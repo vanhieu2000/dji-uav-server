@@ -73,6 +73,30 @@ async function planGrid(profile, areaIdRaw, polygonRaw) {
     };
 }
 
+/** Quét lưới theo ranh giới nhà máy (VD quét bản đồ 2D khi chưa vẽ khu nào). */
+async function planPlant(profile, plantIdRaw) {
+    const plantId = v.parseId(plantIdRaw, 'nhà máy');
+    const rows = await query('SELECT plant_id, plant_code, boundary_geojson FROM plants WHERE plant_id = ?', [plantId]);
+    if (!rows.length) throw new NotFoundError('Không tìm thấy nhà máy');
+    if (!rows[0].boundary_geojson) throw new v.ValidationError('Nhà máy chưa vẽ ranh giới. Vẽ ở Cây tài sản → chọn nhà máy → Vẽ ranh giới.');
+    const geometry = deriveGeometry(profile);
+    let plan;
+    try {
+        plan = gridPlan({
+            polygon: rows[0].boundary_geojson, lineSpacingM: geometry.line_spacing_m, triggerDistanceM: geometry.trigger_distance_m,
+            speedMps: geometry.max_speed_mps, marginM: profile.margin_m,
+            headingMode: profile.heading_mode === 'FIXED' ? 'FIXED' : 'AUTO', headingDeg: profile.heading_deg
+        });
+    } catch (e) {
+        throw new v.ValidationError(e.message);
+    }
+    return {
+        kind: 'GRID', area: { area_id: null, area_code: rows[0].plant_code }, geometry, plan, stats: plan.stats,
+        warnings: [...geometry.warnings, ...plan.warnings],
+        geojson: { path: { type: 'LineString', coordinates: plan.waypoints.map(p => [p.lng, p.lat]) }, points: [] }
+    };
+}
+
 /** Mở rộng tài sản đã chọn thành danh sách (loại, id) gồm cả tài sản con có điểm chụp. */
 async function expandTargets(targets) {
     if (!Array.isArray(targets) || !targets.length) throw new v.ValidationError('Chọn ít nhất 1 tài sản có điểm chụp ảnh');
@@ -135,7 +159,7 @@ async function planPoints(profile, targets) {
 async function buildPlan(body) {
     const profile = await loadProfile(body && body.profile_id);
     const result = profile.route_kind === 'GRID'
-        ? await planGrid(profile, body.area_id, body.polygon)
+        ? (v.isBlank(body.plant_id) ? await planGrid(profile, body.area_id, body.polygon) : await planPlant(profile, body.plant_id))
         : await planPoints(profile, body.targets);
     if (profile.time_window_start && profile.time_window_end) {
         result.warnings.push(`Chỉ bay trong khung giờ ${profile.time_window_start.slice(0, 5)}–${profile.time_window_end.slice(0, 5)}`);

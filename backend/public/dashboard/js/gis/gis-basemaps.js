@@ -156,6 +156,18 @@
                 <button class="btn primary" type="submit">⬆️ Tải lên</button>
                 <progress id="gis-bm-progress" max="1" value="0" hidden></progress>
               </form>
+              <details class="gis-details"><summary>Quy trình tạo bản đồ nền từ ảnh bay (quét 2D)</summary>
+                <ol class="gis-steps">
+                  <li><b>Vẽ ranh giới</b> nhà máy (hoặc khu) ở tab <i>Cây tài sản &amp; bản đồ</i>.</li>
+                  <li><b>Lập đường bay</b> với hồ sơ <i>Quét bản đồ 2D</i> (camera rộng, chồng ảnh 80/70 %), chọn "Toàn nhà máy" hoặc khu, gán vào một phiếu.</li>
+                  <li><b>Bay</b> khi trời sáng đều, ít bóng, RTK FIX. Ảnh tự về server hoặc nhập ở tab <i>Nhập ảnh thẻ nhớ</i>.</li>
+                  <li><b>Lấy ảnh</b> ở tab <i>Xuất ảnh cho Vision</i>: lọc theo phiếu, chỉ camera Rộng → tải ZIP.</li>
+                  <li><b>Ghép ảnh</b> bằng DJI Terra (Tái tạo 2D → xuất GeoTIFF) hoặc phần mềm tương đương (Pix4D, WebODM).</li>
+                  <li><b>Cắt ô ảnh</b>: QGIS → Processing → <i>Generate XYZ tiles (Directory)</i>, zoom khoảng 16–22, PNG/JPG → nén thư mục thành ZIP.</li>
+                  <li><b>Tải lên</b> ở mục trên, bấm <i>Xem</i> để kiểm tra, đặt làm bản đồ nền mặc định.</li>
+                </ol>
+                <p class="faint">Lưu ý: module RTK cho M3T cho vị trí ảnh chính xác cm, nhưng M3T không phải dòng đo đạc (như M3E) – bản đồ đủ dùng làm nền và vẽ tài sản; nếu cần bản đồ chuẩn đo đạc, hỏi đại lý DJI hoặc dùng điểm khống chế mặt đất (GCP).</p>
+              </details>
               <details class="gis-details"><summary>Đăng ký thư mục có sẵn trên máy chủ</summary>
                 <form id="gis-bm-scan" class="gis-row gis-bm-form">
                   <div class="field"><label for="gis-bm-scan-code">Tên thư mục *</label><input class="input" id="gis-bm-scan-code" required placeholder="thac-mo-2026"></div>

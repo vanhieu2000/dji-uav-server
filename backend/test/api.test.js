@@ -667,6 +667,23 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal((await api('GET', `/manage/api/v1/workspaces/ws1/waylines/duplicate-names`)).body.code, 0);
     });
 
+    await t.test('quét bản đồ 2D theo ranh giới nhà máy', async () => {
+        const map2d = (await api('GET', '/api/capture-profiles')).body.data.find(p => p.profile_code === 'MAP_2D');
+        const noBoundary = await api('POST', '/api/flight-plans/preview', { profile_id: map2d.profile_id, plant_id: plantId });
+        assert.equal(noBoundary.status, 400);
+        assert.match(noBoundary.body.message, /chưa vẽ ranh giới/);
+        const boundary = { type: 'Polygon', coordinates: [[[106.999, 11.849], [107.004, 11.849], [107.004, 11.854], [106.999, 11.854], [106.999, 11.849]]] };
+        assert.equal((await api('PUT', `/api/solar/plants/${plantId}`, { boundary_geojson: boundary })).status, 200);
+        const pv = await api('POST', '/api/flight-plans/preview', { profile_id: map2d.profile_id, plant_id: plantId });
+        assert.equal(pv.status, 200, JSON.stringify(pv.body));
+        assert.equal(pv.body.data.area.area_code, 'TM01');
+        assert.ok(pv.body.data.stats.line_count >= 2);
+        const made = await api('POST', '/api/flight-plans', { profile_id: map2d.profile_id, plant_id: plantId, route_name: 'Quét 2D toàn nhà máy' });
+        assert.equal(made.status, 200, JSON.stringify(made.body));
+        assert.equal(made.body.data.area_id, null);
+        assert.equal(made.body.data.target_area, 'TM01');
+    });
+
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
         await db.closePool();
         const r = await api('GET', '/api/solar/areas');

@@ -179,11 +179,12 @@ phiếu gán cũ giữ nguyên vì không xác định được phiếu đúng).
 Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
 
 ### Giai đoạn B – Bản đồ & quản lý đường bay (~4–5 ngày)
-- [ ] Thư viện đường bay (bảng `flight_routes` + bảng mới `route_targets`): danh sách, xem trước trên bản đồ, gắn khu/ngăn lộ/DCL, nhân bản, xóa.
-- [ ] Gán đường bay vào phiếu; API wayline cho Pilot 2 chỉ trả tuyến của phiếu đang chọn.
-- [ ] Quy trình quét 2D: bay hồ sơ "Quét bản đồ 2D" → ghép bằng DJI Terra → xuất ô ảnh XYZ → tải lên mục Bản đồ nền (đã có) → vẽ tài sản.
+- [x] Thư viện đường bay trong MySQL (`services/routeLibrary.js`): KMZ cũ trong thư mục tự vào DB, tìm theo `route_uuid`; tuyến có độ cao theo mực nước biển được gắn nhãn ⚠ (B1, B4).
+- [x] Gán đường bay vào phiếu (bảng `ticket_routes`, nhiều tuyến / phiếu) và API thư viện cho Pilot 2 chỉ trả tuyến của phiếu đang bay (`routes/pilotWaylines.js`) (B2, B3).
+- [x] Quy trình quét 2D: lập tuyến theo ranh giới nhà máy (`plant_id`), hướng dẫn 7 bước trong tab Bản đồ nền (B5).
+  **DB thật:** 3 tuyến cũ (do code cũ sinh, EGM96) đã gắn nhãn ⚠ – xóa hoặc tạo lại trước khi bay.
   Ghi chú: module RTK cho M3T là "định vị RTK", M3T không phải dòng đo đạc như M3E → hỏi đại lý nếu cần bản đồ chuẩn đo đạc.
-- [ ] Bỏ `memoryStore.routes` (đang đọc từ thư mục), chuyển hết sang MySQL.
+- [x] Bỏ `memoryStore.routes`; bộ vẽ tay dashboard sinh KMZ đúng chuẩn và lưu thư viện (B4).
 
 ### Giai đoạn C – Chuyến bay & giám sát (~4 ngày)
 - [ ] Bảng `flight_sessions`: tự nhận cất/hạ cánh, gắn phiếu/máy bay/tuyến; lịch sử + xem lại vết bay.
@@ -334,4 +335,5 @@ Tổng ước lượng còn lại: ~45–55 ngày công lập trình (chưa tín
 | `dfb77f2`, `e488f2d` | A2 sinh đường bay KMZ + giao diện |
 | `6513c8e`, `f625157` | A3 nhận ảnh đúng + nhập thẻ nhớ |
 | `6d509af`, `64155db` | A4 kiểm tra đủ ảnh + bay bù |
-| `02c35ae` + commit này | A5 xuất bộ ảnh Vision + làm sạch ảnh cũ |
+| `02c35ae`, `6ea9550` | A5 xuất bộ ảnh Vision + làm sạch ảnh cũ |
+| `016972c`, `ab2f92a`, `589fc03`, `b4aaec1` + commit B5 | Giai đoạn B: thư viện đường bay, gán phiếu, API Pilot 2, vẽ tay, quét 2D |

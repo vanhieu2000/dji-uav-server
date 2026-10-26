@@ -30,12 +30,15 @@
     const box = st.root.querySelector('#gis-fp-target');
     if (kind === 'GRID') {
       const areas = st.tree ? st.tree.areas : [];
+      const plant = st.tree ? st.tree.plant : null;
+      const plantReady = Boolean(plant && plant.boundary_geojson);
       const ready = areas.filter(a => a.has_polygon);
       box.innerHTML = `<div class="field"><label for="gis-fp-area">Khu pin</label><select class="input" id="gis-fp-area">
-        ${ready.length ? '' : '<option value="">-- Chưa có khu nào vẽ ranh giới --</option>'}
+        ${ready.length || plantReady ? '' : '<option value="">-- Chưa có khu nào vẽ ranh giới --</option>'}
+        ${plantReady ? `<option value="plant:${plant.plant_id}">Toàn nhà máy ${esc(plant.plant_code)} (theo ranh giới nhà máy – dùng cho quét bản đồ 2D)</option>` : ''}
         ${areas.map(a => `<option value="${a.area_id}" ${a.has_polygon ? '' : 'disabled'} ${a === ready[0] ? 'selected' : ''}>${esc(a.area_code)} – ${esc(a.area_name)}${a.has_polygon ? '' : ' (chưa vẽ ranh giới)'}</option>`).join('')}
       </select></div>
-      ${ready.length ? '' : '<div class="gis-warn">Tuyến quét lưới cần ranh giới khu. Vào tab <b>Cây tài sản & bản đồ</b> → chọn khu → <b>Vẽ ranh giới</b> → Lưu.</div>'}`;
+      ${ready.length || plantReady ? '' : '<div class="gis-warn">Tuyến quét lưới cần ranh giới khu hoặc nhà máy. Vào tab <b>Cây tài sản & bản đồ</b> → chọn khu → <b>Vẽ ranh giới</b> → Lưu.</div>'}`;
     } else {
       box.innerHTML = `<div class="field"><span class="gis-field-label">Tài sản (dùng các điểm chụp ảnh đã khai báo)</span><div class="gis-tgt-list">${targetList()}</div></div>`;
     }
@@ -47,7 +50,11 @@
     const body = { profile_id: st.root.querySelector('#gis-fp-profile').value, route_name: st.root.querySelector('#gis-fp-name').value.trim() };
     const tk = st.root.querySelector('#gis-fp-ticket').value;
     if (tk) body.ticket_id = tk;
-    if (kind === 'GRID') body.area_id = (st.root.querySelector('#gis-fp-area') || {}).value;
+    if (kind === 'GRID') {
+      const val = (st.root.querySelector('#gis-fp-area') || {}).value || '';
+      if (val.startsWith('plant:')) body.plant_id = val.slice(6);
+      else body.area_id = val;
+    }
     else body.targets = [...st.root.querySelectorAll('.gis-tgt input:checked')].map(i => ({ asset_type: i.dataset.type, asset_id: Number(i.value) }));
     return body;
   }
