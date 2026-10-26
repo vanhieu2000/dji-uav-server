@@ -380,3 +380,6 @@ Tài khoản thật, session SQL/thu hồi/WS filter, đơn vị và phạm vi p
 Kiểm tra local thực phát hiện DB cũ thiếu file_path_local dù schema mới có: đã thêm migration014 additive và test nâng cấp giữ dữ liệu. Dashboard chuyển Leaflet/Geoman/flv/Excel sang asset local có lockfile/license/manifest, không lỗi L undefined khi CDN bị chặn. Health chỉ báo sẵn sàng sau khởi tạo DB/thư viện ảnh.
 
 Bản clone local cuối cùng đã qua Chromium với API thật: login/change-password/dashboard/map/accounts/mobile/logout, 7 API nghiệp vụ trả200/code0, không lỗi JS/CDN. Server chạy8081/MQTT1884 để người dùng kiểm tra trong cloud; hướng dẫn clone về máy cá nhân có trong CHAY_LOCAL.md.
+
+### Launcher một nút – 27/10/2026
+CHAY_LOCAL.bat + PowerShell wizard + Node launcher: nhập MySQL một lần ngoài git, dependency theo lockfile, init/migrate an toàn, chỉ tạo admin chưa có, chờ health rồi mở browser, giữ nguyên tài khoản/dữ liệu và tái dùng server khi bấm lại. 79 test đạt; wizard PowerShell7 đã test bằng stub, chưa thao tác GUI Windows thật.

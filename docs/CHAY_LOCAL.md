@@ -2,6 +2,23 @@
 
 Bản hướng dẫn ngày 27/10/2026. Code hoàn thiện nằm trên **nhánh `codex/uav-completion`**, chưa gộp vào `main`. Không clone mặc định `main` nếu muốn thử các phần vừa hoàn thiện.
 
+## Chạy bằng một nút (Windows)
+
+1. Lấy code nhánh `codex/uav-completion` (hoặc `git pull --ff-only` nếu đã clone).
+2. Bấm đúp **`CHAY_LOCAL.bat`** ở thư mục gốc. File `3_Chạy_Server_Local_Ngay.bat` cũ cũng gọi launcher này.
+3. Lần đầu chưa có `.env`, nhập mật khẩu MySQL root một lần trong cửa sổ được che ký tự. Tự dùng DB `dji_uav_management` trên `127.0.0.1:3306`; cấu hình và file mật khẩu `backend/data/local-mysql-password` chỉ lưu ngoài git. Wizard dùng MYSQL_PASSWORD_FILE để giữ nguyên các ký tự đặc biệt như @, dấu nháy và dấu gạch chéo; nếu di chuyển thư mục, cập nhật đường dẫn file này trong .env. Nếu đã có `.env`, giữ nguyên cấu hình.
+4. Chờ cửa sổ báo `SERVER SAN SANG`; trình duyệt tự mở dashboard. Giữ cửa sổ server mở, Ctrl+C để dừng.
+
+Launcher kiểm tra Node24/npm, tự cài dependency theo lockfile khi cần, khởi tạo DB rỗng hoặc nâng cấp DB hiện hữu an toàn, tạo `local-admin` **chỉ khi chưa tồn tại**. Mật khẩu Web ban đầu nằm trong `backend/data/local-admin-password.txt`; khác mật khẩu MySQL. Nếu đã đổi mật khẩu Web, dùng mật khẩu mới, file cũ chỉ là mật khẩu ban đầu. Không đặt lại mật khẩu/tạo lại DB mỗi lần chạy.
+
+Bấm lần nữa khi server do launcher này mở vẫn đang chạy sẽ mở lại đúng trang, không tạo thêm server. Nếu cổng đang bị ứng dụng khác dùng, launcher chọn cổng trống gần đó và in URL chính xác; đọc URL trong cửa sổ thay vì đoán cổng. Sau thay đổi code/cấu hình, đóng cửa sổ server cũ rồi bấm lại. Mật khẩu không được ghi trong file `.bat`/`.ps1` hay GitHub.
+
+Cần cài Node24 và MySQL8 trước; launcher không cài hệ điều hành/MySQL và không tự thay mật khẩu root. MySQL phải đang chạy. Lần đầu cài thư viện cần Internet; các lần sau không cài lại nếu lockfile không đổi. Sao lưu DB/ảnh trước khi nâng cấp bản cũ.
+
+Nếu hiện lỗi `local-launcher.lock`: kiểm tra cửa sổ server trước, chờ lần khởi động hiện tại hoàn tất. Chỉ xóa `backend/data/local-launcher.lock` khi chắc chắn cửa sổ launcher/server cũ đã đóng. Không xóa DB hoặc thư mục `backend/data` để thử lại.
+
+macOS/Linux có thể chạy `cd backend && npm run local` sau khi đã cấu hình `.env`; dùng `LOCAL_NO_BROWSER=1` nếu không muốn tự mở trình duyệt. File `.bat`/PowerShell dành cho Windows.
+
 ## 1. Chuẩn bị
 
 - Git, Node.js **24 LTS**, MySQL **8.x** đang chạy tại `127.0.0.1:3306`.
@@ -117,3 +134,5 @@ Không chạy `admin:create` mỗi lần, không xóa `backend/data` (chứa kh�
 Repo được clone riêng tại `/workspace/dji-uav-local`, cấu hình ngoài git, DB `dji_uav_management`, Web8081/MQTT1884 để tránh cổng đang dùng. Tài khoản Web của bản chạy này: `local-admin`; mật khẩu hiện tại lưu riêng tại `backend/data/local-web-password` sau khi đã đổi mật khẩu bắt buộc trong kiểm thử. Không có file mật khẩu này trên GitHub. Bản sao lưu trước nâng cấp: `backend/data/pre-local-upgrade.sql`, chỉ có trên môi trường chạy, không nằm trên GitHub. Đây là máy cloud hiện tại; trợ lý không có kết nối điều khiển trực tiếp máy tính cá nhân của bạn. Dùng các bước bên trên để chạy bản tương tự trên máy của bạn.
 
 Kết quả kiểm tra bản clone ngày 27/10/2026: health200, DB/MQTT kết nối; đăng nhập và đổi mật khẩu bắt buộc, dashboard/bản đồ/quản trị/mobile/đăng xuất đạt với Chromium thật, không mock API/CDN; không lỗi JavaScript hay tải thư viện. DB hiện tại chưa có phiếu để xuất báo cáo nên không tự tạo dữ liệu giả; xuất Word/PDF đã kiểm tra bằng fixture trong bộ 77 test. Ảnh nền Internet vẫn có thể trống khi mạng chặn máy chủ tiles; cần nhập tiles nhà máy để xem offline. Ảnh chụp và JSON kết quả riêng ở backend/data, không commit thông tin tài khoản.
+
+Kiểm chứng launcher một nút: 79 test Node/MySQL đạt (0 skip), gồm khởi tạo DB trong đường dẫn có dấu cách, bấm lại dùng đúng server và không đổi hash mật khẩu/dữ liệu, từ chối cấu hình đã thay đổi khi server cũ còn chạy, dừng và dọn khóa. PowerShell7 đã parse và chạy wizard bằng mật khẩu ký tự đặc biệt với Node/browser stub trong cloud; chưa kiểm thử thao tác GUI trực tiếp trên Windows. CI có job parse bằng Windows PowerShell.

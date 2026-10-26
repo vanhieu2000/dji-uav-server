@@ -6,6 +6,8 @@ Node.js 24 / MySQL 8, dashboard `/dashboard/`, hiện trường `/m/`, cổng Pi
 
 ## Chạy local
 
+**Windows: bấm đúp `CHAY_LOCAL.bat`.** Lần đầu nhập mật khẩu MySQL nếu chưa có `.env`; launcher tự chuẩn bị DB/tài khoản và mở Web. Cần cài Node24/MySQL8 trước. Những lần sau chỉ bấm lại, không reset tài khoản hay dữ liệu.
+
 Hướng dẫn từng bước clone/điền MySQL/khởi tạo an toàn/đăng nhập trên Windows, macOS, Linux: [CHAY_LOCAL.md](docs/CHAY_LOCAL.md).
 
 Dùng MySQL đã cấu hình; `.env.example` → `.env` và điền tài khoản DB riêng. `setup:local` khởi tạo khi DB rỗng; DB đang có dữ liệu chỉ chạy migration additive. `mysql_init/01_schema.sql` có DROP TABLE, **không nhập lại trên DB đang dùng**. Không dùng seed dữ liệu nhà máy mẫu trong production.

@@ -191,6 +191,7 @@ app.get('/api/health', (req, res) => {
     data: {
       db: req.user?.role==='ADMIN'?getDbStatus():{connected:isDbConnected()},
       mqtt: { connected: Boolean(mqttClient && mqttClient.connected) },
+      ...(process.env.LOCAL_LAUNCH_ID&&process.env.NODE_ENV!=='production'?{local_instance_id:process.env.LOCAL_LAUNCH_ID}:{}),
       uptime_s: Math.round(process.uptime())
     }
   });
