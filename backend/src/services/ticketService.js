@@ -4,7 +4,6 @@
 const { query } = require('../config/db');
 
 const ACTIVE_STATUSES = ['PENDING', 'ASSIGNED', 'EXECUTING'];
-const DEFAULT_LIVE_CHANNEL = 'm3t_live';
 
 const TICKET_SELECT = `
     SELECT t.ticket_id, t.ticket_code, t.ticket_name, t.inspection_type, t.target_facility,
@@ -18,7 +17,7 @@ function normalizeTicket(row) {
     if (!row) return null;
     return {
         ...row,
-        livestream_channel: row.livestream_channel || DEFAULT_LIVE_CHANNEL
+        livestream_channel: `ticket_${row.ticket_id}`
     };
 }
 
@@ -40,4 +39,4 @@ async function findTicketById(ticketId) {
     return normalizeTicket(rows[0]);
 }
 
-module.exports = { listActiveTickets, findTicketById, ACTIVE_STATUSES, DEFAULT_LIVE_CHANNEL };
+module.exports = { listActiveTickets, findTicketById, ACTIVE_STATUSES };

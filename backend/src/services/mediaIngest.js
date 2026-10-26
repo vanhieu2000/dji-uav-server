@@ -47,7 +47,7 @@ async function activeSession(sn) {
     if (sn) { sql += ' AND (aircraft_sn = ? OR rc_sn = ?)'; params.push(sn, sn); }
     const rows = await query(`${sql} ORDER BY session_id DESC LIMIT 1`, params);
     if (rows.length || !sn) return rows[0] || null;
-    return activeSession(null);
+    return null;
 }
 
 /* ---------------- Ghép điểm chụp ---------------- */

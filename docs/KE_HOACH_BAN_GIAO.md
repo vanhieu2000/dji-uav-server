@@ -194,10 +194,10 @@ Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
   Ngưỡng cất/hạ cánh cần thử với máy thật (độ cao `elevation` của Pilot 2 tính từ điểm cất cánh).
 - [x] C2 – `GET /api/flights` (lọc máy bay / phiếu / ngày), `GET /api/flights/:id` (vết bay ≤ 5000 điểm + ảnh);
   tab **Lịch sử chuyến bay** (`gis-flight-history.js`): vết bay tô màu theo RTK, điểm ảnh theo camera, phát lại 1×/5×/20×, thông báo khi cất/hạ cánh.
-- [ ] Đa máy bay trên bản đồ; cảnh báo HMS.
-- [ ] Theo dõi tiến độ chụp realtime trên bản đồ (vị trí từng ảnh vừa về).
-- [ ] Livestream kênh theo mã phiếu.
-- [ ] Sửa số giả còn sót: KPI "DCL vượt ngưỡng 83.5 °C" ở Tổng quan, thanh OSD "Dãy 01 · 3.36 MWp".
+- [x] C3 – Đa UAV độc lập trên bản đồ, chọn UAV/phiếu; HMS lưu MySQL, chống lặp và xác nhận đã xem (migration 007). Chưa kiểm chứng payload HMS trên RC thật.
+- [x] C4 – Lớp ảnh vừa nhận theo phiếu, cursor media_id phục hồi khi reconnect; giữ vị trí/camera/chất lượng định vị thật.
+- [x] C5 – Kênh live riêng theo phiếu + serial, lưu ticket_live_streams; Pilot hiển thị RTMP URL; Web chọn kênh, state theo publisher NMS v4. Live web tắt mặc định; khi bật cần live_capacity thật. Chưa nghiệm thu Pilot/video thật.
+- [x] C6 – KPI DCL vượt ngưỡng/max nhiệt lấy SQL; bỏ nhãn khu 3.36 MWp và marker UAV giả trước OSD. Biểu đồ mẫu còn lại thuộc G.
 
 ### Giai đoạn D – Tích hợp AI Vision (~4 ngày, sau khi chốt đặc tả)
 - [ ] Gửi job sang Vision, nhận webhook kết quả (khung pixel, loại lỗi, độ tin cậy, nhiệt độ).
@@ -343,3 +343,13 @@ Tổng ước lượng còn lại: ~45–55 ngày công lập trình (chưa tín
 | `6d509af`, `64155db` | A4 kiểm tra đủ ảnh + bay bù |
 | `02c35ae`, `6ea9550` | A5 xuất bộ ảnh Vision + làm sạch ảnh cũ |
 | `016972c`, `ab2f92a`, `589fc03`, `b4aaec1` + commit B5 | Giai đoạn B: thư viện đường bay, gán phiếu, API Pilot 2, vẽ tay, quét 2D |
+
+## 9. Tiếp tục ngày 26/10/2026 – C3–C6
+
+Bắt đầu từ main `384ff56` (C2). Migration 007 additive; test dùng DB riêng, không cập nhật DB nhà máy. Bỏ fallback phiên của UAV khác khi biết serial nhưng không có phiên phù hợp; OSD timestamp cũ không ghi đè vị trí mới.
+
+Kiểm tra: `npm test` và `npm run test:browser` (Chromium, API/WS fixture, 0 lệnh). Đặt `CHROMIUM_PATH` nếu không ở /usr/bin/chromium. API: `/api/monitoring/devices`, `/photos?after_id=&ticket_id=`, `/hms`, `PATCH /hms/:id/ack`, `/live/:ticketId`. Kênh dùng ID phiếu ổn định + hash serial. Sau restart, state STOPPED tới khi publisher thật kết nối.
+
+Giới hạn: auth/workspace/stream ACL thuộc E/I, chưa triển khai public. HMS lưu mã/mức gốc, chưa tự dịch code theo model. `MEDIA_HTTP_BASE_URL` hỗ trợ reverse proxy HTTPS; standalone HTTP-FLV không đồng nghĩa WebRTC/NAT đã đạt. D cần contract/service/model từ Vision, không chọn/train mô hình thay họ.
+
+Kết quả C3–C6: 53 kiểm thử Node/MySQL đạt, không skip; Chromium smoke đạt (2 UAV, pin 0%, OFFLINE, ảnh realtime, không lệnh). NMS v4 có grace window 30 giây trước donePublish; trạng thái dừng phản ánh theo sự kiện đó, không hứa tức thời.

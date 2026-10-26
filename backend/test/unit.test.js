@@ -325,3 +325,47 @@ test('flights.thin giữ điểm đầu, cuối và giới hạn số điểm', 
     assert.equal(out[out.length - 1], 10000);
     assert.deepEqual(thin([1, 2], 5000), [1, 2]);
 });
+
+test('giám sát: kênh riêng theo phiếu/UAV, không dùng mã phiếu làm đường dẫn', () => {
+    const { channelFor, hmsItems } = require('../src/services/liveMonitoring');
+    assert.notEqual(channelFor(1, 'UAV-A'), channelFor(1, 'UAV-B'));
+    assert.notEqual(channelFor(1, 'UAV-A'), channelFor(2, 'UAV-A'));
+    assert.equal(channelFor(1, 'UAV-A'), channelFor(1, 'UAV-A'));
+    assert.throws(() => channelFor(0, '../bad'));
+    assert.deepEqual(hmsItems({ list: [{ code: '123', level: 2, message: 'Pin yếu' }, {}, null] }),
+        [{ code: '123', level: 2, message: 'Pin yếu', device_sn: null }]);
+});
+
+test('giám sát: publisher đúng kênh/phiên; không nhầm HTTP accepted thành STREAMING', async () => {
+    const { createMonitoring, channelFor } = require('../src/services/liveMonitoring');
+    const row = { stream_id: 1, ticket_id: 2, device_sn: 'UAV-A', channel: channelFor(2, 'UAV-A') };
+    const events = [];
+    const m = createMonitoring({ query: async () => [row], onEvent: e => events.push(e) });
+    assert.equal((await m.streams(2))[0].status, 'STOPPED');
+    await m.publisherEvent('start', { id: 'pub1', streamPath: '/live/' + row.channel });
+    assert.equal((await m.streams(2))[0].status, 'STREAMING');
+    await m.publisherEvent('start', { id: 'pub2', streamPath: '/live/' + row.channel });
+    await m.publisherEvent('stop', { id: 'pub2', streamPath: '/live/' + row.channel });
+    assert.equal((await m.streams(2))[0].status, 'STREAMING');
+    await m.publisherEvent('stop', { id: 'pub1', streamPath: '/live/' + row.channel });
+    assert.equal((await m.streams(2))[0].status, 'STOPPED');
+    assert.deepEqual(events.map(e => e.type), ['stream_started', 'stream_stopped']);
+    assert.equal(await m.publisherEvent('start', { id: 'x', streamPath: '/live/m3t_live' }), null);
+});
+
+test('live capability lấy video_index đã báo cáo, không dựng wide/thermal giả', () => {
+    const { videoIds } = require('../src/services/liveCapabilities');
+    assert.deepEqual(videoIds(null), []);
+    assert.deepEqual(videoIds({ device_list: [{ sn: 'UAV-A', camera_list: [{ camera_index: '67-0-0', video_list: [{ video_index: 'normal-0' }] }] }] }), ['UAV-A/67-0-0/normal-0']);
+});
+
+test('dashboard: tất cả script inline và module mới parse được', () => {
+    const vm = require('vm');
+    const html = fs.readFileSync(path.join(__dirname, '../public/dashboard/index.html'), 'utf8');
+    let count = 0;
+    for (const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
+        if (m[1].trim()) { new vm.Script(m[1]); count++; }
+    }
+    assert.ok(count > 0);
+    new vm.Script(fs.readFileSync(path.join(__dirname, '../public/dashboard/js/gis/gis-live-monitor.js'), 'utf8'));
+});

@@ -190,6 +190,7 @@
     </div>
 
     <div class="status-box" id="statusBox"></div>
+    <div id="liveTargetBox" style="display:none;margin:12px 0;word-break:break-all"><b>Kênh live của phiếu / thiết bị</b><p id="liveTargetUrl"></p><small>Nhập địa chỉ này khi bật RTMP trên Pilot 2. Không dùng kênh của phiếu khác.</small></div>
 
     <div class="log-container" id="logBox">
       [System] Khởi tạo giao diện Pilot 2 Portal...<br>
@@ -318,6 +319,8 @@
         const data = await res.json();
 
         if (data.code === 0) {
+          document.getElementById('liveTargetBox').style.display = 'block';
+          document.getElementById('liveTargetUrl').textContent = data.data.livestream ? data.data.livestream.rtmpUrl : 'Chưa đọc được serial thiết bị. Kết nối lại Pilot 2 sau khi nhận diện RC/UAV.';
           addLog("✓ Xác thực thành công: " + data.data.workspace_name);
           statusBox.className = "status-box success";
           statusBox.innerHTML = `<strong>KẾT NỐI THÀNH CÔNG!</strong><br>Đã gán: ${escapeHtml(data.data.assigned_ticket)}<br>MQTT Host: ${escapeHtml(data.data.mqtt.host)}`;

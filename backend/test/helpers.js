@@ -91,6 +91,9 @@ async function startTestApp() {
     app.use('/api/capture-profiles', require('../src/routes/captureProfiles'));
     app.use('/api/flight-plans', require('../src/routes/flightPlans'));
     app.use('/api/coverage', require('../src/routes/coverage'));
+    const monitoring = require('../src/services/liveMonitoring').createMonitoring({ query: require('../src/config/db').query });
+    app.use('/api/monitoring', require('../src/routes/monitoring').createRouter({ monitoring }));
+    app.use('/api/reports', require('../src/routes/reports'));
     app.use('/api/flights', require('../src/routes/flights'));
     app.use('/api/datasets', require('../src/routes/datasets'));
     const server = await new Promise(resolve => {

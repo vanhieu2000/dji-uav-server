@@ -358,11 +358,21 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
           </div>
         </div>
 
+        <div class="card" style="padding:16px;margin-bottom:16px">
+          <h2>Giám sát UAV theo phiếu</h2>
+          <div class="actions" style="margin:12px 0;flex-wrap:wrap">
+            <label>Phiếu <select id="uav-live-ticket"><option value="">Tất cả phiếu</option></select></label>
+            <label>Livestream <select id="uav-live-stream"><option value="">Chọn phiếu để xem kênh live</option></select></label>
+            <span id="uav-photo-count">Chưa nhận dữ liệu ảnh</span>
+          </div>
+          <div id="uav-live-devices"></div>
+          <details style="margin-top:12px"><summary>Cảnh báo thiết bị (HMS)</summary><div id="uav-hms-list">Đang tải…</div></details>
+        </div>
         <div class="grid g-4" style="margin-bottom:16px">
           <div class="card stat"><span class="l">Mavic 3T</span><span class="v num" style="color:var(--ink3)" id="kpi-drone-st">CHƯA KẾT NỐI</span><span class="d muted" id="kpi-drone-sub">Pin: --% · Alt: --m</span></div>
           <div class="card stat"><span class="l">Phiếu kiểm tra</span><span class="v num" id="kpi-ticket-count">--</span><span class="d muted">Đang thực hiện</span></div>
           <div class="card stat"><span class="l">Tấm pin lỗi</span><span class="v num down" id="kpi-panel-fault">--</span><span class="d down">Hotspot cần kiểm tra</span></div>
-          <div class="card stat"><span class="l">DCL vượt ngưỡng</span><span class="v num down" id="kpi-dcl-alert">1</span><span class="d down">DCL 171-7 (83.5 °C)</span></div>
+          <div class="card stat"><span class="l">DCL vượt ngưỡng</span><span class="v num down" id="kpi-dcl-alert">--</span><span class="d down" id="kpi-dcl-alert-detail">Chưa có dữ liệu đo</span></div>
         </div>
 
         <div class="grid g-main">
@@ -418,7 +428,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
 
             <!-- THANH OSD TELEMETRY MỎNG TRÊN ĐỈNH BẢN ĐỒ -->
             <div class="map-osd-topbar" id="solar-map-osd">
-              <span>☀️ <b>Nhà Máy Pin</b> (<span id="solar-map-subinfo">Dãy 01 · 3.36 MWp</span>)</span>
+              <span>☀️ <b>Nhà Máy Pin</b> (<span id="solar-map-subinfo">Chưa chọn khu vực</span>)</span>
               <span style="opacity:0.3">|</span>
               <span class="dot off" id="solar-dot-status"></span><span>Mavic 3T</span>
               <span style="opacity:0.3">|</span>
@@ -1335,6 +1345,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
 <script src="js/gis/gis-media-import.js"></script>
 <script src="js/gis/gis-coverage.js"></script>
 <script src="js/gis/gis-flight-history.js"></script>
+<script src="js/gis/gis-live-monitor.js"></script>
 <script src="js/gis/gis-datasets.js"></script>
 <script src="js/gis/gis-page.js"></script>
 
@@ -1348,7 +1359,7 @@ let gBaseLayerSolar = null;
 let gBaseLayerSub = null;
 let gBaseLayerManual = null;
 let gAutoFollow = true;
-let gSelectedDroneSn = '1581F5FJC243K00DNRRT';
+let gSelectedDroneSn = null;
 
 // native: mức zoom sâu nhất nguồn ảnh có; phóng to hơn thì Leaflet phóng ảnh lên thay vì báo "không có dữ liệu"
 const BASEMAPS = {
@@ -1481,14 +1492,6 @@ function initSolarMap(){
  L.control.zoom({ position: 'topright' }).addTo(gMap);
  setBasemap('satellite', 'solar');
 
- // Marker Drone Mavic 3T
- const droneIcon = L.divIcon({
-  html: '<div style="background:var(--brand);color:#fff;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;border:2px solid #fff;box-shadow:0 0 16px var(--brand);font-size:18px;">🛸</div>',
-  iconSize: [38,38], iconAnchor: [19,19]
- });
- droneMarker = L.marker([11.831200, 106.591300], { icon: droneIcon }).addTo(gMap);
- droneMarker.bindPopup('<b>DJI Mavic 3T (Realtime)</b><br>SN: 1581F5FJC243K00DNRRT<br><span style="color:var(--ink3)">Trạng thái: Đang chờ OSD...</span>');
-
  // Lớp tài sản thật từ CSDL (khu vực, chuỗi, tấm pin, bất thường...) + tâm theo nhà máy
  if(window.GIS){
   GIS.centerOnPlant(gMap, 17);
@@ -1562,13 +1565,6 @@ function initManualMap(){
  L.control.zoom({ position: 'topright' }).addTo(gMapManual);
  setBasemap('satellite', 'manual');
  setTimeout(()=>{ if(gMapManual) gMapManual.invalidateSize(); }, 200);
-
- const droneIcon = L.divIcon({
-  html: '<div style="background:var(--brand);color:#fff;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;border:2px solid #fff;box-shadow:0 0 16px var(--brand);font-size:18px;">🛸</div>',
-  iconSize: [38,38], iconAnchor: [19,19]
- });
- manualDroneMarker = L.marker([11.831200, 106.591300], { icon: droneIcon }).addTo(gMapManual);
- manualDroneMarker.bindPopup('<b>DJI Mavic 3T (Realtime)</b><br>SN: 1581F5FJC243K00DNRRT<br><span style="color:var(--ink3)">Trạng thái: Đang theo dõi...</span>');
 
  // Lớp tài sản thật (khu vực, dao cách ly, bất thường) thay cho dữ liệu mẫu
  if(window.GIS){
@@ -2138,6 +2134,8 @@ async function refreshDashboardData(){
    const d = data.data;
    document.getElementById('kpi-ticket-count').innerText = `${d.completed_tickets}/${d.total_tickets}`;
    document.getElementById('kpi-panel-fault').innerText = d.total_defects_found;
+   document.getElementById('kpi-dcl-alert').innerText = d.overheated_disconnectors;
+   document.getElementById('kpi-dcl-alert-detail').innerText = d.max_disconnector_temperature == null ? 'Chưa có dữ liệu đo' : 'Cao nhất đã đo: ' + Number(d.max_disconnector_temperature).toFixed(1) + ' °C';
   }
  } catch(e){}
 }
@@ -2856,23 +2854,14 @@ async function manualSendRth(){
 }
 
 async function manualStartLive(){
-  toast('Đang gửi lệnh live_start_push tới Mavic 3T...');
-  try{
-    const res = await fetch('/api/control/live', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_sn: gSelectedDroneSn, action: 'start', camera_type: 'wide-0' })
-    });
-    const d = await res.json();
-    if(res.ok && d.code === 0){
-      toast('✓ Đã kích hoạt luồng phát RTMP trực tiếp từ Mavic 3T!');
-    } else {
-      toast('⚠️ ' + (d.message || 'Mavic 3T đang OFFLINE!'));
-    }
-  }catch(e){
-    toast('Lỗi lệnh Live: ' + e.message);
-  }
-  setTimeout(startFlvLivePlayer, 1200);
+  startFlvLivePlayer();
+}
+function stopFlvLivePlayer(){
+  if(gFlvPlayer){ try { gFlvPlayer.destroy(); } catch(e){} gFlvPlayer = null; }
+  const video = document.getElementById('manual-live-video');
+  if(video){ video.pause(); video.style.display = 'none'; }
+  const ph = document.getElementById('manual-live-placeholder'); if(ph) ph.style.display = 'block';
+  const badge = document.getElementById('manual-stream-badge'); if(badge) badge.textContent = 'CHƯA PHÁT';
 }
 
 /* ===================================================================
@@ -2880,7 +2869,7 @@ async function manualStartLive(){
    =================================================================== */
 let gFlvPlayer = null;
 
-function startFlvLivePlayer(){
+function startFlvLivePlayer(streamPath, playbackUrl){
   const videoEl = document.getElementById('manual-live-video');
   const placeholderEl = document.getElementById('manual-live-placeholder');
   const badgeEl = document.getElementById('manual-stream-badge');
@@ -2901,7 +2890,9 @@ function startFlvLivePlayer(){
     gFlvPlayer = null;
   }
 
-  const flvUrl = `http://${location.hostname}:8000/live/m3t_live.flv`;
+  streamPath = streamPath || (window.GIS && GIS.LiveMonitor && GIS.LiveMonitor.streamPath());
+  if (!/^\/live\/ticket_\d+_[a-f0-9]{16}$/.test(streamPath || '')) { toast('Chọn phiếu và kênh đang phát trong Giám sát UAV.'); return; }
+  const flvUrl = playbackUrl || `${location.protocol}//${location.hostname}:8000${streamPath}.flv`;
   try{
     gFlvPlayer = flvjs.createPlayer({
       type: 'flv',
@@ -3865,10 +3856,11 @@ function setupRealtimeTelemetry(){
  const wsUrl = `${protocol}//${location.host}/ws`;
 
  wsRealtime = new WebSocket(wsUrl);
- wsRealtime.onopen = () => { console.log('[WebSocket] Đã kết nối kênh OSD Mavic 3T & Live MQTT Console'); };
+ wsRealtime.onopen = () => { if (window.GIS && GIS.LiveMonitor) GIS.LiveMonitor.reconnect(); };
  wsRealtime.onmessage = (ev) => {
   try{
    const msg = JSON.parse(ev.data);
+   if (window.GIS && GIS.LiveMonitor) GIS.LiveMonitor.onEvent(msg);
 
    // 1. Gói tin MQTT thô gửi vào Live Console
    if(msg.type === 'raw_mqtt' && msg.log){
@@ -3890,11 +3882,11 @@ function setupRealtimeTelemetry(){
    // 1.1 Luồng Live Stream video từ Mavic 3T
    if(msg.type === 'stream_started'){
     toast('✓ Đã nhận luồng phát trực tiếp từ Mavic 3T! Đang hiển thị...');
-    startFlvLivePlayer();
+    // Kênh được chọn theo phiếu trong Giám sát UAV, không tự mở kênh của UAV khác.
    }
    if(msg.type === 'stream_stopped'){
     toast('Luồng phát trực tiếp từ Mavic 3T đã tạm dừng');
-    stopFlvLivePlayer();
+    // Module LiveMonitor chỉ dừng player khi đúng kênh đang xem.
    }
 
    // 2. Ảnh chụp đồng bộ mới từ Mavic 3T
@@ -3905,7 +3897,7 @@ function setupRealtimeTelemetry(){
    }
 
    // 3. Telemetry OSD
-   if(msg.type === 'osd' && msg.data){
+   if(msg.type === 'osd' && msg.data && msg.device_sn === gSelectedDroneSn){
     const d = msg.data;
     if(d.lat && d.lng){
      if(droneMarker) droneMarker.setLatLng([d.lat, d.lng]);
@@ -3969,16 +3961,8 @@ function setupRealtimeTelemetry(){
      else thBadge.classList.remove('danger');
     }
 
-    // TỰ ĐỘNG CHỤP & CẢNH BÁO KHI PHÁT HIỆN QUÁ NHIỆT (AUTO OVERHEAT CAPTURE)
-    if(d.thermal_max !== undefined && parseFloat(d.thermal_max) >= 65.0){
-      const now = Date.now();
-      if(now - gLastOverheatAlertTime > 12000){ // Giãn cách 12 giây chống spam
-        gLastOverheatAlertTime = now;
-        console.warn(`[Tự Động Cảnh Báo] Phát hiện điểm nóng bất thường ${thMax}! Tự động chụp ảnh lưu sự cố...`);
-        triggerPhoto('thermal');
-        toast(`⚠️ CẢNH BÁO: Điểm nóng bất thường (${thMax})! Hệ thống đã tự động chụp & lưu ảnh sự cố vào CSDL.`);
-      }
-    }
+    // Chỉ hiển thị số đo nhận được; không tự phát lệnh chụp khi thấy nhiệt độ cao.
+
    }
   }catch(e){}
  };
@@ -4551,6 +4535,7 @@ async function triggerWaypointPhoto(wp, index, total, alt, gimbalPitch, curTemp,
    KHỞI ĐỘNG HỆ THỐNG KHI LOAD TRANG
    =================================================================== */
 document.addEventListener('DOMContentLoaded', ()=>{
+ if(window.GIS && GIS.LiveMonitor) GIS.LiveMonitor.mount(sn => { gSelectedDroneSn = sn; });
  // 0. Khôi phục trạng thái thu nhỏ / mở rộng của Sidebar từ localStorage
  if(localStorage.getItem('uav_sidebar_collapsed') === '1'){
   document.getElementById('app')?.classList.add('sidebar-collapsed');

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test --test-concurrency=1 test/unit.test.js test/api.test.js",
-    "migrate": "node src/db/migrate.js"
+    "migrate": "node src/db/migrate.js",
+    "test:browser": "node test/browser-monitoring.cjs"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",
@@ -22,5 +23,9 @@
     "ws": "^8.18.1",
     "yauzl": "3.4.0",
     "yazl": "3.3.1"
+  },
+  "devDependencies": {
+    "leaflet": "1.9.4",
+    "playwright-core": "1.64.1"
   }
 }

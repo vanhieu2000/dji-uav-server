@@ -295,7 +295,7 @@ test('API tài sản & bản đồ', async (t) => {
         const { listActiveTickets, findTicketById } = require('../src/services/ticketService');
         const list = await listActiveTickets();
         assert.equal(list.length, 1);
-        assert.equal(list[0].livestream_channel, 'm3t_live');
+        assert.equal(list[0].livestream_channel, `ticket_${list[0].ticket_id}`);
         assert.equal((await findTicketById(list[0].ticket_id)).ticket_name, 'Kiểm tra khu INV-01');
         assert.equal(await findTicketById('abc'), null);
     });
@@ -725,6 +725,47 @@ test('API tài sản & bản đồ', async (t) => {
         const yday = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
         assert.equal((await api('GET', `/api/flights?from=${yday}`)).body.data.length >= 1, true);
         assert.equal((await api('GET', `/api/flights?to=${yday}`)).body.data.length, 0);
+    });
+
+    await t.test('giám sát trực tiếp: đa UAV, ảnh keyset theo phiếu, HMS idempotent, kênh riêng', async () => {
+        const { createMonitoring } = require('../src/services/liveMonitoring');
+        const events = [];
+        const m = createMonitoring({ query: db.query, onEvent: e => events.push(e) });
+        const allTickets = await db.query('SELECT ticket_id FROM inspection_tickets ORDER BY ticket_id');
+        const tid = allTickets[0].ticket_id;
+        const a = await m.ensureStream(tid, 'UAV1');
+        const b = await m.ensureStream(tid, 'UAV2');
+        assert.notEqual(a.channel, b.channel);
+        await m.ensureStream(tid, 'UAV1');
+        const live = await api('GET', `/api/monitoring/live/${tid}`);
+        assert.equal(live.status, 200);
+        assert.equal(live.body.data.length, 2);
+        assert.equal(live.body.data[0].status, 'STOPPED');
+        assert.equal((await api('GET', '/api/monitoring/live/99999999')).status, 404);
+        const packet = { timestamp: 1000, tid: 'event-fixture', data: { list: [{ code: 'HMS001', level: 2, message: 'Cảnh báo thử nghiệm' }] } };
+        assert.equal((await m.hms('UAV1', packet, 'RC1')).length, 1);
+        assert.equal((await m.hms('UAV1', packet, 'RC1')).length, 0);
+        assert.equal(events.length, 1);
+        const hms = await api('GET', '/api/monitoring/hms?device_sn=UAV1');
+        assert.equal(hms.body.data.length, 1);
+        assert.equal((await api('PATCH', `/api/monitoring/hms/${hms.body.data[0].event_id}/ack`)).status, 200);
+        assert.ok((await api('GET', '/api/monitoring/hms?device_sn=UAV1')).body.data[0].acknowledged_at);
+        assert.equal((await api('PATCH', '/api/monitoring/hms/9999999/ack')).status, 404);
+        const devs = await api('GET', '/api/monitoring/devices');
+        assert.ok(devs.body.data.some(d => d.device_sn === 'UAV1' && d.status === 'OFFLINE'));
+        const photos = await api('GET', '/api/monitoring/photos?after_id=0');
+        assert.ok(photos.body.data.items.length > 0);
+        const next = await api('GET', `/api/monitoring/photos?after_id=${photos.body.data.next_id}`);
+        assert.equal(next.body.data.items.length, 0);
+        assert.equal((await api('GET', '/api/monitoring/photos?after_id=-1')).status, 400);
+        const subset = await api('GET', `/api/monitoring/photos?ticket_id=${tid}`);
+        assert.ok(subset.body.data.items.every(p => p.ticket_id === tid));
+        // Known unknown serial must not inherit the last other Pilot's task.
+        assert.equal(await require('../src/services/mediaIngest').activeSession('NONEXISTENT-UAV'), null);
+        const stats = await api('GET', '/api/reports/overview');
+        assert.equal(stats.status, 200);
+        const [measured] = await db.query('SELECT COUNT(*) AS n FROM disconnectors WHERE last_inspected_temp >= max_allowed_temp');
+        assert.equal(stats.body.data.overheated_disconnectors, measured.n);
     });
 
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
