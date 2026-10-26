@@ -1,0 +1,4 @@
+# Preserve upstream bytes (SRI/manifest hashes) on Windows as well as Linux.
+# Vendor distributions retain their own line endings and whitespace.
+backend/public/dashboard/vendor/** -text -whitespace
+backend/public/mobile/vendor/** -text -whitespace
