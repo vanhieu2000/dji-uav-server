@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  # 1. EMQX - High Performance MQTT Broker cho DJI Mavic 3T & Pilot 2
+  emqx:
+    image: emqx/emqx:5.8.5
+    container_name: dji_emqx
+    restart: always
+    ports:
+      - "1883:1883"     # MQTT TCP cho Pilot 2 & Drone
+      - "8083:8083"     # MQTT WebSocket
+      - "18083:18083"   # EMQX Dashboard Web UI (tài khoản trong .env)
+    environment:
+      - EMQX_ALLOW_ANONYMOUS=true
+      - EMQX_DASHBOARD__DEFAULT_USERNAME=${EMQX_DASHBOARD_USER}
+      - EMQX_DASHBOARD__DEFAULT_PASSWORD=${EMQX_DASHBOARD_PASSWORD}
+    volumes:
+      - emqx_data:/opt/emqx/data
+    networks:
+      - dji_net
+
+  # 2. MediaMTX - Streaming Server cho Camera Quang Học & Camera Nhiệt M3T
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: dji_mediamtx
+    restart: always
+    ports:
+      - "1935:1935"     # RTMP Ingest (DJI Pilot 2 đẩy luồng trực tiếp)
+      - "8554:8554"     # RTSP Server
+      - "8888:8888"     # HLS Stream
+      - "8889:8889"     # WebRTC Stream (xem độ trễ cực thấp <0.5s trên Web/Mobile)
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    networks:
+      - dji_net
+
+  # 3. MySQL 8.0 - Quản lý CSDL 18 bảng thật
+  mysql:
+    image: mysql:8.0
+    container_name: dji_mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=dji_uav_management
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql_init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - dji_net
+
+  # 4. MinIO - S3 Object Storage lưu trữ ảnh quang học và ảnh nhiệt R-JPEG
+  minio:
+    image: minio/minio:latest
+    container_name: dji_minio
+    restart: always
+    ports:
+      - "9000:9000"     # S3 API
+      - "9001:9001"     # MinIO Web Console
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - dji_net
+
+  # 5. DJI Cloud Backend - REST API, MQTT Ingest, WebSocket Realtime, MySQL Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dji_backend
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - HOST_IP=${HOST_IP}
+      - MQTT_PORT=1883
+      - MQTT_BROKER_URL=mqtt://emqx:1883
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=dji_uav_management
+      - JWT_SECRET=${JWT_SECRET}
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - DJI_APP_ID=${DJI_APP_ID}
+      - DJI_APP_KEY=${DJI_APP_KEY}
+      - DJI_APP_LICENSE=${DJI_APP_LICENSE}
+    depends_on:
+      - emqx
+      - mysql
+      - mediamtx
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/tiles:/app/tiles
+    networks:
+      - dji_net
+
+volumes:
+  emqx_data:
+  mysql_data:
+  minio_data:
+
+networks:
+  dji_net:
+    driver: bridge

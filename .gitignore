@@ -1,0 +1,23 @@
+# Bi mat / cau hinh may that
+.env
+backend/config.json
+backend/Connection.txt
+
+# Thu vien & du lieu sinh ra khi chay
+node_modules/
+backend/uploads/
+backend/data/
+backend/tiles/
+*.log
+
+# SDK va tai lieu ban quyen cua DJI (tai rieng tu developer.dji.com)
+backend/tsdk/
+GOI_BAN_GIAO_CHO_VISION/
+GOI_BAN_GIAO_CHO_VISION.rar
+*.exe
+*.rar
+
+# IDE / cong cu
+.vscode/
+.kombai/
+.vs/

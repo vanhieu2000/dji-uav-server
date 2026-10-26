@@ -1,0 +1,31 @@
+# MediaMTX Configuration for DJI Mavic 3T Livestream
+# Supports RTMP ingest from DJI Pilot 2, and WebRTC / RTSP / HLS playback on Management Software
+
+logLevel: info
+logDestinations: [stdout]
+
+# RTMP Server (Port 1935) - DJI Pilot 2 pushes stream here
+rtmp: yes
+rtmpAddress: :1935
+rtmpEncryption: "no"
+
+# RTSP Server (Port 8554) - Management Software can pull RTSP feed
+rtsp: yes
+protocols: [tcp]
+rtspAddress: :8554
+
+# HLS Server (Port 8888) - Browser / Web preview
+hls: yes
+hlsAddress: :8888
+hlsAlwaysRemux: yes
+
+# WebRTC Server (Port 8889) - Ultra low latency (<0.5s) preview in Web / C#
+webrtc: yes
+webrtcAddress: :8889
+webrtcAllowOrigins: ['*']
+
+# Paths configuration
+paths:
+  # Any stream published (e.g. rtmp://<IP>:1935/live/{channel_name})
+  all_others:
+    source: publisher

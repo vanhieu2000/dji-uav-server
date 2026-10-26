@@ -1,0 +1,22 @@
+{
+  "host_ip": "192.168.1.100",
+  "port": 8080,
+  "mqtt_port": 1883,
+  "rtmp_port": 1935,
+  "workspace_name": "Dự Án Điện Mặt Trời & TBA 110kV",
+  "workspace_id": "00000000-0000-0000-0000-000000000000",
+  "dji_license": {
+    "appId": "",
+    "appKey": "",
+    "appLicense": ""
+  },
+  "flight_settings": {
+    "rth_height": 50,
+    "gimbal_pitch_solar": -90,
+    "gimbal_pitch_dcl": 0
+  },
+  "map_settings": {
+    "source": "online",
+    "offline_url": "/offline-tiles/{z}/{x}/{y}.png"
+  }
+}
