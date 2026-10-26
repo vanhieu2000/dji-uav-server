@@ -9,6 +9,7 @@
   const TABS = [
     ['tree', 'Cây tài sản & bản đồ'],
     ['profiles', 'Hồ sơ chụp'],
+    ['flights', 'Lập đường bay'],
     ['import', 'Nhập Excel'],
     ['basemaps', 'Bản đồ nền']
   ];
@@ -21,6 +22,7 @@
     const pane = root.querySelector(`.gis-tab-pane[data-pane="${tab}"]`);
     if (tab === 'tree') GIS.Assets.open(pane);
     if (tab === 'profiles') GIS.Profiles.render(pane);
+    if (tab === 'flights') GIS.FlightPlans.render(pane);
     if (tab === 'import') GIS.Import.render(pane);
     if (tab === 'basemaps') GIS.BaseMaps.render(pane);
   }

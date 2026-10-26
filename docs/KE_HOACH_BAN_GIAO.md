@@ -135,7 +135,7 @@ Tài liệu: https://developer.dji.com/doc/cloud-api-tutorial/en/api-reference/d
 
   Xong khi: CRUD + test; mẫu mặc định có sẵn sau migration.
 
-- [ ] **A2. Bộ sinh tuyến bay** – `src/services/flightPlanner.js` (toán), `src/services/wpmlBuilder.js` (KMZ):
+- [x] **A2. Bộ sinh tuyến bay** – XONG (`services/flightPlanner.js`, `services/wpmlBuilder.js`, `routes/flightPlans.js`, migration 003, tab "Lập đường bay"). CÒN: bay thử xác nhận KMZ trong Pilot 2 (chọn camera, trigger m/s, zoom), tuyến cận lỗi tự sinh từ kết quả AI (làm ở D) – `src/services/flightPlanner.js` (toán), `src/services/wpmlBuilder.js` (KMZ):
   - Thông số camera M3T (`src/services/cameraModels.js`): nhiệt 640×512, DFOV 61°; rộng 8000×6000, DFOV 84°;
     zoom 4000×3000 (kiểm lại với tài liệu DJI). Tính HFOV từ DFOV + tỉ lệ ảnh.
   - Độ cao từ GSD: `h = GSD × số_px_ngang / (2·tan(HFOV/2))`; bề rộng vệt chụp = `2h·tan(HFOV/2)`.
