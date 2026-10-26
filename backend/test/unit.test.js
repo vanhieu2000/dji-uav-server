@@ -247,3 +247,71 @@ test('extractTileZip: giải nén ô ảnh, bỏ qua file lạ, không ghi ra ng
         fs.rmSync(tmp, { recursive: true, force: true });
     }
 });
+
+/* ---------------- Theo dõi chuyến bay (C1) ---------------- */
+const { createTracker, rtkState } = require('../src/services/flightTracker');
+
+function fakeTracker() {
+    let t = 1_700_000_000_000;
+    const calls = [];
+    const events = [];
+    let nextId = 100;
+    const query = async (sql, params) => {
+        calls.push({ sql, params });
+        if (/^\s*INSERT INTO flight_sessions/.test(sql)) return { insertId: nextId++ };
+        return { affectedRows: 0 };
+    };
+    const tracker = createTracker({ query, now: () => t, onEvent: e => events.push(e), findSession: async () => ({ session_id: 7, ticket_id: 3 }) });
+    return { tracker, calls, events, tick: ms => { t += ms; } };
+}
+const osd = (h, v = 0, extra = {}) => ({ lat: 11.8, lng: 106.59 + h * 1e-6, alt: 50 + h, rel_alt: h, speed: v, battery: 90, is_fixed: 2, ...extra });
+
+test('rtkState đổi mã is_fixed DJI sang FIX/FLOAT/NONE', () => {
+    assert.equal(rtkState(2), 'FIX');
+    assert.equal(rtkState(1), 'FLOAT');
+    assert.equal(rtkState(0), 'NONE');
+    assert.equal(rtkState(undefined), null);
+});
+
+test('flightTracker: cất cánh mở chuyến gắn phiếu, hạ cánh 10 s thì đóng', async () => {
+    const { tracker, calls, events, tick } = fakeTracker();
+    await tracker.onOsd('SN1', osd(0));
+    assert.equal(calls.filter(c => /INSERT INTO flight_sessions/.test(c.sql)).length, 0);
+    tick(1000); const r = await tracker.onOsd('SN1', osd(5, 3));
+    assert.equal(r.airborne, true);
+    assert.equal(r.flight_session_id, 100);
+    const ins = calls.find(c => /INSERT INTO flight_sessions/.test(c.sql));
+    assert.equal(ins.params[1], 3); // ticket_id từ phiên Pilot
+    for (let i = 0; i < 12; i++) { tick(1000); await tracker.onOsd('SN1', osd(0.2, 0)); }
+    const up = calls.find(c => /UPDATE flight_sessions SET ended_at/.test(c.sql));
+    assert.ok(up, 'phải đóng chuyến');
+    assert.equal(up.params[1], 'LANDED');
+    assert.deepEqual(events.map(e => e.type).filter(t => t.startsWith('flight')), ['flight_started', 'flight_ended']);
+});
+
+test('flightTracker: telemetry tối đa 1 lần/giây, có flight_session_id khi bay', async () => {
+    const { tracker, calls, tick } = fakeTracker();
+    for (let i = 0; i < 10; i++) { tick(200); await tracker.onOsd('SN1', osd(10, 5)); } // 5 Hz trong 2 s
+    const logs = calls.filter(c => /INSERT INTO telemetry_logs/.test(c.sql));
+    assert.equal(logs.length, 2);
+    assert.equal(logs[0].params[2], 100);
+    assert.equal(logs[0].params[13], 1); // rtk_fixed
+});
+
+test('flightTracker: gói OSD đến dồn dập chỉ mở 1 chuyến', async () => {
+    const { tracker, calls } = fakeTracker();
+    await Promise.all([tracker.onOsd('SN1', osd(5, 3)), tracker.onOsd('SN1', osd(6, 3)), tracker.onOsd('SN1', osd(7, 3))]);
+    assert.equal(calls.filter(c => /INSERT INTO flight_sessions/.test(c.sql)).length, 1);
+});
+
+test('flightTracker: mất tín hiệu 30 s → OFFLINE và đóng chuyến LOST_LINK', async () => {
+    const { tracker, calls, events, tick } = fakeTracker();
+    await tracker.onOsd('SN1', osd(20, 5));
+    tick(10000); await tracker.sweep();
+    assert.equal(tracker.isOnline('SN1'), true);
+    tick(25000); await tracker.sweep();
+    assert.equal(tracker.isOnline('SN1'), false);
+    assert.equal(calls.find(c => /UPDATE flight_sessions SET ended_at/.test(c.sql)).params[1], 'LOST_LINK');
+    assert.ok(calls.some(c => /SET status = 'OFFLINE'/.test(c.sql)));
+    assert.ok(events.some(e => e.type === 'device_offline'));
+});

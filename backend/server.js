@@ -37,6 +37,7 @@ const assetsRouter = require('./src/routes/assets');
 const basemapsRouter = require('./src/routes/basemaps');
 const { listActiveTickets, findTicketById } = require('./src/services/ticketService');
 const mediaIngest = require('./src/services/mediaIngest');
+const { createTracker } = require('./src/services/flightTracker');
 const mediaUploadRouter = require('./src/routes/mediaUpload');
 const routeLibrary = require('./src/services/routeLibrary');
 const wpmlBuilder = require('./src/services/wpmlBuilder');
@@ -356,32 +357,27 @@ function setupRtmpServer() {
   }
 }
 
-// Hàm ghi Telemetry vào MySQL bất đồng bộ
-async function saveTelemetryToDb(sn, d, dev) {
-  if (!isDbConnected()) return;
-  try {
-    await query(
-      `INSERT INTO uav_devices (device_sn, device_name, device_model, device_type, status, last_latitude, last_longitude, last_altitude, last_relative_height, last_battery, last_speed, last_yaw, last_pitch, last_roll, last_seen)
-       VALUES (?, ?, 'Mavic 3T', 'DRONE', 'ONLINE', ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-       ON DUPLICATE KEY UPDATE 
-         status = 'ONLINE', last_latitude = VALUES(last_latitude), last_longitude = VALUES(last_longitude),
-         last_altitude = VALUES(last_altitude), last_relative_height = VALUES(last_relative_height),
-         last_battery = VALUES(last_battery), last_speed = VALUES(last_speed), last_yaw = VALUES(last_yaw),
-         last_pitch = VALUES(last_pitch), last_roll = VALUES(last_roll), last_seen = NOW()`,
-      [sn, `DJI Mavic 3T (${sn})`, dev.lat || null, dev.lng || null, dev.alt || null, dev.rel_alt || null, dev.battery || null, dev.speed || 0, dev.yaw || 0, dev.pitch || 0, dev.roll || 0]
-    );
-
-    if (dev.lat && dev.lng && (dev.lat !== 0 || dev.lng !== 0)) {
-      await query(
-        `INSERT INTO telemetry_logs (device_sn, latitude, longitude, altitude, relative_height, horizontal_speed, yaw, pitch, roll, battery_percent, satellites)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [sn, dev.lat, dev.lng, dev.alt || 0, dev.rel_alt || 0, dev.speed || 0, dev.yaw || 0, dev.pitch || 0, dev.roll || 0, dev.battery || 100, dev.satellites || 0]
-      );
+// Theo dõi chuyến bay: cất/hạ cánh, telemetry ≤ 1 lần/giây, OFFLINE sau 30 s (src/services/flightTracker.js)
+const flightTracker = createTracker({
+  query,
+  findSession: sn => mediaIngest.activeSession(sn).catch(() => null),
+  onEvent: ev => {
+    if (ev.type === 'device_offline' && memoryStore.devices[ev.device_sn]) memoryStore.devices[ev.device_sn].status = 'OFFLINE';
+    if (ev.type === 'flight_started' || ev.type === 'flight_ended') {
+      console.log(`[Chuyến bay] ${ev.type === 'flight_started' ? 'Cất cánh' : 'Kết thúc (' + ev.reason + ')'} – ${ev.device_sn} #${ev.flight_session_id}`);
     }
-  } catch (err) {
-    // Không ném lỗi ra ngoài làm ảnh hưởng luồng realtime
+    broadcastWebSocket({ ...ev, type: ev.type === 'device_online' || ev.type === 'device_offline' ? 'device_status' : ev.type, status: ev.type === 'device_offline' ? 'OFFLINE' : (ev.type === 'device_online' ? 'ONLINE' : undefined) });
   }
-}
+});
+const gatewayOfAircraft = {}; // SN máy bay -> SN tay điều khiển (từ gói topo)
+const FLIGHT_SWEEP_MS = 5000;
+const MEDIA_ATTACH_MS = 60000;
+setInterval(() => {
+  if (isDbConnected()) flightTracker.sweep().catch(err => console.warn('[Chuyến bay] sweep:', err.message));
+}, FLIGHT_SWEEP_MS).unref();
+setInterval(() => {
+  if (isDbConnected() && dbInitDone) flightTracker.attachMedia().catch(err => console.warn('[Chuyến bay] gắn ảnh:', err.message));
+}, MEDIA_ATTACH_MS).unref();
 
 // saveMediaToDb (cũ, gán cứng phiếu 1 và tự tạo cảnh báo 65 °C) đã thay bằng src/services/mediaIngest.js
 
@@ -524,7 +520,9 @@ function handleDjiMqttMessage(topic, json) {
     dev.pitch = d.attitude_pitch !== undefined ? d.attitude_pitch : (dev.pitch || 0);
     dev.roll = d.attitude_roll !== undefined ? d.attitude_roll : (dev.roll || 0);
     dev.satellites = (d.position_state?.gps_number !== undefined) ? d.position_state.gps_number : (dev.satellites || 0);
-    dev.is_fixed = d.position_state?.is_fixed || 0;
+    if (d.position_state?.is_fixed !== undefined) dev.is_fixed = d.position_state.is_fixed;
+    if (d.mode_code !== undefined) dev.mode_code = d.mode_code;
+    dev.gateway_sn = gatewayOfAircraft[sn] || dev.gateway_sn || null;
     dev.status = 'ONLINE';
     dev.last_seen = new Date();
 
@@ -539,8 +537,14 @@ function handleDjiMqttMessage(topic, json) {
 
     memoryStore.devices[sn] = dev;
 
-    // Lưu vào MySQL thật (chạy nền bất đồng bộ)
-    saveTelemetryToDb(sn, d, dev);
+    // Chuyến bay + telemetry vào MySQL (chạy nền, không chặn luồng realtime)
+    if (isDbConnected() && dbInitDone) {
+      flightTracker.onOsd(sn, dev).then(r => {
+        dev.flight_session_id = r.flight_session_id;
+        dev.airborne = r.airborne;
+        dev.rtk_state = r.rtk;
+      }).catch(err => console.warn('[Chuyến bay] OSD:', err.message));
+    }
 
     // Phát OSD chuẩn DUY NHẤT từ Máy Bay Mavic 3T tới Dashboard
     broadcastWebSocket({
@@ -567,6 +571,7 @@ function handleDjiMqttMessage(topic, json) {
       json.data.sub_devices.forEach(sub => {
         if (sub.sn) {
           const uavSn = sub.sn;
+          gatewayOfAircraft[uavSn] = sn;
           const dev = memoryStore.devices[uavSn] || {
             device_sn: uavSn,
             device_name: `DJI Mavic 3T (${uavSn})`,
@@ -1673,6 +1678,8 @@ async function initDatabase() {
   try {
     await runMigrations(dbConfig);
     dbInitDone = true;
+    const dangling = await flightTracker.closeDangling();
+    if (dangling) console.log(`[Chuyến bay] Đóng ${dangling} chuyến còn mở từ lần chạy trước.`);
     // Làm sạch ảnh nhận bằng code cũ (giá trị gán cứng) – chỉ chạm các dòng chưa có sha256
     const imported = await routeLibrary.importDiskKmz();
     if (imported) console.log(`[Đường bay] Đã đưa ${imported} file KMZ cũ trong uploads/waylines vào thư viện.`);

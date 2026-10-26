@@ -684,6 +684,32 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal(made.body.data.target_area, 'TM01');
     });
 
+    await t.test('chuyến bay: lưu chuyến, telemetry, OFFLINE và gắn ảnh vào chuyến (SQL thật)', async () => {
+        const { createTracker } = require('../src/services/flightTracker');
+        let t0 = Date.now() - 120000;
+        const tr = createTracker({ query: db.query, now: () => t0 });
+        const p = (hgt, v) => ({ lat: 11.8, lng: 106.59, alt: 60, rel_alt: hgt, speed: v, battery: 88, is_fixed: 2, mode_code: 5, gateway_sn: 'RC1' });
+        await tr.onOsd('UAV1', p(10, 4));
+        t0 += 5000; await tr.onOsd('UAV1', { ...p(30, 6), lng: 106.5905 });
+        const capturedAt = new Date(t0);
+        await db.query("INSERT INTO media_files (device_sn, file_name, file_url, captured_at) VALUES ('UAV1', 'DJI_TEST_T.JPG', '/x', ?)", [capturedAt]);
+        t0 += 40000; await tr.sweep();
+        const [f] = await db.query('SELECT * FROM flight_sessions WHERE device_sn = ?', ['UAV1']);
+        assert.equal(f.end_reason, 'LOST_LINK');
+        assert.ok(f.distance_m > 40 && f.distance_m < 70, String(f.distance_m));
+        assert.equal(f.max_relative_height, 30);
+        assert.equal(f.rtk_fix_ratio, 1);
+        assert.equal(f.photo_count, 1);
+        const logs = await db.query('SELECT * FROM telemetry_logs WHERE flight_session_id = ?', [f.flight_session_id]);
+        assert.equal(logs.length, 2);
+        const [dev] = await db.query('SELECT status, gateway_sn, rtk_state FROM uav_devices WHERE device_sn = ?', ['UAV1']);
+        assert.deepEqual({ ...dev }, { status: 'OFFLINE', gateway_sn: 'RC1', rtk_state: 'FIX' });
+        const [m] = await db.query("SELECT flight_session_id FROM media_files WHERE file_name = 'DJI_TEST_T.JPG'");
+        assert.equal(m.flight_session_id, f.flight_session_id);
+        await db.query("INSERT INTO flight_sessions (device_sn, started_at) VALUES ('UAV2', NOW())");
+        assert.equal(await tr.closeDangling(), 1);
+    });
+
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
         await db.closePool();
         const r = await api('GET', '/api/solar/areas');

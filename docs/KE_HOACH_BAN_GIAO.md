@@ -187,8 +187,13 @@ Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
 - [x] Bỏ `memoryStore.routes`; bộ vẽ tay dashboard sinh KMZ đúng chuẩn và lưu thư viện (B4).
 
 ### Giai đoạn C – Chuyến bay & giám sát (~4 ngày)
-- [ ] Bảng `flight_sessions`: tự nhận cất/hạ cánh, gắn phiếu/máy bay/tuyến; lịch sử + xem lại vết bay.
-- [ ] Đa máy bay; OFFLINE sau 30 s; trạng thái RTK; cảnh báo HMS.
+- [x] C1 – Bảng `flight_sessions` (migration 006) + `src/services/flightTracker.js`: tự nhận cất cánh (cao > 1,5 m hoặc tốc độ > 1 m/s)
+  và hạ cánh (< 0,8 m, < 0,3 m/s liên tục 10 s), gắn phiếu theo phiên Pilot; telemetry ≤ 1 lần/giây có `flight_session_id`;
+  OFFLINE sau 30 s không có OSD (đang bay → `LOST_LINK`); `uav_devices.rtk_state`, `gateway_sn` (từ gói topo);
+  ảnh gắn vào chuyến theo giờ chụp ±30 s (chạy lại mỗi phút vì ảnh về sau khi hạ cánh); chuyến còn mở khi server tắt → `SERVER_RESTART`.
+  Ngưỡng cất/hạ cánh cần thử với máy thật (độ cao `elevation` của Pilot 2 tính từ điểm cất cánh).
+- [ ] C2 – Lịch sử chuyến bay + xem lại vết bay.
+- [ ] Đa máy bay trên bản đồ; cảnh báo HMS.
 - [ ] Theo dõi tiến độ chụp realtime trên bản đồ (vị trí từng ảnh vừa về).
 - [ ] Livestream kênh theo mã phiếu.
 - [ ] Sửa số giả còn sót: KPI "DCL vượt ngưỡng 83.5 °C" ở Tổng quan, thanh OSD "Dãy 01 · 3.36 MWp".
