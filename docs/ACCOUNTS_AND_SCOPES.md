@@ -1,0 +1,9 @@
+# Tài khoản và phạm vi dữ liệu (E)
+
+Chạy migrations rồi `cd backend && npm run admin:create`. Lệnh chỉ tạo tài khoản chưa tồn tại, ghi mật khẩu ngẫu nhiên vào `backend/data/bootstrap-password` (0600, gitignore); bắt đổi ngay sau đăng nhập. Không tự sửa/xóa tài khoản hay dữ liệu nhà máy. Hash mẫu không đăng nhập được và không có mật khẩu dự phòng. Dashboard dùng cookie HttpOnly/SameSite Strict; Pilot dùng Bearer JWT HS256 có issuer/audience/jti, phiên SQL và thời hạn 12 giờ. Khóa tài khoản, đổi quyền/mật khẩu, đăng xuất thu hồi phiên; socket kiểm tra lại phiên và phạm vi mỗi sự kiện.
+
+`/dashboard/accounts.html`: đơn vị, người dùng/khóa/khôi phục, phân quyền, phạm vi UAV, danh mục chung, cấu hình lưu trữ, nhật ký. Không thể khóa/hạ quyền quản trị cuối cùng. Chỉ ADMIN dùng API legacy chưa có resolver; OPERATOR/ENGINEER/VIEWER dùng `/api/workspace/*`. Phạm vi phiếu cần **đồng thời** đơn vị và nhà máy; tài sản chỉ đọc, không cấp quyền sửa cho vận hành. Phiếu/UAV cũ chưa gán phạm vi chỉ ADMIN thấy. Gán lại trên giao diện, không tự đoán từ tên nhà máy. Tổ công tác legacy dùng riêng ADMIN; phạm vi tổ không được suy ra tự động.
+
+Khôi phục: cấu hình SMTP_* và PASSWORD_RESET_BASE_URL HTTPS. Token random lưu SHA256, hết hạn 20 phút, một lần; fragment URL tránh log token. Nếu thiếu SMTP trả 503 rõ ràng. Test chỉ tạo token hash trong DB test, không gửi email thật. Cần kiểm tra SMTP thật tại triển khai. Password tối thiểu 12 ký tự, tối đa 72 byte (giới hạn bcrypt).
+
+Kiểm chứng: 69 test Node/MySQL đạt (0 skip), gồm gate 401/403/428, không bypass admin123, cookie HttpOnly, nhà máy/đơn vị khác bị chặn, WS không lộ phiếu khác, reset một lần, logout và khóa thu hồi ngay. Chromium dashboard smoke đạt. Đây là kiểm thử localhost/fixture, chưa nghiệm thu RC hay email production. Phần I tiếp tục harden MQTT, storage, CORS và HTTPS; chưa coi receiver S3 local là STS production.

@@ -32,7 +32,7 @@ const AdmZip = require('adm-zip');
 // Database và các module định tuyến chuẩn hóa
 const { testConnection, query, isDbConnected, getStatus: getDbStatus, onStatusChange: onDbStatusChange, dbConfig, sendDbError } = require('./src/config/db');
 const { runMigrations } = require('./src/db/migrate');
-const { authRouter, verifyLogin, issuePilotToken } = require('./src/routes/auth');
+const { authRouter, verifyLogin, issuePilotToken, userForToken, tokenOf, loginLimit } = require('./src/routes/auth');
 const assetsRouter = require('./src/routes/assets');
 const basemapsRouter = require('./src/routes/basemaps');
 const { listActiveTickets, findTicketById } = require('./src/services/ticketService');
@@ -52,7 +52,13 @@ const { parseDjiThermalJpeg, getPixelTemperature } = require('./src/services/the
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws' });
+const wss = new WebSocketServer({server,path:'/ws',verifyClient:(info,done)=>{
+  const req=info.req,origin=req.headers.origin;
+  try{if(origin&&new URL(origin).host!==req.headers.host)return done(false,403);}catch(e){return done(false,403);}
+  userForToken(tokenOf(req)).then(user=>{if(!user||user.must_change_password)return done(false,401);req.user=user;done(true);}).catch(()=>done(false,503));
+}});
+wss.on('connection',(socket,req)=>{socket.user=req.user;socket.authToken=tokenOf(req);});
+authRouter.setOnRevoked(({user_id,session_id})=>{for(const c of wss.clients)if(c.user?.user_id===user_id&&(!session_id||c.user.session_id===session_id))c.close(1008,'Phiên đã thu hồi');});
 
 // Nạp cấu hình hệ thống động từ config.json
 const CONFIG_PATH = path.join(__dirname, 'config.json');
@@ -117,13 +123,20 @@ function getWifiIp() {
   return '10.20.28.50';
 }
 
-const PORT = systemConfig.port || process.env.PORT || 8080;
-const MQTT_PORT = systemConfig.mqtt_port || process.env.MQTT_PORT || 1883;
-const HOST_IP = systemConfig.host_ip || getWifiIp();
+const PORT = Number(process.env.PORT || systemConfig.port || 8080);
+const MQTT_PORT = Number(process.env.MQTT_PORT || systemConfig.mqtt_port || 1883);
+const HOST_IP = process.env.HOST_IP || systemConfig.host_ip || getWifiIp();
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+if(process.env.TRUST_PROXY==='1')app.set('trust proxy',1);
+app.use(require('./src/middleware/accessControl').audit);
+app.use(require('./src/middleware/accessControl').accessControl);
+app.use('/api/workspace',require('./src/routes/workspace'));
+const administrationRouter=require('./src/routes/administration');
+administrationRouter.setOnUserChanged(id=>{for(const c of wss.clients)if(c.user?.user_id===id)c.close(1008,'Quyền tài khoản đã thay đổi');});
+app.use('/api/admin',administrationRouter);
 
 // Chặn favicon.ico ngay lập tức tránh nghẽn server
 app.get('/favicon.ico', (req, res) => res.status(204).end());
@@ -192,7 +205,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     code: 0,
     data: {
-      db: getDbStatus(),
+      db: req.user?.role==='ADMIN'?getDbStatus():{connected:isDbConnected()},
       mqtt: { connected: Boolean(mqttClient && mqttClient.connected) },
       uptime_s: Math.round(process.uptime())
     }
@@ -720,10 +733,15 @@ function handleDjiMqttMessage(topic, json) {
 
 // WebSocket broadcast
 function broadcastWebSocket(data) {
-  const msg = JSON.stringify(data);
-  wss.clients.forEach(c => {
-    if (c.readyState === 1) c.send(msg);
-  });
+  for(const c of wss.clients){
+    if(c.readyState!==1)continue;
+    // Một chuỗi trên từng socket giữ thứ tự bản tin qua kiểm tra quyền async.
+    c.delivery=(c.delivery||Promise.resolve()).then(async()=>{
+      const user=await userForToken(c.authToken);
+      if(!user){c.close(1008,'Phiên đã hết hạn');return;}
+      if(await require('./src/services/socketAccess').eventAllowed(user,data) && c.readyState===1)c.send(JSON.stringify(data));
+    }).catch(()=>{});
+  }
 }
 
 // Tự động đồng bộ ảnh siêu tốc (Auto Sync) từ Drone/Tay Cầm về máy tính
@@ -766,7 +784,8 @@ mediaUploadRouter.setOnIngested((media) => {
 // 1. Danh sách phiếu đang thực hiện cho màn hình đăng nhập Pilot 2
 app.get('/api/pilot/tickets', async (req, res) => {
   try {
-    const tickets = await listActiveTickets();
+    const all = await listActiveTickets();
+    const tickets = req.user.role==='ADMIN'?all:all.filter(t=>req.user.plant_ids.includes(t.plant_id)&&req.user.unit_id!=null&&t.unit_id===req.user.unit_id);
     res.json({
       code: 0,
       data: tickets.map(t => ({
@@ -783,7 +802,7 @@ app.get('/api/pilot/tickets', async (req, res) => {
 });
 
 // 1.0 Endpoint đăng nhập Pilot 2: kiểm tra tài khoản và phiếu trong MySQL
-app.post('/api/pilot/login', async (req, res) => {
+app.post('/api/pilot/login', loginLimit, async (req, res) => {
   const { username, password, ticketId, rc_sn: rcSn, aircraft_sn: aircraftSn } = req.body || {};
   console.log(`[Pilot 2 Login] Remote yêu cầu đăng nhập: User=${username}, TicketID=${ticketId}`);
 
@@ -794,6 +813,10 @@ app.post('/api/pilot/login', async (req, res) => {
     if (!auth.ok) {
       return res.status(auth.status).json({ code: auth.status, message: auth.message });
     }
+    if(auth.user.must_change_password)return res.status(428).json({code:428,message:'Đổi mật khẩu trên Web trước khi kết nối Pilot'});
+    const actor=await userForToken(auth.token);
+    if(!actor)return res.status(401).json({code:401,message:'Phiên không hợp lệ'});
+    try{await require('./src/services/authorization').ticket(actor,Number(ticketId));}catch(e){return res.status(403).json({code:403,message:'Không có quyền với phiếu này'});}
     ticket = await findTicketById(ticketId);
   } catch (err) {
     return sendDbError(res, err);
@@ -809,6 +832,7 @@ app.post('/api/pilot/login', async (req, res) => {
   let sessionId = null;
   let ticketRouteList = [];
   let liveStream = null;
+  let pilotToken = null;
   let uploadNamespace = null;
   try {
     const sn = v => (typeof v === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(v) ? v : null);
@@ -817,6 +841,7 @@ app.post('/api/pilot/login', async (req, res) => {
     if (streamDevice) liveStream = await monitoring.ensureStream(ticket.ticket_id, streamDevice);
     ticketRouteList = await require('./src/services/ticketRoutes').routesOfTicket(ticket.ticket_id);
     uploadNamespace = (await query('SELECT upload_namespace FROM pilot_sessions WHERE session_id=?',[sessionId]))[0].upload_namespace;
+    pilotToken=await issuePilotToken(auth.user,sessionId,systemConfig.workspace_id);
   } catch (err) {
     return sendDbError(res, err);
   }
@@ -844,7 +869,7 @@ app.post('/api/pilot/login', async (req, res) => {
       assigned_ticket: `${ticket.ticket_code} - ${ticket.ticket_name}`,
       user: auth.user,
       license: systemConfig.dji_license,
-      token: issuePilotToken(auth.user,sessionId,systemConfig.workspace_id),
+      token: pilotToken,
       mqtt: {
         host: `tcp://${HOST_IP}:${MQTT_PORT}`,
         username: 'pilot',

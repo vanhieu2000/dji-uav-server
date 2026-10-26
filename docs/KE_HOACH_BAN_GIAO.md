@@ -221,11 +221,11 @@ Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
 - Tiêu chí xong: 2 chu kỳ bay DCL → biểu đồ nhiệt theo mối nối, cảnh báo sớm khi tăng nhanh.
 
 ### Giai đoạn E – Tài khoản, phân quyền, cấu hình (~6 ngày) – hạng mục #1–5, #39 (phần quyền)
-- [ ] Màn đăng nhập / đăng xuất / thông tin tài khoản trên dashboard (#1); bỏ mật khẩu chung `admin123`, sửa hash mẫu.
-- [ ] Đổi mật khẩu, quên mật khẩu qua email (#2).
-- [ ] Quản lý đơn vị (bảng `units`) và người dùng: thêm / sửa / khóa / khôi phục (#3).
-- [ ] Vai trò + quyền chức năng + phạm vi dữ liệu theo nhà máy / đơn vị; middleware JWT cho mọi API (#4, #39).
-- [ ] Danh mục chung (loại lỗi, tổ công tác...), cấu hình lưu ảnh (thời gian giữ, dung lượng) (#5).
+- [x] Màn đăng nhập / đăng xuất / thông tin tài khoản trên dashboard (#1); bỏ mật khẩu chung `admin123`, sửa hash mẫu.
+- [x] Đổi mật khẩu, quên mật khẩu qua email (#2).
+- [x] Quản lý đơn vị (bảng `units`) và người dùng: thêm / sửa / khóa / khôi phục (#3).
+- [x] Vai trò + quyền chức năng + phạm vi dữ liệu theo nhà máy / đơn vị; middleware JWT cho mọi API (#4, #39).
+- [x] Danh mục chung (loại lỗi, tổ công tác...), cấu hình lưu ảnh (thời gian giữ, dung lượng) (#5).
 - Tiêu chí xong: tài khoản vận hành không sửa được tài sản; API không token → 401.
 
 ### Giai đoạn H – Web điện thoại, báo cáo, API mở (~7 ngày) – hạng mục #11, #33–37
@@ -362,3 +362,6 @@ Xem docs/INSPECTION_WORKFLOW.md. Ảnh thiếu bằng chứng để UNRESOLVED; 
 
 ### G – 26/10/2026
 Xem docs/TEMPERATURE_ALERTS.md. 61 test Node/MySQL đã đạt trước hoàn thiện UI; Chromium kiểm tra chart trống không tạo số liệu. Số đo từ Vision cần được đội Vision kiểm định; chưa có nhiệt radiometric từ hardware. Giữ D2 và nghiệm thu phần cứng chưa hoàn tất.
+
+### E – 26/10/2026
+Tài khoản thật, session SQL/thu hồi/WS filter, đơn vị và phạm vi phiếu/UAV, API workspace fail-closed, quản trị/UI, email reset token hash. 69 test đạt, Chromium smoke đạt. Xem docs/ACCOUNTS_AND_SCOPES.md; SMTP thực cần cấu hình và thử riêng.

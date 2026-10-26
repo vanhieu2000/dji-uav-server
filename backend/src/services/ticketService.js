@@ -6,7 +6,7 @@ const { query } = require('../config/db');
 const ACTIVE_STATUSES = ['PENDING', 'ASSIGNED', 'EXECUTING'];
 
 const TICKET_SELECT = `
-    SELECT t.ticket_id, t.ticket_code, t.ticket_name, t.inspection_type, t.target_facility,
+    SELECT t.plant_id,t.unit_id,t.ticket_id, t.ticket_code, t.ticket_name, t.inspection_type, t.target_facility,
            t.status, t.assigned_route_id, t.assigned_device_sn, t.livestream_channel,
            r.route_name
     FROM inspection_tickets t

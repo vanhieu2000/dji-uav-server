@@ -165,7 +165,7 @@
 
       <div class="form-group">
         <label for="ticketSelect">Phiếu Kiểm Tra Hiện Tại</label>
-        <select id="ticketSelect" required>
+        <select id="ticketSelect">
           <option value="">Đang tải danh sách phiếu...</option>
         </select>
       </div>
@@ -234,11 +234,12 @@
         select.innerHTML = '<option value="">Lỗi tải phiếu: ' + escapeHtml(err.message) + '</option>';
       }
     }
-    loadTickets();
+    // Danh sách phiếu chỉ tải sau xác thực.
+    let ticketsLoaded=false;
 
     function addLog(msg) {
       const time = new Date().toLocaleTimeString();
-      logBox.innerHTML += `[${time}] ${msg}<br>`;
+      const line=document.createElement("div");line.textContent=`[${time}] ${String(msg).replace(/<[^>]*>/g, "")}`;logBox.append(line);
       logBox.scrollTop = logBox.scrollHeight;
       try {
         fetch('/api/pilot/log', {
@@ -267,9 +268,12 @@
     }
 
     // Đăng ký callback toàn cục theo chuẩn Thinklabs / DJI Cloud API
+    let bridgeVerified=false;
     window.connectCallback = function(t) {
       addLog("<span style='color:#3fb950; font-weight:bold;'>✓ [DJI Pilot 2] MQTT Bắt tay thành công (Connect Callback): " + JSON.stringify(t) + "</span>");
-      showConnectedSuccess();
+      let value=t;try{if(typeof t==='string')value=JSON.parse(t);}catch(e){}
+      if(bridgeVerified && (value===true || value===0 || value?.code===0 || value?.connected===true)) showConnectedSuccess();
+      else addLog("Chưa có callback kết nối hợp lệ; cần kiểm tra Pilot 2.");
     };
 
     window.liveStatusCallback = function(t) {
@@ -311,7 +315,14 @@
       if (rcSn || aircraftSn) addLog('Tay điều khiển: ' + (rcSn || '?') + ' · Máy bay: ' + (aircraftSn || '?'));
 
       try {
-        const res = await fetch('/api/pilot/login', {
+        if(!ticketsLoaded){
+          const login=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+          const result=await login.json();if(!login.ok)throw new Error(result.message);
+          if(result.data.user.must_change_password)throw new Error('Đổi mật khẩu trên Web trước khi dùng Pilot.');
+          await loadTickets();ticketsLoaded=true;connectBtn.disabled=false;connectBtn.innerText='KẾT NỐI PHIẾU ĐÃ CHỌN';return;
+        }
+        if(!ticketId)throw new Error('Chọn phiếu kiểm tra trước khi kết nối.');
+        const res = await fetch('/api/pilot/login' , {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password, ticketId, rc_sn: rcSn, aircraft_sn: aircraftSn })
@@ -323,7 +334,7 @@
           document.getElementById('liveTargetUrl').textContent = data.data.livestream ? data.data.livestream.rtmpUrl : 'Chưa đọc được serial thiết bị. Kết nối lại Pilot 2 sau khi nhận diện RC/UAV.';
           addLog("✓ Xác thực thành công: " + data.data.workspace_name);
           statusBox.className = "status-box success";
-          statusBox.innerHTML = `<strong>KẾT NỐI THÀNH CÔNG!</strong><br>Đã gán: ${escapeHtml(data.data.assigned_ticket)}<br>MQTT Host: ${escapeHtml(data.data.mqtt.host)}`;
+          statusBox.innerHTML = `<strong>ĐÃ XÁC THỰC — CHỜ PILOT KẾT NỐI</strong><br>Đã gán: ${escapeHtml(data.data.assigned_ticket)}<br>MQTT Host: ${escapeHtml(data.data.mqtt.host)}`;
 
           // Nếu đang chạy trong app DJI Pilot 2 thực tế:
           if (isDjiBridge || (typeof window !== 'undefined' && window.djiBridge)) {
@@ -340,9 +351,12 @@
               addLog("Phản hồi VerifyLicense: " + JSON.stringify(licRes));
 
               const isVerified = window.djiBridge.platformIsVerified();
-              addLog("Trạng thái platformIsVerified: " + isVerified);
+              const verified=typeof isVerified==='string'?JSON.parse(isVerified):isVerified;
+              bridgeVerified=verified===true||verified?.data===true;
+              if(!bridgeVerified)throw new Error('License chưa được xác thực');
+              window.djiBridge.platformSetWorkspaceId(data.data.workspace_id);
             } catch (err) {
-              addLog("Lỗi VerifyLicense: " + err.message);
+              throw new Error("Không xác thực được license DJI: "+err.message);
             }
 
             // 2. Nạp module API đầu tiên (Bắt buộc theo chuẩn DJI & Thinklabs)
@@ -444,10 +458,8 @@
           connectBtn.innerText = "ĐÃ GỬI LỆNH KẾT NỐI";
           connectBtn.style.background = "#238636";
 
-          // Tự động hiển thị thẻ trạng thái kết nối thành công
-          setTimeout(() => {
-            showConnectedSuccess();
-          }, 1200);
+          if(!window.djiBridge){statusBox.textContent='Đăng nhập thành công. Trình duyệt này không có DJI Bridge nên chưa kết nối UAV.';connectBtn.disabled=false;}
+          else addLog('Đang chờ callback MQTT thật từ Pilot 2.');
 
         } else {
           statusBox.className = "status-box error";

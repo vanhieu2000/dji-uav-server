@@ -1,171 +1,91 @@
-const express = require('express');
-const router = express.Router();
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { query, isDbConnected } = require('../config/db');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'uav_solar_secret_key_2026_jwt';
-
-// Middleware xác thực JWT token
-function authenticateToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (!token) {
-        return res.status(401).json({ code: 401, message: 'Yêu cầu token xác thực hợp lệ' });
-    }
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.status(403).json({ code: 403, message: 'Token hết hạn hoặc không hợp lệ' });
-        req.user = user;
-        next();
-    });
+const express=require('express'),bcrypt=require('bcryptjs'),jwt=require('jsonwebtoken'),crypto=require('crypto');
+const {query,withTransaction,sendDbError}=require('../config/db');
+const {asyncHandler,ok}=require('../utils/http');
+const v=require('../utils/validate');
+const JWT_SECRET=require('../services/authKeys').signingKey();
+const OPTIONS={algorithms:['HS256'],audience:'dji-uav',issuer:'dji-uav-server'};
+const router=express.Router();let onRevoked=()=>{};
+router.setOnRevoked=fn=>{onRevoked=fn;};
+const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
+const publicUser=u=>({user_id:u.user_id,username:u.username,full_name:u.full_name,role:u.role,email:u.email,phone:u.phone,unit_id:u.unit_id,auth_version:u.auth_version||0,must_change_password:!!u.must_change_password});
+function tokenOf(req){
+    const get=name=>typeof req.get==='function'?req.get(name):req.headers[name];
+    const auth=get('authorization');if(auth)return /^Bearer\s+(.+)$/i.exec(auth)?.[1]||null;
+    const native=get('x-auth-token');if(native)return native;
+    try{return (req.headers.cookie||'').split(';').map(s=>s.trim()).find(s=>s.startsWith('uav_session='))?.slice(12)||null;}catch(e){return null;}
 }
-
-/**
- * Kiểm tra tài khoản và cấp token. Dùng chung cho Web và DJI Pilot 2.
- * @returns {Promise<{ok: true, token: string, user: object, message: string} | {ok: false, status: number, message: string}>}
- */
-async function verifyLogin(username, password) {
-    if (!username || !password) {
-        return { ok: false, status: 400, message: 'Vui lòng cung cấp tài khoản và mật khẩu' };
-    }
-
-    if (!isDbConnected()) {
-        // Chế độ dự phòng khi DB đang khởi động: cho phép admin mặc định
-        if (username === 'admin' && password === 'admin123') {
-            const token = jwt.sign({ user_id: 1, username: 'admin', role: 'ADMIN', full_name: 'Quản Trị Viên' }, JWT_SECRET, { expiresIn: '24h' });
-            return {
-                ok: true,
-                token,
-                message: 'Đăng nhập thành công (Fallback)',
-                user: { user_id: 1, username: 'admin', full_name: 'Quản Trị Viên', role: 'ADMIN' }
-            };
-        }
-    }
-
-    const users = await query('SELECT * FROM users WHERE username = ? LIMIT 1', [username]);
-    if (!users || users.length === 0) {
-        return { ok: false, status: 401, message: 'Tài khoản không tồn tại' };
-    }
-
-    const user = users[0];
-    if (user.status === 'LOCKED') {
-        return { ok: false, status: 403, message: 'Tài khoản đã bị tạm khóa' };
-    }
-
-    let isMatch = false;
-    // Kiểm tra hash bcrypt hoặc so khớp mật khẩu mặc định
-    if (user.password_hash.startsWith('$2a$') || user.password_hash.startsWith('$2b$')) {
-        isMatch = await bcrypt.compare(password, user.password_hash);
-    } else {
-        isMatch = (password === user.password_hash || password === 'admin123');
-    }
-
-    if (!isMatch && password !== 'admin123') {
-        return { ok: false, status: 401, message: 'Mật khẩu không chính xác' };
-    }
-
-    const token = jwt.sign(
-        { user_id: user.user_id, username: user.username, role: user.role, full_name: user.full_name },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-    );
-
-    // Cập nhật thời điểm đăng nhập gần nhất
-    await query('UPDATE users SET last_login = NOW() WHERE user_id = ?', [user.user_id]);
-
-    return {
-        ok: true,
-        token,
-        message: 'Đăng nhập thành công',
-        user: {
-            user_id: user.user_id,
-            username: user.username,
-            full_name: user.full_name,
-            role: user.role,
-            email: user.email,
-            phone: user.phone
-        }
-    };
+function decodeToken(token){try{return jwt.verify(String(token),JWT_SECRET,OPTIONS);}catch(e){return null;}}
+async function issueToken(user,claims={}){
+    const id=crypto.randomUUID(),payload={...publicUser(user),...claims};
+    const token=jwt.sign(payload,JWT_SECRET,{algorithm:'HS256',audience:'dji-uav',issuer:'dji-uav-server',expiresIn:'12h',jwtid:id,subject:String(user.user_id)});
+    await query(`INSERT INTO user_sessions (session_id,user_id,device_type,refresh_token,expires_at) VALUES (?,?,'UNKNOWN',?,DATE_ADD(NOW(),INTERVAL 12 HOUR))`,[id,user.user_id,sha(token)]);
+    return token;
 }
-
-// 1. Đăng nhập
-router.post('/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-        const result = await verifyLogin(username, password);
-        if (!result.ok) {
-            return res.status(result.status).json({ code: result.status, message: result.message });
-        }
-        res.json({
-            code: 0,
-            message: result.message,
-            data: { token: result.token, user: result.user }
-        });
-    } catch (err) {
-        console.error('[Auth Error]', err);
-        res.status(500).json({ code: 500, message: 'Lỗi máy chủ khi đăng nhập: ' + err.message });
-    }
-});
-
-// 2. Lấy thông tin tài khoản hiện tại
-router.get('/me', authenticateToken, async (req, res) => {
-    try {
-        const users = await query('SELECT user_id, username, full_name, email, phone, role, status, last_login, created_at FROM users WHERE user_id = ?', [req.user.user_id]);
-        if (!users || users.length === 0) {
-            return res.status(404).json({ code: 404, message: 'Không tìm thấy thông tin tài khoản' });
-        }
-        res.json({ code: 0, data: users[0] });
-    } catch (err) {
-        res.status(500).json({ code: 500, message: err.message });
-    }
-});
-
-// 3. Đổi mật khẩu
-router.post('/change-password', authenticateToken, async (req, res) => {
-    try {
-        const { old_password, new_password } = req.body;
-        if (!old_password || !new_password) {
-            return res.status(400).json({ code: 400, message: 'Vui lòng cung cấp mật khẩu cũ và mới' });
-        }
-
-        const users = await query('SELECT * FROM users WHERE user_id = ?', [req.user.user_id]);
-        if (!users || users.length === 0) return res.status(404).json({ code: 404, message: 'Tài khoản không tồn tại' });
-
-        const user = users[0];
-        let isOldValid = false;
-        if (user.password_hash.startsWith('$2')) {
-            isOldValid = await bcrypt.compare(old_password, user.password_hash);
-        } else {
-            isOldValid = (old_password === user.password_hash || old_password === 'admin123');
-        }
-
-        if (!isOldValid) {
-            return res.status(400).json({ code: 400, message: 'Mật khẩu cũ không chính xác' });
-        }
-
-        const newHash = await bcrypt.hash(new_password, 10);
-        await query('UPDATE users SET password_hash = ? WHERE user_id = ?', [newHash, req.user.user_id]);
-
-        res.json({ code: 0, message: 'Đổi mật khẩu thành công' });
-    } catch (err) {
-        res.status(500).json({ code: 500, message: err.message });
-    }
-});
-
-/** Đọc token (Web hoặc DJI Pilot 2 gửi qua header x-auth-token). Trả payload hoặc null. */
-function decodeToken(token) {
-    if (!token) return null;
-    try { return jwt.verify(String(token), JWT_SECRET); } catch (e) { return null; }
+function issuePilotToken(user,sessionId,workspaceId){return issueToken(user,{pilot_session_id:sessionId,workspace_id:workspaceId});}
+async function userForToken(token){
+    const p=decodeToken(token);if(!p||!Number.isSafeInteger(p.user_id)||p.user_id<1||typeof p.jti!=='string')return null;
+    const [u]=await query(`SELECT u.* FROM users u JOIN user_sessions s ON s.user_id=u.user_id
+        WHERE u.user_id=? AND s.session_id=? AND s.expires_at>NOW() AND u.status='ACTIVE'`,[p.user_id,p.jti]);
+    if(!u||u.auth_version!==(p.auth_version||0))return null;
+    const plants=await query('SELECT plant_id FROM user_plant_scopes WHERE user_id=?',[u.user_id]);
+    const permissions=await query('SELECT permission FROM role_permissions WHERE role=?',[u.role]);
+    return {...publicUser(u),session_id:p.jti,pilot_session_id:p.pilot_session_id||null,workspace_id:p.workspace_id||null,
+        plant_ids:plants.map(x=>x.plant_id),permissions:permissions.map(x=>x.permission)};
 }
-
-function issuePilotToken(user, sessionId, workspaceId) {
-    return jwt.sign({...user,pilot_session_id:sessionId,workspace_id:workspaceId},JWT_SECRET,{expiresIn:'12h'});
+async function authenticateToken(req,res,next){
+    if(req.user)return next();
+    const token=tokenOf(req);if(!token)return res.status(401).json({code:401,message:'Cần đăng nhập'});
+    try{const user=await userForToken(token);if(!user)return res.status(401).json({code:401,message:'Phiên không hợp lệ hoặc đã hết hạn'});req.user=user;next();}
+    catch(e){sendDbError(res,e);}
 }
-
-module.exports = {
-    issuePilotToken,
-    authRouter: router,
-    authenticateToken,
-    verifyLogin,
-    decodeToken
-};
+const loginBuckets=new Map();
+function loginLimit(req,res,next){
+    const key=req.ip||'unknown',now=Date.now();let b=loginBuckets.get(key);
+    if(!b||now-b.start>15*60000){b={start:now,count:0};loginBuckets.set(key,b);}
+    if(loginBuckets.size>10000)for(const [k,x]of loginBuckets)if(now-x.start>15*60000)loginBuckets.delete(k);
+    if(++b.count>20)return res.status(429).json({code:429,message:'Thử lại sau 15 phút'});next();
+}
+async function verifyLogin(username,password){
+    if(typeof username!=='string'||!username.trim()||username.length>50||typeof password!=='string'||password.length>128)return {ok:false,status:400,message:'Thông tin đăng nhập không hợp lệ'};
+    const [u]=await query('SELECT * FROM users WHERE username=? LIMIT 1',[username.trim()]);
+    const hash=u&&/^\$2[aby]\$/.test(u.password_hash)?u.password_hash:'$2b$10$C6UzMDM.H6dfI/f/IKcEe.6g9iGeBMKkmbv7zS7CIB1u3TKl0/E5K';
+    let valid=false;try{valid=await bcrypt.compare(password,hash);}catch(e){/* invalid legacy hash never grants access */}
+    if(!u||u.status!=='ACTIVE'||!valid)return {ok:false,status:401,message:'Tài khoản hoặc mật khẩu không đúng'};
+    const token=await issueToken(u);await query('UPDATE users SET last_login=NOW() WHERE user_id=?',[u.user_id]);
+    return {ok:true,token,user:publicUser(u),message:'Đăng nhập thành công'};
+}
+function cookie(req,res,token){res.cookie('uav_session',token,{httpOnly:true,sameSite:'strict',secure:req.secure,path:'/',maxAge:12*3600000});}
+router.post('/login',loginLimit,asyncHandler(async(req,res)=>{const r=await verifyLogin(req.body.username,req.body.password);if(!r.ok)return res.status(r.status).json({code:r.status,message:r.message});cookie(req,res,r.token);ok(res,{token:r.token,user:r.user});}));
+router.get('/me',authenticateToken,asyncHandler(async(req,res)=>ok(res,req.user)));
+router.post('/logout',authenticateToken,asyncHandler(async(req,res)=>{await query('DELETE FROM user_sessions WHERE session_id=?',[req.user.session_id]);onRevoked({user_id:req.user.user_id,session_id:req.user.session_id});res.clearCookie('uav_session',{path:'/',httpOnly:true,sameSite:'strict',secure:req.secure});ok(res,{});}));
+function passwordInput(value){if(typeof value!=='string'||value.length<12||Buffer.byteLength(value,'utf8')>72)throw new v.ValidationError('Mật khẩu mới cần ít nhất 12 ký tự và tối đa 72 byte');return value;}
+router.post('/change-password',authenticateToken,asyncHandler(async(req,res)=>{
+    const password=passwordInput(req.body.new_password);const [u]=await query('SELECT * FROM users WHERE user_id=?',[req.user.user_id]);
+    if(typeof req.body.old_password!=='string'||!await bcrypt.compare(req.body.old_password,u.password_hash))return res.status(400).json({code:400,message:'Mật khẩu cũ không đúng'});
+    const hash=await bcrypt.hash(password,12);
+    await withTransaction(async conn=>{await conn.execute('UPDATE users SET password_hash=?,auth_version=auth_version+1,must_change_password=0 WHERE user_id=?',[hash,u.user_id]);await conn.execute('DELETE FROM user_sessions WHERE user_id=?',[u.user_id]);});
+    onRevoked({user_id:u.user_id});res.clearCookie('uav_session',{path:'/'});ok(res,{reauthenticate:true},'Đã đổi mật khẩu, đăng nhập lại');
+}));
+router.post('/forgot-password',loginLimit,asyncHandler(async(req,res)=>{
+    if(!process.env.SMTP_HOST||!process.env.PASSWORD_RESET_BASE_URL)return res.status(503).json({code:503,message:'Chưa cấu hình dịch vụ khôi phục mật khẩu; liên hệ quản trị'});
+    const email=v.requiredString(req.body.email,'email',255);
+    const [u]=await query("SELECT user_id,email FROM users WHERE email=? AND status='ACTIVE'",[email]);
+    if(u){
+        const token=crypto.randomBytes(32).toString('hex');await query('DELETE FROM password_reset_tokens WHERE user_id=?',[u.user_id]);
+        await query('INSERT INTO password_reset_tokens (token_hash,user_id,expires_at) VALUES (?,?,DATE_ADD(NOW(),INTERVAL 20 MINUTE))',[sha(token),u.user_id]);
+        try{await require('../services/passwordMail').sendReset(u.email,token);}catch(e){await query('DELETE FROM password_reset_tokens WHERE token_hash=?',[sha(token)]);console.warn('[Mật khẩu] Không gửi được email khôi phục');}
+    }
+    ok(res,{},'Nếu tài khoản hợp lệ, hướng dẫn sẽ được gửi qua email');
+}));
+router.post('/reset-password',loginLimit,asyncHandler(async(req,res)=>{
+    if(typeof req.body.token!=='string'||!/^[a-f0-9]{64}$/.test(req.body.token))throw new v.ValidationError('Link khôi phục không hợp lệ');
+    const password=passwordInput(req.body.new_password),hash=await bcrypt.hash(password,12);
+    const uid=await withTransaction(async conn=>{
+        const [rows]=await conn.execute('SELECT * FROM password_reset_tokens WHERE token_hash=? AND expires_at>NOW() AND used_at IS NULL FOR UPDATE',[sha(req.body.token)]);
+        const r=rows[0];if(!r)throw new v.ValidationError('Link đã hết hạn hoặc đã dùng');
+        const [changed]=await conn.execute("UPDATE users SET password_hash=?,auth_version=auth_version+1,must_change_password=0 WHERE user_id=? AND status='ACTIVE'",[hash,r.user_id]);
+        if(!changed.affectedRows)throw new v.ValidationError('Tài khoản không thể khôi phục');
+        await conn.execute('UPDATE password_reset_tokens SET used_at=NOW() WHERE token_hash=?',[sha(req.body.token)]);await conn.execute('DELETE FROM user_sessions WHERE user_id=?',[r.user_id]);return r.user_id;
+    });onRevoked({user_id:uid});ok(res,{},'Đã đặt lại mật khẩu');
+}));
+module.exports={authRouter:router,authenticateToken,verifyLogin,decodeToken,issueToken,issuePilotToken,userForToken,tokenOf,passwordInput,publicUser,loginLimit};

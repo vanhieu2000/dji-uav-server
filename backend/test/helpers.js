@@ -120,4 +120,11 @@ async function startTestApp() {
     return { server, base, api, close: () => new Promise(r => server.close(r)) };
 }
 
-module.exports = { TEST_DB, rootConfig, mysqlAvailable, resetTestDatabase, dropTestDatabase, startTestApp, fakeDjiJpeg };
+async function adminHeaders(){
+    const db=require('../src/config/db');
+    await db.query("INSERT IGNORE INTO users (user_id,username,password_hash,full_name,role) VALUES (1,'fixture-admin','not-a-runtime-password','Fixture Admin','ADMIN')");
+    const [user]=await db.query('SELECT * FROM users WHERE user_id=1');
+    return {Authorization:'Bearer '+await require('../src/routes/auth').issueToken(user)};
+}
+
+module.exports = { adminHeaders, TEST_DB, rootConfig, mysqlAvailable, resetTestDatabase, dropTestDatabase, startTestApp, fakeDjiJpeg };

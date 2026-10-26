@@ -782,7 +782,7 @@ test('API tài sản & bản đồ', async (t) => {
         const job = await jobs.enqueue(mediaId);
         assert.equal(job.status, 'QUEUED');
         assert.equal((await jobs.enqueue(mediaId)).job_id, job.job_id);
-        const admin = { Authorization: 'Bearer '+require('jsonwebtoken').sign({user_id:1,role:'ADMIN'},process.env.JWT_SECRET) };
+        const admin = await h.adminHeaders();
         assert.equal((await api('PUT','/api/vision/rules/PANEL',{enabled:true})).status,401);
         assert.equal((await api('PUT','/api/vision/rules/PANEL',{max_temp_c:80,delta_t_c:20,min_confidence:.8,enabled:true},admin)).status,200);
         const payload = { contract_version:'2.0', job_id:job.job_id, media_id:mediaId, input_sha256:sha, result_version:1,
@@ -901,7 +901,7 @@ test('API tài sản & bản đồ', async (t) => {
     await t.test('lịch sử nhiệt: hai chu kỳ mối nối, xu hướng, ngưỡng riêng và nhật ký xử lý', async () => {
         const jobs=require('../src/services/visionJobs');
         const {sha256File}=require('../src/services/mediaIngest');
-        const admin={Authorization:'Bearer '+require('jsonwebtoken').sign({user_id:1,role:'ADMIN'},process.env.JWT_SECRET)};
+        const admin=await h.adminHeaders();
         const machine={Authorization:'Bearer '+process.env.VISION_WEBHOOK_SECRET};
         const [dcl]=await db.query('SELECT disconnector_id FROM disconnectors LIMIT 1');
         const contact=await db.query("INSERT INTO dcl_contacts (disconnector_id,contact_code) VALUES (?,'G-FIXTURE')",[dcl.disconnector_id]);

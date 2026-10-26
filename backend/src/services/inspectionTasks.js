@@ -38,6 +38,9 @@ async function saveTask(body,id=null){
         await exists(conn,'capture_profiles','profile_id',profile,'hồ sơ chụp');await exists(conn,'inspection_teams','team_id',team,'tổ công tác');await exists(conn,'users','user_id',inspector,'người phụ trách');
         const device=v.optionalString(b.assigned_device_sn,'mã UAV',64);
         await exists(conn,'uav_devices','device_sn',device,'UAV được giao');
+        const plantId=v.isBlank(b.plant_id)?null:v.parseId(b.plant_id,'nhà máy');
+        const unitId=v.isBlank(b.unit_id)?null:v.parseId(b.unit_id,'đơn vị');
+        await exists(conn,'plants','plant_id',plantId,'nhà máy');await exists(conn,'units','unit_id',unitId,'đơn vị');
         const notes=v.optionalString(b.notes,'ghi chú',5000);
         let revision=current?current.revision+1:0;
         if(!id){
@@ -46,6 +49,7 @@ async function saveTask(body,id=null){
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,[code,name,type,facility,device,inspector,notes,team,profile,start,end,b.vision_required?1:0]);id=r.insertId;
         }else await conn.execute(`UPDATE inspection_tickets SET ticket_name=?,inspection_type=?,target_facility=?,assigned_device_sn=?,inspector_id=?,notes=?,team_id=?,capture_profile_id=?,planned_start_at=?,planned_end_at=?,vision_required=?,revision=?,reconciled_at=NULL WHERE ticket_id=?`,
             [name,type,facility,device,inspector,notes,team,profile,start,end,b.vision_required?1:0,revision,id]);
+        await conn.execute('UPDATE inspection_tickets SET plant_id=?,unit_id=? WHERE ticket_id=?',[plantId,unitId,id]);
         if(body.scope!==undefined){
             if(!Array.isArray(body.scope)||body.scope.length>5000)throw new v.ValidationError('Phạm vi tối đa 5000 mục');
             const seen=new Set();await conn.execute('DELETE FROM ticket_details WHERE ticket_id=?',[id]);

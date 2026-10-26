@@ -11,6 +11,8 @@ const path=require('path');const req=require('module').createRequire(path.resolv
   if(u.pathname.startsWith('/api/')){
    if(route.request().method()!=='GET')commands.push(u.pathname);
    let data=[];
+   if(u.pathname==='/api/workspace/context')data={plants:[]};
+   if(u.pathname==='/api/auth/me')data={user_id:1,role:'ADMIN',username:'fixture-admin'};
    if(u.pathname==='/api/insights/charts')data={tickets:[],defects:[],areas:[],temperatures:[]};
    if(u.pathname==='/api/health')data={db:{connected:true}};
    if(u.pathname==='/api/tickets')data=[{ticket_id:1,ticket_code:'TEST-1',ticket_name:'Phiếu thử'}];
