@@ -157,3 +157,10 @@
 .gis-fh-player{align-items:center;gap:8px;margin-top:8px}
 .gis-fh-player input[type=range]{flex:1;min-width:120px}
 .gis-fh-player select{width:auto}
+
+/* Đội bay realtime (C3) */
+.gis-fleet-icon{background:none;border:0}
+.gis-fleet-drone{width:34px;height:34px;border-radius:50%;background:var(--c);border:2px solid #fff;box-shadow:0 0 14px var(--c);display:grid;place-items:center;color:#fff;font-size:15px}
+.gis-fleet-drone.off{opacity:.55;box-shadow:none}
+.gis-fleet-arrow{display:inline-block;transform-origin:50% 50%;margin-top:-1px}
+.gis-fleet-label{position:absolute;left:38px;top:7px;white-space:nowrap;background:rgba(15,23,42,.82);color:#fff;border-left:3px solid var(--c);padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600}

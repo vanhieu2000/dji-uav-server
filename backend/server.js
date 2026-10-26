@@ -1505,17 +1505,44 @@ app.get('/api/media/thermal-point', (req, res) => {
 app.get('/api/devices', async (req, res) => {
   try {
     const rows = await query('SELECT * FROM uav_devices ORDER BY device_sn ASC');
-    const result = (rows || []).map(d => {
-      const isOnline = Boolean(memoryStore.devices[d.device_sn]) || Boolean(memoryStore.gateways[d.device_sn]);
-      return {
-        ...d,
-        status: isOnline ? 'ONLINE' : 'OFFLINE'
-      };
-    });
+    const result = (rows || []).map(d => ({ ...d, status: liveStatus(d.device_sn) }));
     res.json({ code: 0, data: result });
   } catch (err) {
-    res.status(500).json({ code: 500, message: err.message });
+    sendDbError(res, err);
   }
+});
+
+/** Trạng thái thật theo OSD gần nhất (không dựa vào việc từng thấy máy trong bộ nhớ). */
+function liveStatus(sn) {
+  const live = flightTracker.snapshot().find(x => x.device_sn === sn);
+  if (live && live.online) return live.airborne ? 'IN_FLIGHT' : 'ONLINE';
+  const gw = memoryStore.gateways[sn];
+  if (gw && gw.last_seen && Date.now() - new Date(gw.last_seen).getTime() < FLEET_GATEWAY_TIMEOUT_MS) return 'ONLINE';
+  return 'OFFLINE';
+}
+const FLEET_GATEWAY_TIMEOUT_MS = 30000;
+
+// 12.0 Đội bay realtime: mọi máy bay đang / từng gửi OSD từ lúc server chạy (C3)
+app.get('/api/fleet', (req, res) => {
+  const snap = new Map(flightTracker.snapshot().map(x => [x.device_sn, x]));
+  const data = Object.values(memoryStore.devices).map(dev => {
+    const t = snap.get(dev.device_sn) || {};
+    return {
+      device_sn: dev.device_sn,
+      device_name: dev.device_name,
+      model: dev.model,
+      lat: dev.lat ?? null, lng: dev.lng ?? null, rel_alt: dev.rel_alt ?? null,
+      speed: dev.speed ?? null, yaw: dev.yaw ?? null, battery: dev.battery ?? null,
+      gateway_sn: dev.gateway_sn || null,
+      status: liveStatus(dev.device_sn),
+      airborne: Boolean(t.airborne),
+      flight_session_id: t.flight_session_id || null,
+      ticket_id: t.ticket_id || null,
+      rtk_state: t.rtk || null,
+      last_seen: dev.last_seen || null
+    };
+  });
+  res.json({ code: 0, data });
 });
 
 app.post('/api/devices', async (req, res) => {

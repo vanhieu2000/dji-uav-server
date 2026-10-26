@@ -1335,6 +1335,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
 <script src="js/gis/gis-media-import.js"></script>
 <script src="js/gis/gis-coverage.js"></script>
 <script src="js/gis/gis-flight-history.js"></script>
+<script src="js/gis/gis-fleet.js"></script>
 <script src="js/gis/gis-datasets.js"></script>
 <script src="js/gis/gis-page.js"></script>
 
@@ -1481,13 +1482,8 @@ function initSolarMap(){
  L.control.zoom({ position: 'topright' }).addTo(gMap);
  setBasemap('satellite', 'solar');
 
- // Marker Drone Mavic 3T
- const droneIcon = L.divIcon({
-  html: '<div style="background:var(--brand);color:#fff;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;border:2px solid #fff;box-shadow:0 0 16px var(--brand);font-size:18px;">🛸</div>',
-  iconSize: [38,38], iconAnchor: [19,19]
- });
- droneMarker = L.marker([11.831200, 106.591300], { icon: droneIcon }).addTo(gMap);
- droneMarker.bindPopup('<b>DJI Mavic 3T (Realtime)</b><br>SN: 1581F5FJC243K00DNRRT<br><span style="color:var(--ink3)">Trạng thái: Đang chờ OSD...</span>');
+ // Máy bay: mỗi SN một biểu tượng, chỉ hiện khi có OSD thật (GIS.Fleet)
+ if(window.GIS && GIS.Fleet) GIS.Fleet.attach(gMap);
 
  // Lớp tài sản thật từ CSDL (khu vực, chuỗi, tấm pin, bất thường...) + tâm theo nhà máy
  if(window.GIS){
@@ -1553,6 +1549,7 @@ function initSubstationMap(){
    else GIS.centerOnPlant(gMapSub, 17);
   }).catch(()=>GIS.centerOnPlant(gMapSub, 17));
   gGisSub = GIS.attachMap(gMapSub, { kind: 'substation', onSelect: showDclDetail });
+  if(GIS.Fleet) GIS.Fleet.attach(gMapSub);
  }
 }
 
@@ -1563,12 +1560,7 @@ function initManualMap(){
  setBasemap('satellite', 'manual');
  setTimeout(()=>{ if(gMapManual) gMapManual.invalidateSize(); }, 200);
 
- const droneIcon = L.divIcon({
-  html: '<div style="background:var(--brand);color:#fff;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;border:2px solid #fff;box-shadow:0 0 16px var(--brand);font-size:18px;">🛸</div>',
-  iconSize: [38,38], iconAnchor: [19,19]
- });
- manualDroneMarker = L.marker([11.831200, 106.591300], { icon: droneIcon }).addTo(gMapManual);
- manualDroneMarker.bindPopup('<b>DJI Mavic 3T (Realtime)</b><br>SN: 1581F5FJC243K00DNRRT<br><span style="color:var(--ink3)">Trạng thái: Đang theo dõi...</span>');
+ if(window.GIS && GIS.Fleet) GIS.Fleet.attach(gMapManual);
 
  // Lớp tài sản thật (khu vực, dao cách ly, bất thường) thay cho dữ liệu mẫu
  if(window.GIS){
@@ -1580,9 +1572,10 @@ function initManualMap(){
  gMapManual.on('click', function(e){
   const lat = e.latlng.lat;
   const lng = e.latlng.lng;
-  const droneLatLng = manualDroneMarker ? manualDroneMarker.getLatLng() : L.latLng(11.831200, 106.591300);
-  const distM = Math.round(gMapManual.distance(droneLatLng, e.latlng));
-  const distStr = distM > 1000 ? (distM / 1000).toFixed(2) + ' km' : distM + ' m';
+  // Khoảng cách tới máy bay đang chọn (OSD gần nhất); chưa có máy bay thì không tính
+  const osd = window.gLastOsd;
+  const distM = osd && osd.lat && osd.lng ? Math.round(gMapManual.distance(L.latLng(osd.lat, osd.lng), e.latlng)) : null;
+  const distStr = distM == null ? 'chưa có vị trí máy bay' : (distM > 1000 ? (distM / 1000).toFixed(2) + ' km' : distM + ' m');
 
   const popupHtml = `
     <div style="min-width:220px;font-family:'Be Vietnam Pro',sans-serif;padding:2px">
@@ -3880,8 +3873,15 @@ function setupRealtimeTelemetry(){
     GIS.onDbStatus(msg.data);
    }
 
+   // 1.0a Máy bay trực tuyến / mất kết nối (server báo sau 30 s không có OSD)
+   if(msg.type === 'device_status' && window.GIS && GIS.Fleet){
+    GIS.Fleet.onStatus(msg);
+    if(msg.status === 'OFFLINE') toast(`⚠ Mất tín hiệu máy bay ${msg.device_sn}`, 'error');
+   }
+
    // 1.0b Chuyến bay bắt đầu / kết thúc (tự ghi ở server)
    if(msg.type === 'flight_started' || msg.type === 'flight_ended'){
+    if(window.GIS && GIS.Fleet) GIS.Fleet.onFlight(msg);
     const why = { LANDED: 'hạ cánh', LOST_LINK: 'mất tín hiệu' }[msg.reason] || msg.reason;
     toast(msg.type === 'flight_started' ? `🛫 ${msg.device_sn} cất cánh – bắt đầu ghi chuyến bay #${msg.flight_session_id}` : `🛬 Chuyến bay #${msg.flight_session_id} kết thúc (${why})`);
     if(window.GIS && GIS.FlightHistory) GIS.FlightHistory.refresh();
@@ -3902,14 +3902,14 @@ function setupRealtimeTelemetry(){
     toast(`📸 Đã nhận ảnh mới từ Mavic 3T: ${msg.data.file_name}`);
     gSyncedMediaList.unshift(msg.data);
     renderMediaGrid();
+    if(window.GIS && GIS.Fleet) GIS.Fleet.onPhoto(msg.data);
    }
 
    // 3. Telemetry OSD
    if(msg.type === 'osd' && msg.data){
     const d = msg.data;
+    if(window.GIS && GIS.Fleet) GIS.Fleet.onOsd(msg.device_sn || d.device_sn, d);
     if(d.lat && d.lng){
-     if(droneMarker) droneMarker.setLatLng([d.lat, d.lng]);
-     if(manualDroneMarker) manualDroneMarker.setLatLng([d.lat, d.lng]);
 
      if(gAutoFollow){
       if(gMap && gCurrentView === 'map-solar'){
@@ -3925,8 +3925,6 @@ function setupRealtimeTelemetry(){
     const thMax = (d.thermal_max !== undefined && d.thermal_max !== null) ? Number(d.thermal_max).toFixed(1) + ' °C' : '-- °C';
 
     // Cập nhật thẻ trạng thái Topbar & Dashboard khi có tín hiệu thật
-    const topDrone = document.getElementById('topbar-drone-status');
-    if(topDrone) topDrone.innerHTML = `<span class="dot"></span>Mavic 3T: ONLINE (${bat})`;
     const dashBadge = document.getElementById('dash-drone-badge');
     if(dashBadge){
      dashBadge.className = 'tag ok';
@@ -4627,6 +4625,20 @@ document.addEventListener('DOMContentLoaded', ()=>{
  loadTicketsFromDatabase();
  refreshDashboardData();
  setupRealtimeTelemetry();
+ // Thanh trên cùng: số máy bay trực tuyến / đang bay (nhiều máy bay)
+ if(window.GIS && GIS.Fleet){
+  GIS.Fleet.onChange(list => {
+   const el = document.getElementById('topbar-drone-status');
+   if(!el) return;
+   const on = list.filter(d => d.status !== 'OFFLINE');
+   const flying = on.filter(d => d.status === 'IN_FLIGHT').length;
+   if(!on.length){ el.innerHTML = `<span class="dot off"></span>Máy bay: ${list.length ? 'mất kết nối' : 'chưa kết nối'}`; return; }
+   const one = on.length === 1 ? ` · pin ${on[0].battery ?? '--'}%` : '';
+   el.innerHTML = `<span class="dot"></span>Máy bay: ${on.length} trực tuyến${flying ? ` (${flying} đang bay)` : ''}${one}`;
+   el.title = on.map(d => d.device_sn).join(', ');
+  });
+  GIS.Fleet.load();
+ }
  loadInitialMqttLogs();
  loadInitialMedia();
  setupThermalCanvasEvents();

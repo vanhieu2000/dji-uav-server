@@ -194,7 +194,11 @@ Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
   Ngưỡng cất/hạ cánh cần thử với máy thật (độ cao `elevation` của Pilot 2 tính từ điểm cất cánh).
 - [x] C2 – `GET /api/flights` (lọc máy bay / phiếu / ngày), `GET /api/flights/:id` (vết bay ≤ 5000 điểm + ảnh);
   tab **Lịch sử chuyến bay** (`gis-flight-history.js`): vết bay tô màu theo RTK, điểm ảnh theo camera, phát lại 1×/5×/20×, thông báo khi cất/hạ cánh.
-- [ ] Đa máy bay trên bản đồ; cảnh báo HMS.
+- [x] C3 – `gis-fleet.js` (GIS.Fleet): mỗi máy bay 1 biểu tượng (màu theo SN, mũi tên hướng bay, pin, RTK) trên bản đồ pin,
+  trạm và điều khiển; mất kết nối → làm mờ + thông báo; ảnh mới về hiện ngay tại vị trí chụp (giữ 300 ảnh gần nhất);
+  thanh trên cùng đếm số máy trực tuyến / đang bay. `GET /api/fleet` trạng thái realtime; `/api/devices` hết báo ONLINE sai.
+  Bỏ marker máy bay đặt cứng (SN và tọa độ giả).
+- [ ] Cảnh báo HMS (sự kiện `hms` của DJI) – để sau.
 - [ ] Theo dõi tiến độ chụp realtime trên bản đồ (vị trí từng ảnh vừa về).
 - [ ] Livestream kênh theo mã phiếu.
 - [ ] Sửa số giả còn sót: KPI "DCL vượt ngưỡng 83.5 °C" ở Tổng quan, thanh OSD "Dãy 01 · 3.36 MWp".
