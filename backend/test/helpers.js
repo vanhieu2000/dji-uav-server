@@ -97,6 +97,7 @@ async function startTestApp() {
     app.use('/api/monitoring', require('../src/routes/monitoring').createRouter({ monitoring }));
     app.use('/api/vision', require('../src/routes/vision'));
     app.use('/api/ai', require('../src/routes/ai_bridge'));
+    app.use('/api/insights', require('../src/routes/insights'));
     app.use('/api/reports', require('../src/routes/reports'));
     app.use('/api/flights', require('../src/routes/flights'));
     app.use('/api/datasets', require('../src/routes/datasets'));

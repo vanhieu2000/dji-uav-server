@@ -11,6 +11,7 @@ const path=require('path');const req=require('module').createRequire(path.resolv
   if(u.pathname.startsWith('/api/')){
    if(route.request().method()!=='GET')commands.push(u.pathname);
    let data=[];
+   if(u.pathname==='/api/insights/charts')data={tickets:[],defects:[],areas:[],temperatures:[]};
    if(u.pathname==='/api/health')data={db:{connected:true}};
    if(u.pathname==='/api/tickets')data=[{ticket_id:1,ticket_code:'TEST-1',ticket_name:'Phiếu thử'}];
    if(u.pathname==='/api/monitoring/photos')data={items:[],next_id:0,has_more:false};
@@ -33,6 +34,8 @@ const path=require('path');const req=require('module').createRequire(path.resolv
   if(process.env.BROWSER_SCREENSHOT) await page.screenshot({path:process.env.BROWSER_SCREENSHOT,fullPage:false});
   await page.evaluate(()=>{triggerPhoto();startSimulatedMissionFlight();toggleSimulated3Cams();GIS.Tasks.render(document.getElementById('gis-assets-root'));});
   await page.waitForSelector('#task-form',{state:'attached'});
+  await page.evaluate(()=>GIS.Insights.reports());
+  await page.waitForSelector('#insights-reports-root .gis-empty',{state:'attached'});
   assert.deepEqual(commands,[]);assert.deepEqual(errors,[]);
   console.log('PASS Chromium: dashboard boots, two UAV markers, zero battery, offline event, realtime photo; task UI mounts, legacy simulation sends no commands; no page errors');
  }finally{await browser.close();server.close();}

@@ -52,6 +52,7 @@ router.post('/detections/:id/asset',admin,asyncHandler(async(req,res)=>{
         await conn.execute("UPDATE ai_defect_detections SET panel_id=?,disconnector_id=?,contact_id=?,verified_by_human=1,verified_by_user_id=?,mapping_status='HUMAN_CONFIRMED' WHERE detection_id=?",
             [type==='PANEL'?assetId:null,type==='DISCONNECTOR'?assetId:null,type==='CONTACT'?assetId:null,req.user.user_id,id]);
         await conn.execute('INSERT INTO vision_asset_reviews (detection_id,vision_job_id,result_version,user_id,asset_type,asset_id) VALUES (?,?,?,?,?,?)',[id,d.vision_job_id,version,req.user.user_id,type,assetId]);
+        await require('../services/temperatureHistory').recordConfirmed(conn,d,type,assetId);
         if(type==='PANEL')await conn.execute("UPDATE solar_panels SET status='DEFECT',last_inspected_at=NOW() WHERE panel_id=?",[assetId]);
         if(d.panel_id && (type!=='PANEL'||d.panel_id!==assetId))await conn.execute("UPDATE solar_panels SET status=IF(EXISTS(SELECT 1 FROM ai_defect_detections WHERE panel_id=? AND verified_by_human=1),'DEFECT','NORMAL') WHERE panel_id=? AND status='DEFECT'",[d.panel_id,d.panel_id]);
     });
@@ -107,8 +108,8 @@ router.put('/rules/:type',admin,asyncHandler(async(req,res)=>{
     const number=(key,min,max,nullable=false)=>{const n=b[key];if(nullable&&n==null)return null;if(typeof n!=='number'||!Number.isFinite(n)||n<min||n>max)throw new v.ValidationError(`${key} không hợp lệ`);return n;};
     const temp=number('max_temp_c',-273,2000,true),delta=number('delta_t_c',0,2000,true),confidence=number('min_confidence',0,1);
     if(typeof b.enabled!=='boolean')throw new v.ValidationError('enabled phải là true/false');
-    await query(`INSERT INTO alert_rules (asset_type,max_temp_c,delta_t_c,min_confidence,enabled) VALUES (?,?,?,?,?)
-        ON DUPLICATE KEY UPDATE max_temp_c=VALUES(max_temp_c),delta_t_c=VALUES(delta_t_c),min_confidence=VALUES(min_confidence),enabled=VALUES(enabled)`,[type,temp,delta,confidence,b.enabled?1:0]);
+    await query(`INSERT INTO alert_rules (asset_type,max_temp_c,delta_t_c,min_confidence,enabled,trend_horizon_days) VALUES (?,?,?,?,?,?)
+        ON DUPLICATE KEY UPDATE max_temp_c=VALUES(max_temp_c),delta_t_c=VALUES(delta_t_c),min_confidence=VALUES(min_confidence),enabled=VALUES(enabled),trend_horizon_days=VALUES(trend_horizon_days)`,[type,temp,delta,confidence,b.enabled?1:0,number('trend_horizon_days',0.1,3650,true)]);
     ok(res,{asset_type:type});
 }));
 module.exports=router;

@@ -777,7 +777,7 @@ test('API tài sản & bản đồ', async (t) => {
         const sha = await require('../src/services/mediaIngest').sha256File(fixture);
         const [tk] = await db.query('SELECT ticket_id FROM inspection_tickets ORDER BY ticket_id LIMIT 1');
         const row = await db.query(`INSERT INTO media_files (ticket_id,device_sn,file_name,file_url,file_path_local,sha256,source,lens)
-            VALUES (?, 'VISION-FIXTURE','vision-input.jpg','/fixture',?,?,'SD_IMPORT','WIDE')`, [tk.ticket_id,fixture,sha]);
+            VALUES (?, 'VISION-FIXTURE','vision-input.jpg','/fixture',?,?,'SD_IMPORT','IR')`, [tk.ticket_id,fixture,sha]);
         const mediaId = row.insertId;
         const job = await jobs.enqueue(mediaId);
         assert.equal(job.status, 'QUEUED');
@@ -786,7 +786,7 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal((await api('PUT','/api/vision/rules/PANEL',{enabled:true})).status,401);
         assert.equal((await api('PUT','/api/vision/rules/PANEL',{max_temp_c:80,delta_t_c:20,min_confidence:.8,enabled:true},admin)).status,200);
         const payload = { contract_version:'2.0', job_id:job.job_id, media_id:mediaId, input_sha256:sha, result_version:1,
-            model_version:'fixture-model-1', status:'SUCCEEDED', detections:[{defect_type:'HOTSPOT_CELL',confidence:.9,image:'rgb',image_width:16,image_height:16,bbox:[0,0,4,4],max_temp_c:90,delta_t_c:25}] };
+            model_version:'fixture-model-1', status:'SUCCEEDED', detections:[{defect_type:'HOTSPOT_CELL',confidence:.9,image:'thermal',image_width:16,image_height:16,bbox:[0,0,4,4],max_temp_c:90,delta_t_c:25}] };
         process.env.VISION_WEBHOOK_SECRET = crypto.randomBytes(32).toString('hex');
         const machine = {Authorization:'Bearer '+process.env.VISION_WEBHOOK_SECRET};
         assert.equal((await api('POST','/api/vision/results',payload)).status,401);
@@ -896,6 +896,50 @@ test('API tài sản & bản đồ', async (t) => {
         // Broken bytes cannot be signed off just because a previous callback succeeded.
         fs.appendFileSync(images[0].file_path_local,'corruption-fixture');
         assert.equal((await api('POST',`/api/tickets/${id}/reconcile`,{expected_count:2,originals_checked:true,note:'Kiểm tra lại'})).status,409);
+    });
+
+    await t.test('lịch sử nhiệt: hai chu kỳ mối nối, xu hướng, ngưỡng riêng và nhật ký xử lý', async () => {
+        const jobs=require('../src/services/visionJobs');
+        const {sha256File}=require('../src/services/mediaIngest');
+        const admin={Authorization:'Bearer '+require('jsonwebtoken').sign({user_id:1,role:'ADMIN'},process.env.JWT_SECRET)};
+        const machine={Authorization:'Bearer '+process.env.VISION_WEBHOOK_SECRET};
+        const [dcl]=await db.query('SELECT disconnector_id FROM disconnectors LIMIT 1');
+        const contact=await db.query("INSERT INTO dcl_contacts (disconnector_id,contact_code) VALUES (?,'G-FIXTURE')",[dcl.disconnector_id]);
+        const cid=contact.insertId;
+        assert.equal((await api('PUT',`/api/insights/rules/CONTACT/${cid}`,{max_temp_c:100,delta_t_c:null,min_confidence:.8,enabled:true,trend_horizon_days:5},admin)).status,200);
+        let lastJob;
+        for(const [i,temp] of [60,80].entries()){
+            const t=await api('POST','/api/tickets',{ticket_name:'Chu kỳ '+i,inspection_type:'DISCONNECTOR',target_facility:'Mối nối fixture'});
+            const fixture=path.join(__dirname,'fixtures',i?'vision-cycle-2.jpg':'vision-input.jpg');
+            const sha=await sha256File(fixture);
+            const m=await db.query(`INSERT INTO media_files (ticket_id,device_sn,file_name,file_url,file_path_local,sha256,source,lens,captured_at)
+                VALUES (?,'G-FIXTURE',?,'/fixture',?,?,'SD_IMPORT','IR',?)`,[t.body.data.ticket_id,path.basename(fixture),fixture,sha,'2026-10-0'+(i+1)+' 10:00:00']);
+            const job=await jobs.enqueue(m.insertId);lastJob=job;
+            const payload={contract_version:'2.0',job_id:job.job_id,media_id:m.insertId,input_sha256:sha,result_version:1,model_version:'fixture-model',status:'SUCCEEDED',
+                detections:[{defect_type:'DCL_CONTACT_OVERHEAT',confidence:.95,image:'thermal',image_width:16,image_height:16,bbox:[0,0,4,4],max_temp_c:temp}]};
+            assert.equal((await api('POST','/api/vision/results',payload,machine)).status,200);
+            const [det]=await db.query('SELECT detection_id FROM ai_defect_detections WHERE vision_job_id=?',[job.job_id]);
+            const mapped=await api('POST',`/api/vision/detections/${det.detection_id}/asset`,{asset_type:'CONTACT',asset_id:cid,result_version:1},admin);
+            assert.equal(mapped.status,200,JSON.stringify(mapped.body));
+            if(i===1){
+                const list=await api('GET',`/api/insights/disconnectors?ticket_id=${t.body.data.ticket_id}`);
+                assert.equal(list.body.data.find(x=>x.disconnector_id===dcl.disconnector_id).max_temp_c,80);
+            }
+        }
+        const history=await api('GET',`/api/insights/temperature?asset_type=CONTACT&asset_id=${cid}`);
+        assert.equal(history.body.data.samples.length,2);assert.equal(history.body.data.trend.cycles,2);
+        assert.equal(history.body.data.trend.slope_c_per_day,20);assert.equal(history.body.data.trend.estimated_days_to_threshold,1);
+        const [latest]=await db.query('SELECT last_inspected_temp FROM dcl_contacts WHERE contact_id=?',[cid]);assert.equal(latest.last_inspected_temp,80);
+        const alerts=await api('GET','/api/insights/alerts');
+        const early=alerts.body.data.find(a=>a.asset_type==='CONTACT'&&a.asset_id===cid&&a.alert_kind==='TREND');assert.ok(early);
+        assert.equal((await api('PATCH',`/api/insights/alerts/${early.alert_id}`,{status:'RESOLVED'},admin)).status,200);
+        const changes=await api('GET',`/api/insights/alerts/${early.alert_id}/history`);assert.equal(changes.body.data[0].to_status,'RESOLVED');
+        const charts=await api('GET','/api/insights/charts?days=365');assert.equal(charts.status,200);assert.ok(charts.body.data.temperatures.some(p=>p.max_temp_c>=80));
+        assert.equal((await api('GET','/api/insights/charts?days=-1')).status,400);
+        // Replacement invalidates superseded measurements rather than leaving a stale max.
+        await jobs.acceptResult({contract_version:'2.0',job_id:lastJob.job_id,media_id:lastJob.media_id,input_sha256:lastJob.input_sha256,result_version:2,model_version:'fixture-model',status:'SUCCEEDED',detections:[]});
+        const revised=await api('GET',`/api/insights/temperature?asset_type=CONTACT&asset_id=${cid}`);
+        assert.equal(revised.body.data.samples.length,1);assert.equal(revised.body.data.trend.last_temp_c,60);
     });
 
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {

@@ -33,7 +33,9 @@ function createMonitoring({ query, onEvent = () => {}, now = () => Date.now(), p
     function state(row) {
         const streamPath = `/live/${row.channel}`;
         const p = publishers.get(streamPath);
-        return { ...row, streamPath, flv_url: playbackBase ? `${playbackBase.replace(/\/$/, '')}${streamPath}.flv` : null, status: p ? 'STREAMING' : 'STOPPED', publisher_seen_at: p ? p.at : null };
+        const nativeStatus = p?.session?.broadcast?.getPublishStatus?.();
+        const status = !p || nativeStatus === 'idle' ? 'STOPPED' : nativeStatus === 'reconnecting' ? 'RECONNECTING' : 'STREAMING';
+        return { ...row, streamPath, flv_url: playbackBase ? `${playbackBase.replace(/\/$/, '')}${streamPath}.flv` : null, status, publisher_seen_at: p ? p.at : null };
     }
     async function streams(ticketId) {
         return (await query('SELECT * FROM ticket_live_streams WHERE ticket_id = ? ORDER BY stream_id', [ticketId])).map(state);
@@ -47,8 +49,9 @@ function createMonitoring({ query, onEvent = () => {}, now = () => Date.now(), p
             if (!row) return null;
             if (kind === 'start') {
                 const current = publishers.get(streamPath);
-                if (current && current.id !== id) return null; // second publisher rejected by media server
-                publishers.set(streamPath, { id, at: new Date(now()).toISOString() });
+                if (session && typeof session === 'object' && session.isPublisher === false) return null;
+                if (current && current.id !== id && session?.isPublisher !== true) return null; // native v4 accepts reconnect before postPublish's async lookup completes
+                publishers.set(streamPath, { id, session: typeof session === 'object' ? session : null, at: new Date(now()).toISOString() });
             } else {
                 const current = publishers.get(streamPath);
                 if (!current || current.id !== id) return null;

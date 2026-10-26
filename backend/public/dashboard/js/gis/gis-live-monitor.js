@@ -68,8 +68,8 @@
       const r = await GIS.api('GET', `/api/monitoring/live/${ticketId}`);
       if (token !== generation) return;
       streams = r.data;
-      selectEl.innerHTML = '<option value="">Chọn kênh phát</option>' + streams.map(s => `<option value="${esc(s.streamPath)}">${esc(s.device_sn)} · ${s.status === 'STREAMING' ? 'Đang phát' : 'Chưa phát'}</option>`).join('');
-      if (currentPath && streams.some(s => s.streamPath === currentPath && s.status === 'STREAMING')) selectEl.value = currentPath;
+      selectEl.innerHTML = '<option value="">Chọn kênh phát</option>' + streams.map(s => `<option value="${esc(s.streamPath)}">${esc(s.device_sn)} · ${s.status === 'STREAMING' ? 'Đang phát' : s.status === 'RECONNECTING' ? 'Đang kết nối lại' : 'Chưa phát'}</option>`).join('');
+      if (currentPath && streams.some(s => s.streamPath === currentPath && ['STREAMING','RECONNECTING'].includes(s.status))) selectEl.value = currentPath;
       else if (currentPath) stopPlayback();
     } catch (e) { selectEl.innerHTML = '<option value="">Không tải được kênh</option>'; }
   }
@@ -139,6 +139,7 @@
     reconnect: catchUp,
     selected: () => selected,
     streamPath: () => currentPath,
+    playbackUrl: () => streams.find(s=>s.streamPath===currentPath)?.flv_url || null,
     mount(callback) {
       if (mounted) return; mounted = true; onSelect = callback;
       document.getElementById('uav-live-devices').addEventListener('click', e => {

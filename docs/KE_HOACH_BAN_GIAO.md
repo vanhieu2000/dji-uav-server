@@ -212,12 +212,12 @@ Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
 - Tiêu chí xong: tạo phiếu → bay 2 lượt → ảnh và lỗi của cả 2 lượt nằm đúng phiếu.
 
 ### Giai đoạn G – Cảnh báo, dashboard, xu hướng nhiệt (~6 ngày) – hạng mục #28–32, #5 (phần ngưỡng)
-- [ ] Bảng cấu hình ngưỡng (theo loại tài sản, theo DCL/mối nối, ΔT pin) thay giá trị cứng 65 °C; nút "Lưu cấu hình" ghi thật.
-- [ ] Cảnh báo: sinh từ kết quả AI + ngưỡng nhiệt; danh sách, đánh dấu đã xử lý, lịch sử (#29); thông báo realtime.
-- [ ] Danh sách DCL đã kiểm tra + nhiệt độ cao nhất + vượt ngưỡng theo phiếu (#28).
-- [ ] Dashboard Tổng quan & Báo cáo dùng số thật (bỏ biểu đồ và KPI viết tay) (#30).
-- [ ] Lịch sử nhiệt theo từng mối nối / chu kỳ bay (bảng `temperature_history`) (#31).
-- [ ] Xu hướng tăng nhiệt + cảnh báo sớm trước ngưỡng (tốc độ tăng °C/chu kỳ, dự báo chạm ngưỡng) (#32).
+- [x] G1 – Ngưỡng loại/tài sản riêng, max/ΔT/confidence/horizon, UI lưu SQL (migration 010), bỏ 65 °C mặc định.
+- [x] G2 – Alert theo rule, danh sách/trạng thái/nhật ký người xử lý, WebSocket; alert sớm chống lặp.
+- [x] G3 – DCL đã kiểm tra, max theo phiếu và số đo nguồn Vision đã xác nhận, không trộn phiếu khác.
+- [x] G4 – Báo cáo thay chart dựng tay bằng SQL theo kỳ; KPI pin/DCL từ DB; không có dữ liệu thì hiển thị trống.
+- [x] G5 – temperature_history theo asset/flight/task/model/result; superseded valid=0, tính lại summary.
+- [x] G6 – Nhóm chu kỳ, hồi quy °C/ngày + Δ/chu kỳ, horizon cấu hình; rõ là ước lượng, chưa phải dự báo được kiểm định.
 - Tiêu chí xong: 2 chu kỳ bay DCL → biểu đồ nhiệt theo mối nối, cảnh báo sớm khi tăng nhanh.
 
 ### Giai đoạn E – Tài khoản, phân quyền, cấu hình (~6 ngày) – hạng mục #1–5, #39 (phần quyền)
@@ -359,3 +359,6 @@ Contract 2.0 và worker tắt mặc định; endpoint/model/secret do đội Vis
 
 ### F – 26/10/2026
 Xem docs/INSPECTION_WORKFLOW.md. Ảnh thiếu bằng chứng để UNRESOLVED; prefix UUID phải được storage/Pilot giữ nguyên, chưa coi receiver local là STS production. Bỏ endpoint/nút tạo ảnh giả và lệnh Dock/flight không thuộc phạm vi. Parser thiếu SDK trả null, không đoán nhiệt bằng raw/64. Đã thử hai sortie và ảnh tới muộn trên fixture/DB test, không gọi UAV thật.
+
+### G – 26/10/2026
+Xem docs/TEMPERATURE_ALERTS.md. 61 test Node/MySQL đã đạt trước hoàn thiện UI; Chromium kiểm tra chart trống không tạo số liệu. Số đo từ Vision cần được đội Vision kiểm định; chưa có nhiệt radiometric từ hardware. Giữ D2 và nghiệm thu phần cứng chưa hoàn tất.

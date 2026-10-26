@@ -409,3 +409,29 @@ test('thermal parser: thiếu SDK không trả nhiệt từ công thức fallbac
     const file=path.join(__dirname,'fixtures/vision-input.jpg');
     assert.equal(parseDjiThermalJpeg(file),null);
 });
+
+test('xu hướng nhiệt: nhóm theo chu kỳ, không dự báo khi nhiệt giảm/thiếu thời gian', () => {
+    const {linearTrend}=require('../src/services/temperatureHistory');
+    const p=(id,date,temp)=>({history_id:id,ticket_id:id,captured_at:date,max_temp_c:temp});
+    const result=linearTrend([p(1,'2026-10-01',60),p(2,'2026-10-02',80)],100);
+    assert.equal(result.cycles,2);assert.equal(result.slope_c_per_day,20);assert.equal(result.estimated_days_to_threshold,1);
+    assert.equal(linearTrend([p(1,'2026-10-01',80),p(2,'2026-10-02',60)],100).estimated_days_to_threshold,null);
+    assert.equal(linearTrend([p(1,'2026-10-01',60),p(2,'2026-10-01',80)],100).slope_c_per_day,null);
+    assert.equal(linearTrend([p(1,'2026-10-01',0)],100).last_temp_c,0);
+    assert.equal(linearTrend([p(1,null,80)],100).cycles,0);
+});
+
+test('NMS v4: trạng thái reconnect và publisher đã được chấp nhận thay phiên cũ', async () => {
+    const {createMonitoring,channelFor}=require('../src/services/liveMonitoring');
+    const channel=channelFor(1,'NATIVE'),row={ticket_id:1,channel};
+    const m=createMonitoring({query:async()=>[row]});let nativeStatus='publishing';
+    await m.publisherEvent('start',{id:'old',streamPath:'/live/'+channel,isPublisher:true,broadcast:{getPublishStatus:()=>nativeStatus}});
+    nativeStatus='reconnecting';assert.equal((await m.streams(1))[0].status,'RECONNECTING');
+    await m.publisherEvent('start',{id:'rejected',streamPath:'/live/'+channel,isPublisher:false});
+    assert.equal((await m.streams(1))[0].status,'RECONNECTING');
+    await m.publisherEvent('start',{id:'resumed',streamPath:'/live/'+channel,isPublisher:true,broadcast:{getPublishStatus:()=> 'publishing'}});
+    await m.publisherEvent('stop',{id:'old',streamPath:'/live/'+channel});
+    assert.equal((await m.streams(1))[0].status,'STREAMING');
+    await m.publisherEvent('stop',{id:'resumed',streamPath:'/live/'+channel});
+    assert.equal((await m.streams(1))[0].status,'STOPPED');
+});

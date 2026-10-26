@@ -27,6 +27,8 @@ function resultInput(body) {
             if (d[k] != null && (!finite(d[k]) || Math.abs(d[k]) > 2000)) fail(`${k} không hợp lệ`);
             out[k] = d[k] ?? null;
         }
+        if(out.mean_temp_c!=null&&out.max_temp_c!=null&&out.mean_temp_c>out.max_temp_c)fail('Nhiệt trung bình không được lớn hơn nhiệt cực đại');
+        if(d.image==='rgb' && ['max_temp_c','mean_temp_c','ref_temp_c','delta_t_c'].some(k=>out[k]!=null)) fail('Ảnh RGB không cung cấp nhiệt radiometric; dùng job ảnh IR gốc hoặc hợp đồng ghép cặp đã xác minh');
         return out;
     });
     return { contract_version:'2.0', job_id:body.job_id, media_id:body.media_id, input_sha256:body.input_sha256,

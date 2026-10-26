@@ -97,6 +97,7 @@ async function acceptResult(body) {
                 [result.result_version,hash,result.model_version,JSON.stringify(result),result.error,job.job_id]);
             return {job_id:job.job_id,duplicate:false,status:'FAILED'}; // giữ kết quả thành công gần nhất
         }
+        await require('./temperatureHistory').invalidateJob(conn,job.job_id);
         const [oldPanels] = await conn.execute('SELECT DISTINCT panel_id FROM ai_defect_detections WHERE vision_job_id=? AND panel_id IS NOT NULL', [job.job_id]);
         await conn.execute('DELETE FROM ai_defect_detections WHERE vision_job_id = ?', [job.job_id]);
         for (const p of oldPanels) {

@@ -36,11 +36,11 @@
     const labels={PANEL:'Tấm pin',DISCONNECTOR:'Dao cách ly',CONTACT:'Mối nối',OTHER:'Khác'};
     root.querySelector('#vision-rules').innerHTML=Object.entries(labels).map(([type,label])=>{
       const rule=r.data.find(x=>x.asset_type===type)||{};
-      return `<form data-rule="${type}" class="actions" style="margin:8px 0;flex-wrap:wrap"><b>${label}</b><label>Nhiệt độ °C <input type="number" step="any" name="max_temp_c" value="${rule.max_temp_c??''}" placeholder="Không dùng"></label><label>ΔT °C <input type="number" step="any" name="delta_t_c" value="${rule.delta_t_c??''}" placeholder="Không dùng"></label><label>Tin cậy tối thiểu <input type="number" min="0" max="1" step="0.01" name="min_confidence" value="${rule.min_confidence??0.8}" required></label><label><input type="checkbox" name="enabled" ${rule.enabled?'checked':''}> Bật</label><button class="btn sm">Lưu</button></form>`;
+      return `<form data-rule="${type}" class="actions" style="margin:8px 0;flex-wrap:wrap"><b>${label}</b><label>Nhiệt độ °C <input type="number" step="any" name="max_temp_c" value="${rule.max_temp_c??''}" placeholder="Không dùng"></label><label>ΔT °C <input type="number" step="any" name="delta_t_c" value="${rule.delta_t_c??''}" placeholder="Không dùng"></label><label>Tin cậy tối thiểu <input type="number" min="0" max="1" step="0.01" name="min_confidence" value="${rule.min_confidence??0.8}" required></label><label>Cảnh báo sớm trong số ngày <input type="number" name="trend_horizon_days" min="0.1" step="any" value="${rule.trend_horizon_days??''}"></label><label><input type="checkbox" name="enabled" ${rule.enabled?'checked':''}> Bật</label><button class="btn sm">Lưu</button></form>`;
     }).join('');
     root.querySelectorAll('[data-rule]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();GIS.run(async()=>{
       const n=k=>f.elements[k].value===''?null:Number(f.elements[k].value);
-      await GIS.api('PUT','/api/vision/rules/'+f.dataset.rule,{max_temp_c:n('max_temp_c'),delta_t_c:n('delta_t_c'),min_confidence:n('min_confidence'),enabled:f.elements.enabled.checked});
+      await GIS.api('PUT','/api/vision/rules/'+f.dataset.rule,{max_temp_c:n('max_temp_c'),delta_t_c:n('delta_t_c'),min_confidence:n('min_confidence'),trend_horizon_days:n('trend_horizon_days'),enabled:f.elements.enabled.checked});
       GIS.toast('Đã lưu ngưỡng cảnh báo');
     });}));
   }

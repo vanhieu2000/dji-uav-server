@@ -6,6 +6,7 @@ const { query, sendDbError } = require('../config/db');
 router.get('/overview', async (req, res) => {
     try {
         const [panelCount] = await query('SELECT COUNT(*) as total FROM solar_panels');
+        const [faulty] = await query("SELECT COUNT(*) AS total FROM solar_panels WHERE status IN ('DEFECT','WARNING')");
         const [dclCount] = await query('SELECT COUNT(*) as total FROM disconnectors');
         const [heat] = await query('SELECT SUM(last_inspected_temp >= max_allowed_temp) AS exceeded, MAX(last_inspected_temp) AS max_temp FROM disconnectors');
         const [ticketCount] = await query('SELECT COUNT(*) as total, SUM(CASE WHEN status="COMPLETED" THEN 1 ELSE 0 END) as completed FROM inspection_tickets');
@@ -18,6 +19,7 @@ router.get('/overview', async (req, res) => {
             data: {
                 overheated_disconnectors: Number(heat?.exceeded) || 0,
                 max_disconnector_temperature: heat?.max_temp ?? null,
+                faulty_panels: Number(faulty?.total) || 0,
                 total_panels: panelCount?.total || 0,
                 total_disconnectors: dclCount?.total || 0,
                 total_tickets: ticketCount?.total || 0,

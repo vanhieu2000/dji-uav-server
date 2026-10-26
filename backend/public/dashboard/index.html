@@ -541,7 +541,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
           <!-- Panel chi tiết bên phải (Side Detail Panel) -->
           <div class="side-detail-panel" id="side-panel-solar">
             <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:12px">
-              <h2 id="zone-detail-title" style="font-size:15px;font-weight:700">Dãy Pin Inverter 01</h2>
+              <h2 id="zone-detail-title" style="font-size:15px;font-weight:700">Chưa chọn khu pin</h2>
               <span class="tag info" id="zone-detail-code">INV-01</span>
             </div>
 
@@ -615,14 +615,14 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
           <!-- Panel chi tiết bên phải (Side Detail Panel) -->
           <div class="side-detail-panel" id="side-panel-sub">
             <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:12px">
-              <h2 id="dcl-detail-title" style="font-size:15px;font-weight:700">Dao cách ly 171-7 Pha A</h2>
+              <h2 id="dcl-detail-title" style="font-size:15px;font-weight:700">Chưa chọn DCL</h2>
               <span class="tag bad" id="dcl-detail-tag">Quá nhiệt</span>
             </div>
             <div class="thumb" style="border-radius:8px;overflow:hidden;background:#0f172a;border:1px solid var(--line);position:relative">
               <div style="height:190px;display:grid;place-items:center;color:#fff;background:radial-gradient(circle,#3d1824 0%,#0f172a 100%)">
                 <div style="text-align:center">
                   <div style="font-size:32px;margin-bottom:2px">⚡</div>
-                  <b style="font-size:24px;color:var(--hot)" id="dcl-detail-thumb-temp">83.5 °C</b>
+                  <b style="font-size:24px;color:var(--hot)" id="dcl-detail-thumb-temp">Chưa có số đo</b>
                   <p class="muted" style="font-size:11.5px">Ảnh nhiệt R-JPEG (Tiếp xúc)</p>
                 </div>
               </div>
@@ -631,7 +631,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
               <dt>Mã DCL</dt><dd id="dcl-detail-code"><b>171-7</b></dd>
               <dt>Ngăn lộ</dt><dd id="dcl-detail-bay">Ngăn lộ 171</dd>
               <dt>Pha</dt><dd><b id="dcl-detail-phase">Pha A</b></dd>
-              <dt>Nhiệt độ đo</dt><dd><b class="num down" id="dcl-detail-temp" style="font-size:15px">83.5 °C</b></dd>
+              <dt>Nhiệt độ đo</dt><dd><b class="num down" id="dcl-detail-temp" style="font-size:15px">Chưa có số đo</b></dd>
               <dt>Ngưỡng cho phép</dt><dd class="num" id="dcl-detail-max">75.0 °C</dd>
               <dt>Tọa độ GPS</dt><dd class="num" id="dcl-detail-gps">--</dd>
             </dl>
@@ -747,105 +747,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
       </section>
 
       <!-- VIEW 7: BÁO CÁO & THỐNG KÊ (SVG CHARTS CHUYÊN SÂU THEO BẢN MẪU) -->
-      <section class="page-view view-scrollable" id="view-reports">
-        <div class="page-head">
-          <div>
-            <h1>Báo cáo & Thống kê</h1>
-            <p class="muted" style="margin:2px 0 0;font-size:12.5px">Tổng hợp phiếu kiểm tra, tỷ lệ khiếm khuyết pin và giám sát nhiệt độ dao cách ly</p>
-          </div>
-          <div class="actions">
-            <div class="seg">
-              <button class="on" data-rep-period="7" onclick="setReportPeriod(this,'7')">7 ngày</button>
-              <button data-rep-period="30" onclick="setReportPeriod(this,'30')">30 ngày</button>
-              <button data-rep-period="90" onclick="setReportPeriod(this,'90')">90 ngày</button>
-            </div>
-            <button class="btn" onclick="exportTicketsCsv()">Xuất CSV</button>
-            <button class="btn primary" onclick="window.print()">In báo cáo PDF</button>
-          </div>
-        </div>
-
-        <!-- Tầng 1: Bar Chart & Donut Chart -->
-        <div class="grid g-main" style="margin-bottom:16px">
-          <!-- Cột 1: Biểu đồ số phiếu kiểm tra theo tháng -->
-          <section class="card">
-            <div class="card-head">
-              <div>
-                <h2>Số phiếu kiểm tra theo tháng</h2>
-                <p class="muted" style="font-size:12px">Kiểm tra quét nhiệt Pin mặt trời & Dao cách ly trạm 110kV</p>
-              </div>
-              <div class="r"><span class="legend"><span><i class="sw" style="background:var(--brand)"></i>Phiếu hoàn thành</span></span></div>
-            </div>
-            <div style="padding:10px 0" id="reports-bar-chart">
-              <!-- Render SVG Bar Chart -->
-            </div>
-          </section>
-
-          <!-- Cột 2: Biểu đồ Donut phân loại lỗi pin -->
-          <section class="card">
-            <div class="card-head">
-              <h2>Tỷ lệ loại lỗi pin mặt trời</h2>
-            </div>
-            <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;justify-content:center;padding:12px 0">
-              <div id="reports-donut-chart">
-                <!-- Render SVG Donut Chart -->
-              </div>
-              <div class="legend" style="flex-direction:column;gap:8px">
-                <span><i class="sw" style="background:#cf2f5e"></i>Hotspot quá nhiệt · 14 tấm (45%)</span>
-                <span><i class="sw" style="background:#e59a0c"></i>Hỏng Diode Bypass · 11 tấm (30%)</span>
-                <span><i class="sw" style="background:#0d6e6e"></i>Vi nứt tế bào Cell · 6 tấm (15%)</span>
-                <span><i class="sw" style="background:#7d8e93"></i>Bụi bẩn che khuất · 5 tấm (10%)</span>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Tầng 2: Flat Table xếp hạng lỗi & Line Chart nhiệt độ DCL -->
-        <div class="grid g-2">
-          <!-- Bảng tỷ lệ lỗi theo khu vực -->
-          <section class="card flat">
-            <div style="padding:16px 18px 8px">
-              <h2>Tấm pin lỗi theo khu vực</h2>
-              <p class="muted" style="font-size:12px">Xếp hạng khu vực Inverter có mật độ sự cố cao nhất</p>
-            </div>
-            <div class="tbl-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Khu vực</th>
-                    <th>Chuỗi ảnh hưởng</th>
-                    <th>Tấm lỗi</th>
-                    <th>Tỷ lệ lỗi</th>
-                  </tr>
-                </thead>
-                <tbody id="reports-zone-faults-table">
-                  <tr><td class="rowtitle">Khu Vực Inverter 01</td><td>4 / 12 chuỗi</td><td><b style="color:var(--hot)">3 tấm</b></td><td><span class="tag bad">0.45%</span></td></tr>
-                  <tr><td class="rowtitle">Khu Vực Inverter 02</td><td>2 / 12 chuỗi</td><td><b style="color:var(--sun)">1 tấm</b></td><td><span class="tag warn">0.15%</span></td></tr>
-                  <tr><td class="rowtitle">Khu Vực Inverter 03</td><td>1 / 12 chuỗi</td><td><b>0 tấm</b></td><td><span class="tag ok">0.00%</span></td></tr>
-                  <tr><td class="rowtitle">Khu Vực Inverter 04</td><td>0 / 12 chuỗi</td><td><b>0 tấm</b></td><td><span class="tag ok">0.00%</span></td></tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <!-- Biểu đồ Line Chart nhiệt độ DCL với đường đỏ cảnh báo 75°C -->
-          <section class="card">
-            <div class="card-head">
-              <div>
-                <h2>Nhiệt độ dao cách ly theo thời gian</h2>
-                <p class="muted" style="font-size:12px">Ngưỡng giới hạn cho phép: 75.0 °C</p>
-              </div>
-            </div>
-            <div style="padding:10px 0" id="reports-line-chart">
-              <!-- Render SVG Line Chart với vạch đỏ 75°C -->
-            </div>
-            <div class="legend" style="margin-top:8px">
-              <span><i class="sw" style="background:#cf2f5e"></i>DCL 171-7 Pha A (83.5 °C - Quá nhiệt)</span>
-              <span><i class="sw" style="background:#0d6e6e"></i>DCL 171-1 Pha A (48.2 °C - Bình thường)</span>
-              <span><i class="sw" style="background:#dc2626;height:2px;margin-top:5px"></i>Ngưỡng an toàn (75 °C)</span>
-            </div>
-          </section>
-        </div>
-      </section>
+      <section class="page-view view-scrollable" id="view-reports"><div id="insights-reports-root"></div></section>
 
       <!-- VIEW 8: CÀI ĐẶT TÀI SẢN (cây tài sản + bản đồ chỉnh sửa, nhập Excel, bản đồ nền) -->
       <section class="page-view view-scrollable" id="view-assets">
@@ -1349,6 +1251,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
 <script src="js/gis/gis-datasets.js"></script>
 <script src="js/gis/gis-vision.js"></script>
 <script src="js/gis/gis-tasks.js"></script>
+<script src="js/gis/gis-insights.js"></script>
 <script src="js/gis/gis-page.js"></script>
 
 <script>
@@ -2000,7 +1903,7 @@ async function refreshDashboardData(){
   if(data.code === 0 && data.data){
    const d = data.data;
    document.getElementById('kpi-ticket-count').innerText = `${d.completed_tickets}/${d.total_tickets}`;
-   document.getElementById('kpi-panel-fault').innerText = d.total_defects_found;
+   document.getElementById('kpi-panel-fault').innerText = d.faulty_panels;
    document.getElementById('kpi-dcl-alert').innerText = d.overheated_disconnectors;
    document.getElementById('kpi-dcl-alert-detail').innerText = d.max_disconnector_temperature == null ? 'Chưa có dữ liệu đo' : 'Cao nhất đã đo: ' + Number(d.max_disconnector_temperature).toFixed(1) + ' °C';
   }
@@ -2529,153 +2432,7 @@ async function deleteDcl(code){
 /* ===================================================================
    BÁO CÁO & THỐNG KÊ: BỘ BIỂU ĐỒ SVG CHUẨN ĐẶC TẢ
    =================================================================== */
-function setReportPeriod(btn, days){
-  const p = btn.parentElement;
-  if(p) p.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
-  btn.classList.add('on');
-  toast(`Đã lọc số liệu báo cáo trong ${days} ngày qua`);
-  renderReportsSvgCharts();
-}
-
-function renderReportsSvgCharts(){
-  // 1. Bar Chart: Số phiếu kiểm tra theo tháng (6 tháng)
-  const barContainer = document.getElementById('reports-bar-chart');
-  if(barContainer){
-    const months = [
-      { m: 'Th5', count: 14 },
-      { m: 'Th6', count: 18 },
-      { m: 'Th7', count: 24 },
-      { m: 'Th8', count: 20 },
-      { m: 'Th9', count: 28 },
-      { m: 'Th10', count: 32 }
-    ];
-    const maxVal = 40;
-    const chartW = 500;
-    const chartH = 180;
-    const padL = 40;
-    const padB = 30;
-    const availW = chartW - padL - 20;
-    const availH = chartH - padB - 20;
-    const barWidth = 36;
-    const step = availW / months.length;
-
-    let barsSvg = '';
-    months.forEach((item, idx)=>{
-      const h = (item.count / maxVal) * availH;
-      const x = padL + idx * step + (step - barWidth) / 2;
-      const y = chartH - padB - h;
-      barsSvg += `
-        <rect x="${x}" y="${y}" width="${barWidth}" height="${h}" rx="4" fill="var(--brand)" opacity="0.9">
-          <title>${item.m}: ${item.count} phiếu</title>
-        </rect>
-        <text x="${x + barWidth/2}" y="${y - 6}" font-size="11" font-weight="600" text-anchor="middle" fill="var(--ink)">${item.count}</text>
-        <text x="${x + barWidth/2}" y="${chartH - 10}" font-size="11" text-anchor="middle" fill="var(--ink2)">${item.m}</text>
-      `;
-    });
-
-    barContainer.innerHTML = `
-      <svg width="100%" height="${chartH}" viewBox="0 0 ${chartW} ${chartH}" style="overflow:visible">
-        <!-- Đường lưới ngang -->
-        <line x1="${padL}" y1="${chartH - padB}" x2="${chartW - 10}" y2="${chartH - padB}" stroke="var(--line)" stroke-width="1"/>
-        <line x1="${padL}" y1="${chartH - padB - availH/2}" x2="${chartW - 10}" y2="${chartH - padB - availH/2}" stroke="var(--line)" stroke-dasharray="3,3" stroke-width="1"/>
-        <line x1="${padL}" y1="${chartH - padB - availH}" x2="${chartW - 10}" y2="${chartH - padB - availH}" stroke="var(--line)" stroke-dasharray="3,3" stroke-width="1"/>
-        <!-- Nhãn trục Y -->
-        <text x="${padL - 8}" y="${chartH - padB + 4}" font-size="10" text-anchor="end" fill="var(--ink3)">0</text>
-        <text x="${padL - 8}" y="${chartH - padB - availH/2 + 4}" font-size="10" text-anchor="end" fill="var(--ink3)">20</text>
-        <text x="${padL - 8}" y="${chartH - padB - availH + 4}" font-size="10" text-anchor="end" fill="var(--ink3)">40</text>
-        ${barsSvg}
-      </svg>
-    `;
-  }
-
-  // 2. Donut Chart: Phân loại lỗi pin mặt trời
-  const donutContainer = document.getElementById('reports-donut-chart');
-  if(donutContainer){
-    // 45% Hotspot, 30% Diode Bypass, 15% Vi nứt cell, 10% Bụi bẩn
-    // Chu vi C = 2 * PI * 40 = 251.32
-    const C = 251.32;
-    const seg1 = C * 0.45; // 113.1
-    const seg2 = C * 0.30; // 75.4
-    const seg3 = C * 0.15; // 37.7
-    const seg4 = C * 0.10; // 25.1
-    donutContainer.innerHTML = `
-      <svg width="140" height="140" viewBox="0 0 100 100" style="transform:rotate(-90deg)">
-        <circle cx="50" cy="50" r="40" fill="none" stroke="var(--line)" stroke-width="14"/>
-        <circle cx="50" cy="50" r="40" fill="none" stroke="#cf2f5e" stroke-width="14" stroke-dasharray="${seg1} ${C - seg1}" stroke-dashoffset="0"/>
-        <circle cx="50" cy="50" r="40" fill="none" stroke="#e59a0c" stroke-width="14" stroke-dasharray="${seg2} ${C - seg2}" stroke-dashoffset="-${seg1}"/>
-        <circle cx="50" cy="50" r="40" fill="none" stroke="#0d6e6e" stroke-width="14" stroke-dasharray="${seg3} ${C - seg3}" stroke-dashoffset="-${seg1 + seg2}"/>
-        <circle cx="50" cy="50" r="40" fill="none" stroke="#7d8e93" stroke-width="14" stroke-dasharray="${seg4} ${C - seg4}" stroke-dashoffset="-${seg1 + seg2 + seg3}"/>
-      </svg>
-    `;
-  }
-
-  // 3. Line Chart: Nhiệt độ dao cách ly theo thời gian với vạch đỏ 75°C
-  const lineContainer = document.getElementById('reports-line-chart');
-  if(lineContainer){
-    const dclPoints = [
-      { time: '08:00', t1: 42.1, t2: 58.4 },
-      { time: '10:00', t1: 45.3, t2: 68.2 },
-      { time: '12:00', t1: 48.2, t2: 83.5 },
-      { time: '14:00', t1: 47.0, t2: 79.1 },
-      { time: '16:00', t1: 43.5, t2: 65.0 }
-    ];
-    const chartW = 500;
-    const chartH = 180;
-    const padL = 40;
-    const padB = 30;
-    const availW = chartW - padL - 20;
-    const availH = chartH - padB - 20;
-    const minT = 30;
-    const maxT = 95;
-    const getY = (t) => chartH - padB - ((t - minT) / (maxT - minT)) * availH;
-    const step = availW / (dclPoints.length - 1);
-
-    // Tính đường DCL 171-7 (Quá nhiệt) và DCL 171-1 (Bình thường)
-    let pathDclBad = '';
-    let pathDclOk = '';
-    let dotsSvg = '';
-    dclPoints.forEach((p, idx)=>{
-      const x = padL + idx * step;
-      const yBad = getY(p.t2);
-      const yOk = getY(p.t1);
-      if(idx === 0){
-        pathDclBad += `M ${x} ${yBad}`;
-        pathDclOk += `M ${x} ${yOk}`;
-      } else {
-        pathDclBad += ` L ${x} ${yBad}`;
-        pathDclOk += ` L ${x} ${yOk}`;
-      }
-      dotsSvg += `
-        <circle cx="${x}" cy="${yBad}" r="4" fill="#cf2f5e"/>
-        <circle cx="${x}" cy="${yOk}" r="4" fill="#0d6e6e"/>
-        <text x="${x}" y="${chartH - 10}" font-size="10" text-anchor="middle" fill="var(--ink2)">${p.time}</text>
-      `;
-    });
-
-    const y75 = getY(75.0);
-
-    lineContainer.innerHTML = `
-      <svg width="100%" height="${chartH}" viewBox="0 0 ${chartW} ${chartH}">
-        <!-- Lưới ngang -->
-        <line x1="${padL}" y1="${chartH - padB}" x2="${chartW - 10}" y2="${chartH - padB}" stroke="var(--line)"/>
-        <!-- Đường đứt nét cảnh báo 75°C (ĐỎ NỔI BẬT) -->
-        <line x1="${padL}" y1="${y75}" x2="${chartW - 10}" y2="${y75}" stroke="#dc2626" stroke-width="2" stroke-dasharray="4,3"/>
-        <text x="${chartW - 12}" y="${y75 - 5}" font-size="10" font-weight="700" text-anchor="end" fill="#dc2626">Ngưỡng 75.0 °C</text>
-        
-        <!-- Nhãn trục Y -->
-        <text x="${padL - 8}" y="${chartH - padB + 4}" font-size="10" text-anchor="end" fill="var(--ink3)">30°C</text>
-        <text x="${padL - 8}" y="${y75 + 4}" font-size="10" font-weight="700" text-anchor="end" fill="#dc2626">75°C</text>
-        <text x="${padL - 8}" y="${getY(90) + 4}" font-size="10" text-anchor="end" fill="var(--ink3)">90°C</text>
-
-        <!-- Tuyến đường DCL 171-1 -->
-        <path d="${pathDclOk}" fill="none" stroke="#0d6e6e" stroke-width="2.5"/>
-        <!-- Tuyến đường DCL 171-7 -->
-        <path d="${pathDclBad}" fill="none" stroke="#cf2f5e" stroke-width="2.5"/>
-        ${dotsSvg}
-      </svg>
-    `;
-  }
-}
+function renderReportsSvgCharts(){ if(window.GIS && GIS.Insights) GIS.Insights.reports(); }
 
 /* ===================================================================
    CỤM ĐIỀU KHIỂN THỦ CÔNG MANUAL (GIMBAL, RTH, LIVE STREAM)
@@ -2759,7 +2516,7 @@ function startFlvLivePlayer(streamPath, playbackUrl){
 
   streamPath = streamPath || (window.GIS && GIS.LiveMonitor && GIS.LiveMonitor.streamPath());
   if (!/^\/live\/ticket_\d+_[a-f0-9]{16}$/.test(streamPath || '')) { toast('Chọn phiếu và kênh đang phát trong Giám sát UAV.'); return; }
-  const flvUrl = playbackUrl || `${location.protocol}//${location.hostname}:8000${streamPath}.flv`;
+  const flvUrl = playbackUrl || (window.GIS && GIS.LiveMonitor && GIS.LiveMonitor.playbackUrl()) || `${location.protocol}//${location.hostname}:8000${streamPath}.flv`;
   try{
     gFlvPlayer = flvjs.createPlayer({
       type: 'flv',
