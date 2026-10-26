@@ -212,6 +212,30 @@ function buildPointsKmz({ name, points, profile, speed }) {
     return pack(name, speed, waypoints, groups);
 }
 
+/**
+ * Tuyến vẽ tay trên dashboard (Mission planner): đi qua các điểm theo thứ tự.
+ * triggerDistance > 0: chụp mỗi N m suốt tuyến; ngược lại: xoay gimbal + chụp tại từng điểm.
+ */
+function buildManualKmz({ name, waypoints, altitude, speed, lenses = 'ir,wide', triggerDistance = 0, gimbalPitch = -90 }) {
+    actionSeq = 0;
+    const wps = waypoints.map(p => ({
+        lat: p.lat, lng: p.lng, alt: p.alt != null ? p.alt : altitude, speed,
+        gimbalPitch: p.gimbalPitch != null ? p.gimbalPitch : gimbalPitch, heading: null
+    }));
+    const groups = {};
+    if (triggerDistance > 0) {
+        groups[0] = [
+            actionGroup(0, 0, 0, { type: 'reachPoint' }, [gimbalRotate(wps[0].gimbalPitch)]),
+            actionGroup(1, 0, wps.length - 1, { type: 'multipleDistance', param: triggerDistance }, [takePhoto(lenses, 'M')])
+        ];
+    } else {
+        wps.forEach((wp, i) => {
+            groups[i] = [actionGroup(i, i, i, { type: 'reachPoint' }, [gimbalRotate(wp.gimbalPitch), takePhoto(lenses, `M${i + 1}`)])];
+        });
+    }
+    return pack(name, speed, wps, groups);
+}
+
 function pack(name, speed, waypoints, groups) {
     if (waypoints.length < 2) throw new Error('Đường bay cần ít nhất 2 điểm');
     const { template, waylines } = documents(name, speed, waypoints, groups);
@@ -221,4 +245,4 @@ function pack(name, speed, waypoints, groups) {
     return { buffer: zip.toBuffer(), template, waylines, waypointCount: waypoints.length };
 }
 
-module.exports = { buildGridKmz, buildPointsKmz };
+module.exports = { buildGridKmz, buildPointsKmz, buildManualKmz };

@@ -194,6 +194,19 @@ test('coverage: % phủ, vùng thiếu, bỏ ảnh chụp xiên / không có v�
     assert.equal(none.gap_count, 1);
 });
 
+test('wpmlBuilder: tuyến vẽ tay – chụp tại điểm hoặc mỗi N mét, độ cao so với điểm cất cánh', () => {
+    const { buildManualKmz } = require('../src/services/wpmlBuilder');
+    const wps = [{ lat: 11.85, lng: 107 }, { lat: 11.851, lng: 107, alt: 40, gimbalPitch: -45 }, { lat: 11.852, lng: 107 }];
+    const atPoints = buildManualKmz({ name: 'Vẽ tay', waypoints: wps, altitude: 30, speed: 4 });
+    assert.equal((atPoints.waylines.match(/<wpml:actionActuatorFunc>takePhoto</g) || []).length, 3);
+    assert.match(atPoints.waylines, /<wpml:executeHeight>40<\/wpml:executeHeight>/);
+    assert.match(atPoints.waylines, /<wpml:gimbalPitchRotateAngle>-45</);
+    assert.match(atPoints.waylines, /relativeToStartPoint/);
+    const interval = buildManualKmz({ name: 'Vẽ tay 2', waypoints: wps, altitude: 30, speed: 4, triggerDistance: 6 });
+    assert.match(interval.waylines, /<wpml:actionGroupStartIndex>0<\/wpml:actionGroupStartIndex>\s*<wpml:actionGroupEndIndex>2</);
+    assert.match(interval.waylines, /<wpml:actionTriggerParam>6</);
+});
+
 test('parseTilePath chỉ nhận đường dẫn ô ảnh hợp lệ', () => {
     assert.deepEqual(parseTilePath('tiles/18/215000/123000.PNG'), { z: 18, x: 215000, y: 123000, ext: 'png' });
     assert.deepEqual(parseTilePath('3/1/2.jpeg'), { z: 3, x: 1, y: 2, ext: 'jpg' });

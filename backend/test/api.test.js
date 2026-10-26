@@ -580,6 +580,23 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal((await lib.findRoute(String(row.route_id))).route_uuid, row.route_uuid);
         assert.equal(await lib.findRoute('khong-ton-tai'), null);
         assert.equal(await lib.findRoute(''), null);
+
+        // KMZ cũ có độ cao theo mực nước biển (EGM96) → gắn nhãn cảnh báo; KMZ đúng (relativeToStartPoint) giữ nguyên
+        const { buildManualKmz } = require('../src/services/wpmlBuilder');
+        const good = buildManualKmz({ name: 'ok', waypoints: [{ lat: 1, lng: 1 }, { lat: 1.001, lng: 1 }], altitude: 30, speed: 4 });
+        const oldZip = new AdmZip();
+        oldZip.addFile('wpmz/waylines.wpml', Buffer.from('<kml><wpml:executeHeightMode>EGM96</wpml:executeHeightMode></kml>'));
+        fs.writeFileSync(path.join(lib.WAYLINE_DIR, 'DJI_Mission_1_Cu_EGM96.kmz'), oldZip.toBuffer());
+        fs.writeFileSync(path.join(lib.WAYLINE_DIR, 'DJI_Mission_2_Moi_dung.kmz'), good.buffer);
+        assert.equal(await lib.importDiskKmz(), 2);
+        assert.equal(lib.kmzHeightMode(path.join(lib.WAYLINE_DIR, 'DJI_Mission_2_Moi_dung.kmz')), 'relativeToStartPoint');
+        assert.equal(await lib.flagUnsafeHeight(), 1);
+        assert.equal(await lib.flagUnsafeHeight(), 0); // không gắn nhãn 2 lần
+        const [bad] = await db.query("SELECT route_name, description FROM flight_routes WHERE kmz_file_name = 'DJI_Mission_1_Cu_EGM96.kmz'");
+        assert.match(bad.route_name, /^⚠ /);
+        assert.match(bad.description, /mực nước biển/);
+        const [ok2] = await db.query("SELECT route_name FROM flight_routes WHERE kmz_file_name = 'DJI_Mission_2_Moi_dung.kmz'");
+        assert.equal(ok2.route_name, 'Moi dung');
     });
 
     await t.test('gán đường bay vào phiếu: nhiều tuyến / phiếu, đồng bộ assigned_route_id', async () => {

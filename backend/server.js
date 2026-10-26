@@ -39,6 +39,7 @@ const { listActiveTickets, findTicketById } = require('./src/services/ticketServ
 const mediaIngest = require('./src/services/mediaIngest');
 const mediaUploadRouter = require('./src/routes/mediaUpload');
 const routeLibrary = require('./src/services/routeLibrary');
+const wpmlBuilder = require('./src/services/wpmlBuilder');
 const solarRouter = require('./src/routes/solar');
 const substationRouter = require('./src/routes/substation');
 const ticketsRouter = require('./src/routes/tickets');
@@ -256,8 +257,7 @@ const memoryStore = {
   // Trạng thái tay cầm điều khiển Pilot 2 thật
   gateways: {},
   // Phiếu kiểm tra: KHÔNG giữ trong bộ nhớ, luôn đọc từ MySQL (ticketService)
-  // Tuyến bay KMZ thực tế (Đồng bộ trực tiếp từ thư mục uploads/waylines)
-  routes: [],
+  // Đường bay: thư viện trong MySQL (src/services/routeLibrary.js), không giữ trong bộ nhớ
   // Kho ảnh chụp thật được đồng bộ về
   mediaFiles: [],
   // Nhật ký gói tin thô để soi console trên Web
@@ -881,7 +881,9 @@ app.post('/api/routes/upload', uploadWayline.single('kmz_file'), async (req, res
   }
   try {
     const name = String((req.body && req.body.route_name) || '').trim().slice(0, 150) || routeLibrary.nameFromFile(req.file.originalname);
-    const route = await routeLibrary.addKmz({ fileName: req.file.filename, routeName: name, kind: 'MANUAL', description: 'Tải lên thủ công' });
+    await routeLibrary.addKmz({ fileName: req.file.filename, routeName: name, kind: 'MANUAL', description: 'Tải lên thủ công' });
+    await routeLibrary.flagUnsafeHeight(); // file tải lên dùng độ cao theo mực nước biển → gắn nhãn cảnh báo
+    const route = (await query('SELECT * FROM flight_routes WHERE kmz_file_name = ?', [req.file.filename]))[0];
     console.log(`[Wayline Uploaded] Đã nạp file đường bay: ${route.route_name}`);
     res.json({ code: 0, message: 'Nạp đường bay KMZ thành công', data: route });
   } catch (err) {
@@ -890,216 +892,60 @@ app.post('/api/routes/upload', uploadWayline.single('kmz_file'), async (req, res
   }
 });
 
-// 5.1 Tự động tạo và đóng gói file KMZ chuẩn DJI Enterprise WPML v1.0
-app.post('/api/routes/generate-kmz', (req, res) => {
+// 5.1 Sinh KMZ từ bộ vẽ tay trên dashboard (Mission planner) → lưu vào thư viện đường bay (MySQL).
+//     Dùng wpmlBuilder: độ cao so với điểm cất cánh (code cũ dùng EGM96 = so với mực nước biển, sai).
+app.post('/api/routes/generate-kmz', async (req, res) => {
+  const b = req.body || {};
+  const num = (x, lo, hi, def) => {
+    const n = x === undefined || x === null || x === '' ? def : Number(x);
+    return Number.isFinite(n) && n >= lo && n <= hi ? n : NaN;
+  };
+  const routeName = String(b.route_name || 'Tuyến vẽ tay').trim().slice(0, 150);
+  const altitude = num(b.altitude, 2, 500, 30);
+  const speed = num(b.speed, 0.5, 15, 3.5);
+  const trigger = num(b.trigger_distance, 0, 500, 0);
+  const wps = Array.isArray(b.waypoints) ? b.waypoints : [];
+  const bad = wps.length < 2 || wps.length > 1000 || [altitude, speed, trigger].some(Number.isNaN) ||
+    wps.some(w => !w || !(Math.abs(Number(w.lat)) <= 90) || !(Math.abs(Number(w.lng)) <= 180) ||
+      (w.gimbalPitch != null && !(Number(w.gimbalPitch) >= -90 && Number(w.gimbalPitch) <= 35)));
+  if (bad) {
+    return res.status(400).json({ code: 400, message: 'Dữ liệu tuyến không hợp lệ: cần 2–1000 điểm, độ cao 2–500 m, tốc độ 0,5–15 m/s, gimbal −90…35°' });
+  }
   try {
-    const {
-      route_name = 'Tuyến bay Mavic 3T',
-      route_type = 'SOLAR_FARM_MAPPING',
-      altitude = 30,
-      speed = 3.5,
-      trigger_distance = 4,
-      waypoints = []
-    } = req.body;
-
-    if (!Array.isArray(waypoints) || waypoints.length < 2) {
-      return res.status(400).json({ code: 400, message: 'Cần tối thiểu 2 điểm tọa độ để tạo tuyến bay!' });
-    }
-
-    const safeName = route_name.replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-    const fileName = `DJI_Mission_${Date.now()}_${safeName}.kmz`;
-
-    // Danh sách Placemark waypoint cho template.kml chuẩn DJI WPML v1.0.2
-    const placemarksXml = waypoints.map((wp, index) => {
-      const alt = wp.alt || altitude;
-      const gimbalPitch = wp.gimbalPitch !== undefined ? wp.gimbalPitch : (route_type === 'SUBSTATION_DISCONNECTOR' ? 0 : -90);
-      return `      <Placemark>
-        <Point>
-          <coordinates>${wp.lng},${wp.lat}</coordinates>
-        </Point>
-        <wpml:index>${index}</wpml:index>
-        <wpml:ellipsoidHeight>${alt}</wpml:ellipsoidHeight>
-        <wpml:height>${alt}</wpml:height>
-        <wpml:useGlobalHeight>1</wpml:useGlobalHeight>
-        <wpml:useGlobalSpeed>1</wpml:useGlobalSpeed>
-        <wpml:useGlobalHeadingParam>1</wpml:useGlobalHeadingParam>
-        <wpml:useGlobalTurnParam>1</wpml:useGlobalTurnParam>
-        <wpml:gimbalPitchAngle>${gimbalPitch}</wpml:gimbalPitchAngle>
-      </Placemark>`;
-    }).join('\n');
-
-    // Tạo template.kml chuẩn DJI WPML v1.0.2 cho Mavic 3T
-    const templateKml = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:wpml="http://www.dji.com/wpmz/1.0.2">
-  <Document>
-    <wpml:author>UAV-Solar-Substation-System</wpml:author>
-    <wpml:createTime>${Date.now()}</wpml:createTime>
-    <wpml:updateTime>${Date.now()}</wpml:updateTime>
-    <wpml:missionConfig>
-      <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>
-      <wpml:finishAction>goHome</wpml:finishAction>
-      <wpml:exitOnRCLost>goContinue</wpml:exitOnRCLost>
-      <wpml:executeRCLostAction>hover</wpml:executeRCLostAction>
-      <wpml:takeOffSecurityHeight>20</wpml:takeOffSecurityHeight>
-      <wpml:globalTransitionalSpeed>${speed}</wpml:globalTransitionalSpeed>
-      <wpml:droneInfo>
-        <wpml:droneEnumValue>77</wpml:droneEnumValue>
-        <wpml:droneSubEnumValue>1</wpml:droneSubEnumValue>
-      </wpml:droneInfo>
-      <wpml:payloadInfo>
-        <wpml:payloadEnumValue>67</wpml:payloadEnumValue>
-        <wpml:payloadSubEnumValue>0</wpml:payloadSubEnumValue>
-        <wpml:payloadPositionIndex>0</wpml:payloadPositionIndex>
-      </wpml:payloadInfo>
-    </wpml:missionConfig>
-    <Folder>
-      <wpml:templateType>waypoint</wpml:templateType>
-      <wpml:templateId>0</wpml:templateId>
-      <wpml:autoFlightSpeed>${speed}</wpml:autoFlightSpeed>
-      <wpml:gimbalPitchMode>usePointSetting</wpml:gimbalPitchMode>
-      <wpml:globalWaypointHeadingParam>
-        <wpml:waypointHeadingMode>followWayline</wpml:waypointHeadingMode>
-      </wpml:globalWaypointHeadingParam>
-      <wpml:globalWaypointTurnMode>toPointAndStopWithDiscontinuityCurvature</wpml:globalWaypointTurnMode>
-      <wpml:waylineCoordinateSysParam>
-        <wpml:coordinateMode>WGS84</wpml:coordinateMode>
-        <wpml:heightMode>EGM96</wpml:heightMode>
-      </wpml:waylineCoordinateSysParam>
-${placemarksXml}
-    </Folder>
-  </Document>
-</kml>`;
-
-    // Tạo waylines.wpml chuẩn DJI WPML v1.0.2 với các thẻ Placemark thực thi cho Mavic 3T
-    const pointsXml = waypoints.map((wp, index) => {
-      const alt = wp.alt || altitude;
-      const sp = wp.speed || speed;
-      const gimbalPitch = wp.gimbalPitch !== undefined ? wp.gimbalPitch : (route_type === 'SUBSTATION_DISCONNECTOR' ? 0 : -90);
-      return `      <Placemark>
-        <Point>
-          <coordinates>${wp.lng},${wp.lat}</coordinates>
-        </Point>
-        <wpml:index>${index}</wpml:index>
-        <wpml:executeHeight>${alt}</wpml:executeHeight>
-        <wpml:waypointSpeed>${sp}</wpml:waypointSpeed>
-        <wpml:waypointHeadingParam>
-          <wpml:waypointHeadingMode>followWayline</wpml:waypointHeadingMode>
-        </wpml:waypointHeadingParam>
-        <wpml:waypointTurnParam>
-          <wpml:waypointTurnMode>toPointAndStopWithDiscontinuityCurvature</wpml:waypointTurnMode>
-          <wpml:waypointTurnDampingDist>0</wpml:waypointTurnDampingDist>
-        </wpml:waypointTurnParam>
-        <wpml:actionGroup>
-          <wpml:actionGroupId>${index}</wpml:actionGroupId>
-          <wpml:actionGroupStartIndex>${index}</wpml:actionGroupStartIndex>
-          <wpml:actionGroupEndIndex>${index}</wpml:actionGroupEndIndex>
-          <wpml:actionGroupMode>sequence</wpml:actionGroupMode>
-          <wpml:actionTrigger>
-            <wpml:actionTriggerType>reachPoint</wpml:actionTriggerType>
-          </wpml:actionTrigger>
-          <wpml:action>
-            <wpml:actionId>0</wpml:actionId>
-            <wpml:actionActuatorFunc>gimbalRotate</wpml:actionActuatorFunc>
-            <wpml:actionActuatorFuncParam>
-              <wpml:gimbalRotateMode>absoluteAngle</wpml:gimbalRotateMode>
-              <wpml:gimbalPitchRotateEnable>1</wpml:gimbalPitchRotateEnable>
-              <wpml:gimbalPitchRotateAngle>${gimbalPitch}</wpml:gimbalPitchRotateAngle>
-              <wpml:gimbalRollRotateEnable>0</wpml:gimbalRollRotateEnable>
-              <wpml:gimbalRollRotateAngle>0</wpml:gimbalRollRotateAngle>
-              <wpml:gimbalYawRotateEnable>0</wpml:gimbalYawRotateEnable>
-              <wpml:gimbalYawRotateAngle>0</wpml:gimbalYawRotateAngle>
-              <wpml:gimbalRotateTimeEnable>0</wpml:gimbalRotateTimeEnable>
-              <wpml:gimbalRotateTime>0</wpml:gimbalRotateTime>
-              <wpml:payloadPositionIndex>0</wpml:payloadPositionIndex>
-            </wpml:actionActuatorFuncParam>
-          </wpml:action>
-          <wpml:action>
-            <wpml:actionId>1</wpml:actionId>
-            <wpml:actionActuatorFunc>takePhoto</wpml:actionActuatorFunc>
-            <wpml:actionActuatorFuncParam>
-              <wpml:fileSuffix>point_${index}</wpml:fileSuffix>
-              <wpml:payloadPositionIndex>0</wpml:payloadPositionIndex>
-            </wpml:actionActuatorFuncParam>
-          </wpml:action>
-        </wpml:actionGroup>
-      </Placemark>`;
-    }).join('\n');
-
-    const waylinesWpml = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:wpml="http://www.dji.com/wpmz/1.0.2">
-  <Document>
-    <wpml:missionConfig>
-      <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>
-      <wpml:finishAction>goHome</wpml:finishAction>
-      <wpml:exitOnRCLost>goContinue</wpml:exitOnRCLost>
-      <wpml:executeRCLostAction>hover</wpml:executeRCLostAction>
-      <wpml:takeOffSecurityHeight>20</wpml:takeOffSecurityHeight>
-      <wpml:globalTransitionalSpeed>${speed}</wpml:globalTransitionalSpeed>
-      <wpml:droneInfo>
-        <wpml:droneEnumValue>77</wpml:droneEnumValue>
-        <wpml:droneSubEnumValue>1</wpml:droneSubEnumValue>
-      </wpml:droneInfo>
-      <wpml:payloadInfo>
-        <wpml:payloadEnumValue>67</wpml:payloadEnumValue>
-        <wpml:payloadSubEnumValue>0</wpml:payloadSubEnumValue>
-        <wpml:payloadPositionIndex>0</wpml:payloadPositionIndex>
-      </wpml:payloadInfo>
-    </wpml:missionConfig>
-    <Folder>
-      <wpml:templateId>0</wpml:templateId>
-      <wpml:executeHeightMode>WGS84</wpml:executeHeightMode>
-      <wpml:waylineId>0</wpml:waylineId>
-      <wpml:autoFlightSpeed>${speed}</wpml:autoFlightSpeed>
-${pointsXml}
-    </Folder>
-  </Document>
-</kml>`;
-
-    // Đóng gói KMZ bằng AdmZip
-    const zip = new AdmZip();
-    zip.addFile('wpmz/template.kml', Buffer.from(templateKml, 'utf8'));
-    zip.addFile('wpmz/waylines.wpml', Buffer.from(waylinesWpml, 'utf8'));
-
-    const waylineDir = path.join(__dirname, 'uploads', 'waylines');
-    if (!fs.existsSync(waylineDir)) fs.mkdirSync(waylineDir, { recursive: true });
-
-    const filePath = path.join(waylineDir, fileName);
-    zip.writeZip(filePath);
-
-    // Tính mã băm MD5
-    const fileBuffer = fs.readFileSync(filePath);
-    const md5Hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
-
-    const routeRecord = {
-      route_id: memoryStore.routes.length + 1,
-      route_name: route_name,
-      route_type: route_type,
-      file_name: fileName,
-      file_url: `/uploads/waylines/${fileName}`,
-      full_url: `http://${HOST_IP}:${PORT}/uploads/waylines/${fileName}`,
-      md5: md5Hash,
-      altitude: Number(altitude),
-      speed: Number(speed),
-      waypoint_count: waypoints.length,
-      created_at: new Date()
-    };
-
-    memoryStore.routes.push(routeRecord);
-    console.log(`[KMZ Generated] ✓ Đã tạo file KMZ chuẩn DJI: ${fileName} (MD5: ${md5Hash})`);
-
+    const isDcl = b.route_type === 'SUBSTATION_DISCONNECTOR';
+    const kmz = wpmlBuilder.buildManualKmz({
+      name: routeName,
+      waypoints: wps.map(w => ({ lat: Number(w.lat), lng: Number(w.lng), alt: w.alt != null ? Number(w.alt) : null, gimbalPitch: w.gimbalPitch != null ? Number(w.gimbalPitch) : null })),
+      altitude, speed,
+      triggerDistance: isDcl ? 0 : trigger,
+      gimbalPitch: isDcl ? 0 : -90
+    });
+    fs.mkdirSync(routeLibrary.WAYLINE_DIR, { recursive: true });
+    const safe = routeName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 60) || 'route';
+    const fileName = `DJI_Mission_${Date.now()}_${safe}.kmz`;
+    fs.writeFileSync(path.join(routeLibrary.WAYLINE_DIR, fileName), kmz.buffer);
+    const route = await routeLibrary.addKmz({ fileName, routeName, kind: 'MANUAL', waypointCount: kmz.waypointCount, altitude, description: 'Vẽ tay trên dashboard' });
+    if (b.ticket_id) await require('./src/services/ticketRoutes').addRoute(b.ticket_id, route.route_id);
+    console.log(`[KMZ] Đã tạo tuyến vẽ tay ${fileName} (${kmz.waypointCount} điểm)`);
     res.json({
       code: 0,
-      message: 'Đã tạo và đóng gói file KMZ chuẩn DJI thành công',
-      data: routeRecord
+      message: 'Đã tạo file KMZ và lưu vào thư viện đường bay',
+      data: {
+        ...route,
+        file_name: fileName,
+        file_url: `/uploads/waylines/${fileName}`,
+        full_url: `http://${HOST_IP}:${PORT}/uploads/waylines/${encodeURIComponent(fileName)}`,
+        md5: route.kmz_md5,
+        waypoint_count: kmz.waypointCount
+      }
     });
   } catch (err) {
-    console.error('[KMZ Error]', err);
-    res.status(500).json({ code: 500, message: 'Lỗi tạo file KMZ: ' + err.message });
+    sendDbError(res, err);
   }
 });
 
 // 5.2 Bắn lệnh nạp đường bay KMZ trực tiếp vào Drone / DJI Pilot 2 qua DJI Cloud API
-app.post('/api/routes/push-to-drone', (req, res) => {
+app.post('/api/routes/push-to-drone', async (req, res) => {
   const { route_id, file_url, md5, device_sn } = req.body;
   const targetSn = device_sn || Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
   const gatewaySn = Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
@@ -1107,13 +953,15 @@ app.post('/api/routes/push-to-drone', (req, res) => {
   const hasGateway = Boolean(memoryStore.gateways[gatewaySn]);
   const hasDevice = Boolean(memoryStore.devices[targetSn]);
 
-  // Tìm tuyến bay
-  let route = memoryStore.routes.find(r => r.route_id == route_id);
-  if (!route && file_url) {
-    route = {
-      full_url: file_url.startsWith('http') ? file_url : `http://${HOST_IP}:${PORT}${file_url}`,
-      md5: md5 || crypto.randomUUID().replace(/-/g, '')
-    };
+  // Tìm tuyến trong thư viện (MySQL). Không bịa md5 nếu không tìm thấy.
+  let route = null;
+  try {
+    const found = route_id ? await routeLibrary.findRoute(route_id) : null;
+    if (found) {
+      route = { full_url: `http://${HOST_IP}:${PORT}/uploads/waylines/${encodeURIComponent(found.kmz_file_name)}`, md5: found.kmz_md5 };
+    }
+  } catch (err) {
+    return sendDbError(res, err);
   }
 
   if (!route) {
@@ -1153,7 +1001,7 @@ app.post('/api/routes/push-to-drone', (req, res) => {
 
   res.json({
     code: 0,
-    message: 'Đã phát lệnh nạp tuyến bay KMZ xuống DJI Pilot 2 & Mavic 3T thành công!',
+    message: 'Đã gửi lệnh nạp tuyến. Lưu ý: lệnh flighttask chủ yếu dành cho DJI Dock; với Pilot 2 hãy mở Thư viện đường bay (Cloud) trên tay điều khiển và chọn tuyến của phiếu.',
     data: {
       flight_id: flightId,
       kmz_url: kmzUrl,
@@ -1828,6 +1676,8 @@ async function initDatabase() {
     // Làm sạch ảnh nhận bằng code cũ (giá trị gán cứng) – chỉ chạm các dòng chưa có sha256
     const imported = await routeLibrary.importDiskKmz();
     if (imported) console.log(`[Đường bay] Đã đưa ${imported} file KMZ cũ trong uploads/waylines vào thư viện.`);
+    const unsafe = await routeLibrary.flagUnsafeHeight();
+    if (unsafe) console.warn(`[Đường bay] ⚠ ${unsafe} tuyến có độ cao theo mực nước biển – đã gắn nhãn, cần tạo lại trước khi bay.`);
     const legacy = await mediaIngest.backfillLegacy();
     if (legacy.fixed || legacy.missing) {
       console.log(`[Ảnh] Làm sạch dữ liệu cũ: đọc lại ${legacy.fixed} ảnh từ file, xóa giá trị giả của ${legacy.missing} ảnh mất file.`);

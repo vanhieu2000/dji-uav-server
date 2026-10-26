@@ -68,4 +68,43 @@ function kmzPath(route) {
     return path.join(WAYLINE_DIR, path.basename(route.kmz_file_name));
 }
 
-module.exports = { WAYLINE_DIR, importDiskKmz, addKmz, findRoute, kmzPath, md5File, nameFromFile };
+const UNSAFE_PREFIX = '⚠ ';
+const UNSAFE_NOTE = '⚠ Độ cao trong file tính theo mực nước biển (EGM96/WGS84), không phải so với điểm cất cánh – tạo lại tuyến trước khi bay.';
+
+/** Kiểu độ cao trong file KMZ: 'relativeToStartPoint' | 'EGM96' | 'WGS84' | ... | null nếu không đọc được. */
+function kmzHeightMode(file) {
+    try {
+        const AdmZip = require('adm-zip');
+        const zip = new AdmZip(file);
+        const entry = zip.getEntries().find(e => /waylines\.wpml$/i.test(e.entryName));
+        if (!entry) return null;
+        const m = /<wpml:executeHeightMode>([^<]+)<\/wpml:executeHeightMode>/.exec(entry.getData().toString('utf8'));
+        return m ? m[1].trim() : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Gắn nhãn cảnh báo cho tuyến có độ cao theo mực nước biển (tuyến do code cũ sinh ra: EGM96 30 m).
+ * Chỉ kiểm tra tuyến vẽ tay / nhập từ thư mục (tuyến sinh từ hồ sơ chụp luôn dùng relativeToStartPoint).
+ * @returns {Promise<number>} số tuyến vừa gắn nhãn
+ */
+async function flagUnsafeHeight() {
+    const rows = await query("SELECT route_id, route_name, kmz_file_name FROM flight_routes WHERE route_kind = 'MANUAL'");
+    let flagged = 0;
+    for (const r of rows) {
+        if (r.route_name.startsWith(UNSAFE_PREFIX)) continue;
+        const file = path.join(WAYLINE_DIR, path.basename(r.kmz_file_name));
+        if (!fs.existsSync(file)) continue;
+        const mode = kmzHeightMode(file);
+        if (mode && mode !== 'relativeToStartPoint') {
+            await query('UPDATE flight_routes SET route_name = ?, description = ? WHERE route_id = ?',
+                [(UNSAFE_PREFIX + r.route_name).slice(0, 150), `${UNSAFE_NOTE} (executeHeightMode=${mode})`, r.route_id]);
+            flagged += 1;
+        }
+    }
+    return flagged;
+}
+
+module.exports = { WAYLINE_DIR, importDiskKmz, addKmz, findRoute, kmzPath, md5File, nameFromFile, kmzHeightMode, flagUnsafeHeight };
