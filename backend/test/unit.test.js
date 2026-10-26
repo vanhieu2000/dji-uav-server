@@ -164,6 +164,36 @@ test('djiImageMeta: đọc XMP M3T (RTK, gimbal, ống kính, giờ chụp), h�
     assert.equal(m.photoPointFromName('DJI_20261026_0003_T.JPG'), null);
 });
 
+test('coverage: % phủ, vùng thiếu, bỏ ảnh chụp xiên / không có vị trí', () => {
+    const { computeCoverage } = require('../src/services/coverage');
+    const cm = require('../src/services/captureMath');
+    // Khu 200 m (Đông–Tây) × 40 m, ở vĩ độ 11.85
+    const mLat = 1 / 111195;
+    const mLng = 1 / (111195 * Math.cos(11.85 * Math.PI / 180));
+    const poly = { type: 'Polygon', coordinates: [[[107, 11.85], [107 + 200 * mLng, 11.85], [107 + 200 * mLng, 11.85 + 40 * mLat], [107, 11.85 + 40 * mLat], [107, 11.85]]] };
+    const alt = cm.altitudeForGsd('ir', 5); // vệt ~32 × 25,6 m
+    // Phủ nửa Tây: ảnh mỗi 10 m dọc trục giữa, từ x = 0 đến 100 m, máy bay hướng Đông (90°): cạnh dài ảnh theo Bắc–Nam
+    const photos = [];
+    for (let x = 0; x <= 100; x += 10) {
+        photos.push({ latitude: 11.85 + 20 * mLat, longitude: 107 + x * mLng, relative_altitude: alt, gimbal_pitch: -90, gimbal_yaw: 90 });
+    }
+    photos.push({ latitude: 11.85, longitude: 107.0015, relative_altitude: alt, gimbal_pitch: -30, gimbal_yaw: 90 }); // xiên
+    photos.push({ latitude: null, longitude: null, relative_altitude: alt });
+    const c = computeCoverage({ polygon: poly, photos, lens: 'ir', cellM: 2 });
+    assert.equal(c.photos_used, 11);
+    assert.equal(c.photos_skipped_oblique, 1);
+    assert.equal(c.photos_skipped_no_position, 1);
+    // Vệt dọc trục Đông–Tây dài 25,6 m → phủ tới x ≈ 112,8 m / 200 m ≈ 56 %; bề ngang 32 m < 40 m nên hụt 2 dải mép
+    assert.ok(c.coverage_pct > 40 && c.coverage_pct < 60, `phủ ${c.coverage_pct}%`);
+    assert.ok(c.gap_count >= 1);
+    const big = c.gaps[0];
+    const xs = big.polygon.coordinates[0].map(p => (p[0] - 107) / mLng);
+    assert.ok(Math.max(...xs) > 195, 'vùng thiếu lớn nhất ở nửa Đông');
+    const none = computeCoverage({ polygon: poly, photos: [], lens: 'ir' });
+    assert.equal(none.coverage_pct, 0);
+    assert.equal(none.gap_count, 1);
+});
+
 test('parseTilePath chỉ nhận đường dẫn ô ảnh hợp lệ', () => {
     assert.deepEqual(parseTilePath('tiles/18/215000/123000.PNG'), { z: 18, x: 215000, y: 123000, ext: 'png' });
     assert.deepEqual(parseTilePath('3/1/2.jpeg'), { z: 3, x: 1, y: 2, ext: 'jpg' });

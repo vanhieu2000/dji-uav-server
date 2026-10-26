@@ -34,11 +34,17 @@ async function loadProfile(id) {
     return rows[0];
 }
 
-async function planGrid(profile, areaIdRaw) {
+/**
+ * Quét lưới một khu. polygonRaw (tùy chọn): vùng con trong khu (VD vùng thiếu ảnh cần bay bù);
+ * hướng bay vẫn lấy theo dãy pin của khu.
+ */
+async function planGrid(profile, areaIdRaw, polygonRaw) {
     const areaId = v.parseId(areaIdRaw, 'khu pin');
     const areas = await query('SELECT area_id, area_code, area_name, polygon_geojson FROM solar_areas WHERE area_id = ?', [areaId]);
     if (!areas.length) throw new NotFoundError('Không tìm thấy khu pin');
-    const area = areas[0];
+    const area = { ...areas[0] };
+    const sub = v.optionalPolygonGeoJson(polygonRaw, 'vùng bay bù');
+    if (sub) area.polygon_geojson = sub;
     if (!area.polygon_geojson) throw new v.ValidationError(`Khu ${area.area_code} chưa vẽ ranh giới. Vẽ ở Cài đặt tài sản trước.`);
     const strings = await query('SELECT line_geojson FROM solar_strings WHERE area_id = ? AND line_geojson IS NOT NULL', [areaId]);
     const geometry = deriveGeometry(profile);
@@ -128,7 +134,7 @@ async function planPoints(profile, targets) {
 async function buildPlan(body) {
     const profile = await loadProfile(body && body.profile_id);
     const result = profile.route_kind === 'GRID'
-        ? await planGrid(profile, body.area_id)
+        ? await planGrid(profile, body.area_id, body.polygon)
         : await planPoints(profile, body.targets);
     if (profile.time_window_start && profile.time_window_end) {
         result.warnings.push(`Chỉ bay trong khung giờ ${profile.time_window_start.slice(0, 5)}–${profile.time_window_end.slice(0, 5)}`);

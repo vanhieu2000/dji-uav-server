@@ -466,6 +466,36 @@ test('API tài sản & bản đồ', async (t) => {
         assert.ok(!fs.existsSync(path.join(path.dirname(process.env.MEDIA_DIR), 'evil.JPG')));
     });
 
+    await t.test('kiểm tra đủ ảnh + tuyến bay bù cho vùng thiếu', async () => {
+        const ticket = await api('POST', '/api/tickets', { ticket_name: 'Kiểm tra phủ', inspection_type: 'SOLAR_PANEL', target_facility: 'INV-01' });
+        const ticketId = ticket.body.data.ticket_id;
+        // 2 ảnh nhiệt ở góc Tây Nam khu INV-01 (khu ~218 × 222 m)
+        for (const [lat, lng] of [[11.8502, 107.0002], [11.8504, 107.0002]]) {
+            await db.query(
+                `INSERT INTO media_files (ticket_id, device_sn, file_name, file_url, lens, media_type, latitude, longitude, relative_altitude, gimbal_pitch, gimbal_yaw, position_quality)
+                 VALUES (?, 'AC', ?, '/u', 'IR', 'THERMAL_PHOTO', ?, ?, 34.8, -90, 90, 'HIGH')`,
+                [ticketId, `cov_${lat}.JPG`, lat, lng]
+            );
+        }
+        const c = await api('GET', `/api/coverage?area_id=${areaId}&ticket_id=${ticketId}&lens=ir`);
+        assert.equal(c.status, 200, JSON.stringify(c.body));
+        const d = c.body.data;
+        assert.equal(d.photos_used, 2);
+        assert.ok(d.coverage_pct > 0 && d.coverage_pct < 20, `phủ ${d.coverage_pct}%`);
+        assert.ok(d.gap_count >= 1);
+        assert.equal(d.ticket_photos.total, 2);
+        assert.equal(d.points.length, 2);
+
+        // Tuyến bay bù chỉ cho vùng thiếu lớn nhất
+        const grid = (await api('GET', '/api/capture-profiles')).body.data.find(p => p.profile_code === 'SOLAR_THERMAL');
+        const fill = await api('POST', '/api/flight-plans/preview', { profile_id: grid.profile_id, area_id: areaId, polygon: d.gaps[0].polygon });
+        assert.equal(fill.status, 200, JSON.stringify(fill.body));
+        assert.ok(fill.body.data.stats.photo_count > 0);
+        const bad = await api('POST', '/api/flight-plans/preview', { profile_id: grid.profile_id, area_id: areaId, polygon: { type: 'Point', coordinates: [1, 1] } });
+        assert.equal(bad.status, 400);
+        assert.equal((await api('GET', `/api/coverage?area_id=${areaId}`)).status, 400); // thiếu phiếu
+    });
+
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
         await db.closePool();
         const r = await api('GET', '/api/solar/areas');
