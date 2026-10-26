@@ -315,3 +315,13 @@ test('flightTracker: mất tín hiệu 30 s → OFFLINE và đóng chuyến LOST
     assert.ok(calls.some(c => /SET status = 'OFFLINE'/.test(c.sql)));
     assert.ok(events.some(e => e.type === 'device_offline'));
 });
+
+test('flights.thin giữ điểm đầu, cuối và giới hạn số điểm', () => {
+    const { thin } = require('../src/routes/flights');
+    const rows = Array.from({ length: 10001 }, (_, i) => i);
+    const out = thin(rows, 5000);
+    assert.equal(out.length, 5000);
+    assert.equal(out[0], 0);
+    assert.equal(out[out.length - 1], 10000);
+    assert.deepEqual(thin([1, 2], 5000), [1, 2]);
+});

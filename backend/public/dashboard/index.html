@@ -1334,6 +1334,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
 <script src="js/gis/gis-flightplans.js"></script>
 <script src="js/gis/gis-media-import.js"></script>
 <script src="js/gis/gis-coverage.js"></script>
+<script src="js/gis/gis-flight-history.js"></script>
 <script src="js/gis/gis-datasets.js"></script>
 <script src="js/gis/gis-page.js"></script>
 
@@ -3877,6 +3878,13 @@ function setupRealtimeTelemetry(){
    // 1.0 Trạng thái kết nối CSDL (hiện / ẩn thanh cảnh báo đỏ)
    if(msg.type === 'db_status' && window.GIS){
     GIS.onDbStatus(msg.data);
+   }
+
+   // 1.0b Chuyến bay bắt đầu / kết thúc (tự ghi ở server)
+   if(msg.type === 'flight_started' || msg.type === 'flight_ended'){
+    const why = { LANDED: 'hạ cánh', LOST_LINK: 'mất tín hiệu' }[msg.reason] || msg.reason;
+    toast(msg.type === 'flight_started' ? `🛫 ${msg.device_sn} cất cánh – bắt đầu ghi chuyến bay #${msg.flight_session_id}` : `🛬 Chuyến bay #${msg.flight_session_id} kết thúc (${why})`);
+    if(window.GIS && GIS.FlightHistory) GIS.FlightHistory.refresh();
    }
 
    // 1.1 Luồng Live Stream video từ Mavic 3T

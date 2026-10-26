@@ -192,7 +192,8 @@ Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
   OFFLINE sau 30 s không có OSD (đang bay → `LOST_LINK`); `uav_devices.rtk_state`, `gateway_sn` (từ gói topo);
   ảnh gắn vào chuyến theo giờ chụp ±30 s (chạy lại mỗi phút vì ảnh về sau khi hạ cánh); chuyến còn mở khi server tắt → `SERVER_RESTART`.
   Ngưỡng cất/hạ cánh cần thử với máy thật (độ cao `elevation` của Pilot 2 tính từ điểm cất cánh).
-- [ ] C2 – Lịch sử chuyến bay + xem lại vết bay.
+- [x] C2 – `GET /api/flights` (lọc máy bay / phiếu / ngày), `GET /api/flights/:id` (vết bay ≤ 5000 điểm + ảnh);
+  tab **Lịch sử chuyến bay** (`gis-flight-history.js`): vết bay tô màu theo RTK, điểm ảnh theo camera, phát lại 1×/5×/20×, thông báo khi cất/hạ cánh.
 - [ ] Đa máy bay trên bản đồ; cảnh báo HMS.
 - [ ] Theo dõi tiến độ chụp realtime trên bản đồ (vị trí từng ảnh vừa về).
 - [ ] Livestream kênh theo mã phiếu.

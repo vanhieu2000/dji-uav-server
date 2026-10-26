@@ -144,3 +144,16 @@
 .gis-tk-add{height:24px;width:auto;font-size:11px;padding:0 4px}
 
 .gis-steps{margin:8px 0;padding-left:20px;font-size:12.5px;line-height:1.7}
+
+/* Lịch sử chuyến bay (C2) */
+#gis-fh-map{position:absolute;inset:0}
+.gis-fh-row{cursor:pointer}
+.gis-fh-row:hover td{background:var(--hover,rgba(56,189,248,.08))}
+.gis-fh-row.on td{background:rgba(56,189,248,.16)}
+.gis-fh-filter{display:flex;flex-direction:column;gap:8px}
+.gis-fh-filter .gis-row .field{flex:1}
+.gis-fh-detail{border-top:1px solid var(--line);padding-top:10px}
+.gis-fh-detail h3{margin:0 0 6px;font-size:15px}
+.gis-fh-player{align-items:center;gap:8px;margin-top:8px}
+.gis-fh-player input[type=range]{flex:1;min-width:120px}
+.gis-fh-player select{width:auto}

@@ -710,6 +710,23 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal(await tr.closeDangling(), 1);
     });
 
+    await t.test('API lịch sử chuyến bay: danh sách, lọc, chi tiết có vết bay và ảnh', async () => {
+        const list = await api('GET', '/api/flights?device_sn=UAV1');
+        assert.equal(list.status, 200);
+        assert.equal(list.body.data.length, 1);
+        assert.equal(list.body.data[0].photo_count, 1);
+        const id = list.body.data[0].flight_session_id;
+        const one = await api('GET', `/api/flights/${id}`);
+        assert.equal(one.status, 200);
+        assert.equal(one.body.data.track.length, 2);
+        assert.equal(one.body.data.photos[0].file_name, 'DJI_TEST_T.JPG');
+        assert.equal((await api('GET', '/api/flights?from=26-10-2026')).status, 400);
+        assert.equal((await api('GET', '/api/flights/999999')).status, 404);
+        const yday = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+        assert.equal((await api('GET', `/api/flights?from=${yday}`)).body.data.length >= 1, true);
+        assert.equal((await api('GET', `/api/flights?to=${yday}`)).body.data.length, 0);
+    });
+
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
         await db.closePool();
         const r = await api('GET', '/api/solar/areas');

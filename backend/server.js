@@ -176,6 +176,7 @@ app.use('/api/basemaps', basemapsRouter);
 app.use('/api/capture-profiles', require('./src/routes/captureProfiles'));
 app.use('/api/flight-plans', require('./src/routes/flightPlans'));
 app.use('/api/coverage', require('./src/routes/coverage'));
+app.use('/api/flights', require('./src/routes/flights'));
 app.use('/api/datasets', require('./src/routes/datasets'));
 
 // Tình trạng hệ thống: dashboard dùng để hiện cảnh báo mất CSDL

@@ -91,6 +91,7 @@ async function startTestApp() {
     app.use('/api/capture-profiles', require('../src/routes/captureProfiles'));
     app.use('/api/flight-plans', require('../src/routes/flightPlans'));
     app.use('/api/coverage', require('../src/routes/coverage'));
+    app.use('/api/flights', require('../src/routes/flights'));
     app.use('/api/datasets', require('../src/routes/datasets'));
     const server = await new Promise(resolve => {
         const s = app.listen(0, '127.0.0.1', () => resolve(s));
