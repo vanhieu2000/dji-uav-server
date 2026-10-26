@@ -1735,6 +1735,8 @@ async function initDatabase() {
   try {
     await runMigrations(dbConfig);
     dbInitDone = true;
+    // Vừa khởi động: chưa nhận OSD nào nên mọi máy đều OFFLINE (code cũ để kẹt ONLINE)
+    await query("UPDATE uav_devices SET status = 'OFFLINE' WHERE status <> 'OFFLINE'");
     const dangling = await flightTracker.closeDangling();
     if (dangling) console.log(`[Chuyến bay] Đóng ${dangling} chuyến còn mở từ lần chạy trước.`);
     // Làm sạch ảnh nhận bằng code cũ (giá trị gán cứng) – chỉ chạm các dòng chưa có sha256

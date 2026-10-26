@@ -204,7 +204,10 @@ Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
   `/api/control/live` chọn kênh theo `ticket_id` hoặc phiếu của phiên Pilot đang mở trên máy bay; gửi lệnh tới đúng tay điều khiển ghép với máy bay.
   Server nhớ các luồng đang phát (`GET /api/live`, sự kiện `stream_started/stopped` kèm mã phiếu); dashboard phát đúng luồng, nhãn LIVE ghi mã phiếu.
   Sửa lỗi cũ: `stopFlvLivePlayer` chưa từng được định nghĩa. Cần thử với Pilot 2 thật: lệnh `live_start_push` + URL kênh mới.
-- [ ] Sửa số giả còn sót: KPI "DCL vượt ngưỡng 83.5 °C" ở Tổng quan, thanh OSD "Dãy 01 · 3.36 MWp".
+- [x] C5 – Gỡ số giả: KPI "DCL vượt ngưỡng" lấy từ `disconnectors` (lần đo gần nhất > ngưỡng, `/api/reports/overview`);
+  thanh bản đồ pin hiện số khu + tổng MWp thật; khung chi tiết DCL / khu để trống tới khi chọn đối tượng thật;
+  khởi động server đặt mọi `uav_devices` về OFFLINE (code cũ để kẹt ONLINE).
+  **Còn lại (giai đoạn Báo cáo):** biểu đồ nhiệt DCL theo giờ ở trang Báo cáo vẫn là mảng số mẫu (`dclPoints` trong `index.html`).
 
 ### Giai đoạn D – Tích hợp AI Vision (~4 ngày, sau khi chốt đặc tả)
 - [ ] Gửi job sang Vision, nhận webhook kết quả (khung pixel, loại lỗi, độ tin cậy, nhiệt độ).

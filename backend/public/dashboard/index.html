@@ -362,7 +362,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
           <div class="card stat"><span class="l">Mavic 3T</span><span class="v num" style="color:var(--ink3)" id="kpi-drone-st">CHƯA KẾT NỐI</span><span class="d muted" id="kpi-drone-sub">Pin: --% · Alt: --m</span></div>
           <div class="card stat"><span class="l">Phiếu kiểm tra</span><span class="v num" id="kpi-ticket-count">--</span><span class="d muted">Đang thực hiện</span></div>
           <div class="card stat"><span class="l">Tấm pin lỗi</span><span class="v num down" id="kpi-panel-fault">--</span><span class="d down">Hotspot cần kiểm tra</span></div>
-          <div class="card stat"><span class="l">DCL vượt ngưỡng</span><span class="v num down" id="kpi-dcl-alert">1</span><span class="d down">DCL 171-7 (83.5 °C)</span></div>
+          <div class="card stat"><span class="l">DCL vượt ngưỡng</span><span class="v num down" id="kpi-dcl-alert">--</span><span class="d down" id="kpi-dcl-sub">Theo lần đo gần nhất</span></div>
         </div>
 
         <div class="grid g-main">
@@ -418,7 +418,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
 
             <!-- THANH OSD TELEMETRY MỎNG TRÊN ĐỈNH BẢN ĐỒ -->
             <div class="map-osd-topbar" id="solar-map-osd">
-              <span>☀️ <b>Nhà Máy Pin</b> (<span id="solar-map-subinfo">Dãy 01 · 3.36 MWp</span>)</span>
+              <span>☀️ <b>Nhà Máy Pin</b> (<span id="solar-map-subinfo">--</span>)</span>
               <span style="opacity:0.3">|</span>
               <span class="dot off" id="solar-dot-status"></span><span>Mavic 3T</span>
               <span style="opacity:0.3">|</span>
@@ -543,7 +543,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
             <dl class="kv" style="background:var(--surface2);padding:12px;border-radius:8px">
               <dt>Số chuỗi pin</dt><dd class="num" id="zone-detail-strings">12</dd>
               <dt>Số tấm pin</dt><dd class="num" id="zone-detail-panels">672</dd>
-              <dt>Công suất</dt><dd class="num" id="zone-detail-power">3,36 MWp</dd>
+              <dt>Công suất</dt><dd class="num" id="zone-detail-power">--</dd>
               <dt>Tuyến bay gán</dt><dd><b id="zone-detail-route">Tuyến Inverter 01</b></dd>
             </dl>
 
@@ -605,24 +605,24 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
           <!-- Panel chi tiết bên phải (Side Detail Panel) -->
           <div class="side-detail-panel" id="side-panel-sub">
             <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:12px">
-              <h2 id="dcl-detail-title" style="font-size:15px;font-weight:700">Dao cách ly 171-7 Pha A</h2>
-              <span class="tag bad" id="dcl-detail-tag">Quá nhiệt</span>
+              <h2 id="dcl-detail-title" style="font-size:15px;font-weight:700">Chọn dao cách ly trên bản đồ</h2>
+              <span class="tag off" id="dcl-detail-tag">--</span>
             </div>
             <div class="thumb" style="border-radius:8px;overflow:hidden;background:#0f172a;border:1px solid var(--line);position:relative">
               <div style="height:190px;display:grid;place-items:center;color:#fff;background:radial-gradient(circle,#3d1824 0%,#0f172a 100%)">
                 <div style="text-align:center">
                   <div style="font-size:32px;margin-bottom:2px">⚡</div>
-                  <b style="font-size:24px;color:var(--hot)" id="dcl-detail-thumb-temp">83.5 °C</b>
+                  <b style="font-size:24px;color:var(--hot)" id="dcl-detail-thumb-temp">--</b>
                   <p class="muted" style="font-size:11.5px">Ảnh nhiệt R-JPEG (Tiếp xúc)</p>
                 </div>
               </div>
             </div>
             <dl class="kv" style="background:var(--surface2);padding:12px;border-radius:8px">
-              <dt>Mã DCL</dt><dd id="dcl-detail-code"><b>171-7</b></dd>
-              <dt>Ngăn lộ</dt><dd id="dcl-detail-bay">Ngăn lộ 171</dd>
-              <dt>Pha</dt><dd><b id="dcl-detail-phase">Pha A</b></dd>
-              <dt>Nhiệt độ đo</dt><dd><b class="num down" id="dcl-detail-temp" style="font-size:15px">83.5 °C</b></dd>
-              <dt>Ngưỡng cho phép</dt><dd class="num" id="dcl-detail-max">75.0 °C</dd>
+              <dt>Mã DCL</dt><dd id="dcl-detail-code">--</dd>
+              <dt>Ngăn lộ</dt><dd id="dcl-detail-bay">--</dd>
+              <dt>Pha</dt><dd><b id="dcl-detail-phase">--</b></dd>
+              <dt>Nhiệt độ đo</dt><dd><b class="num down" id="dcl-detail-temp" style="font-size:15px">--</b></dd>
+              <dt>Ngưỡng cho phép</dt><dd class="num" id="dcl-detail-max">--</dd>
               <dt>Tọa độ GPS</dt><dd class="num" id="dcl-detail-gps">--</dd>
             </dl>
             <button class="btn primary" style="width:100%;justify-content:center;margin-top:auto" onclick="triggerThermalPhoto()">📸 Chụp đo lại dao cách ly này</button>
@@ -2131,6 +2131,11 @@ async function refreshDashboardData(){
    const d = data.data;
    document.getElementById('kpi-ticket-count').innerText = `${d.completed_tickets}/${d.total_tickets}`;
    document.getElementById('kpi-panel-fault').innerText = d.total_defects_found;
+   document.getElementById('kpi-dcl-alert').innerText = d.dcl_over_threshold;
+   const h = d.dcl_hottest;
+   document.getElementById('kpi-dcl-sub').innerText = h
+     ? `${h.dcl_code} (${Number(h.last_inspected_temp).toFixed(1)} °C / ngưỡng ${Number(h.max_allowed_temp).toFixed(0)} °C)`
+     : (d.total_disconnectors ? 'Chưa có DCL nào vượt ngưỡng' : 'Chưa khai báo DCL');
   }
  } catch(e){}
 }
@@ -2376,8 +2381,18 @@ async function loadSolarAreasFromDb(){
       }));
       renderSolarAreasTable();
       renderZonesDropdown();
+      renderSolarSubinfo();
     }
   }catch(e){}
+}
+
+/** Thanh trên bản đồ pin: số khu và tổng công suất thật (CSDL), không còn số cố định. */
+function renderSolarSubinfo(){
+  const el = document.getElementById('solar-map-subinfo');
+  if(!el) return;
+  if(!localZones.length){ el.innerText = 'chưa có khu vực'; return; }
+  const kwp = localZones.reduce((s, z) => s + (Number(z.kwp) || 0), 0);
+  el.innerText = `${localZones.length} khu${kwp ? ' · ' + (kwp / 1000).toFixed(2) + ' MWp' : ''}`;
 }
 
 function renderSolarAreasTable(){

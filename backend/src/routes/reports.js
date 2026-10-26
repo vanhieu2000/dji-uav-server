@@ -11,6 +11,13 @@ router.get('/overview', async (req, res) => {
         const [defectCount] = await query('SELECT COUNT(*) as total FROM ai_defect_detections');
         const [alertCount] = await query('SELECT COUNT(*) as total FROM defect_alerts WHERE status="UNREAD"');
         const [onlineDroneCount] = await query('SELECT COUNT(*) as total FROM uav_devices WHERE status != "OFFLINE"');
+        // DCL vượt ngưỡng theo lần đo gần nhất (dữ liệu thật trong bảng disconnectors)
+        const [dclOver] = await query('SELECT COUNT(*) AS total FROM disconnectors WHERE last_inspected_temp IS NOT NULL AND last_inspected_temp > max_allowed_temp');
+        const [dclHottest] = await query(
+            `SELECT dcl_code, dcl_name, last_inspected_temp, max_allowed_temp FROM disconnectors
+             WHERE last_inspected_temp IS NOT NULL AND last_inspected_temp > max_allowed_temp
+             ORDER BY last_inspected_temp DESC LIMIT 1`
+        );
 
         res.json({
             code: 0,
@@ -21,7 +28,9 @@ router.get('/overview', async (req, res) => {
                 completed_tickets: ticketCount?.completed || 0,
                 total_defects_found: defectCount?.total || 0,
                 unread_alerts: alertCount?.total || 0,
-                online_devices: onlineDroneCount?.total || 0
+                online_devices: onlineDroneCount?.total || 0,
+                dcl_over_threshold: Number(dclOver?.total) || 0,
+                dcl_hottest: dclHottest || null
             }
         });
     } catch (err) {
