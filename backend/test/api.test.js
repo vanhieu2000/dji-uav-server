@@ -496,6 +496,49 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal((await api('GET', `/api/coverage?area_id=${areaId}`)).status, 400); // thiếu phiếu
     });
 
+    await t.test('xuất bộ ảnh cho Vision: lọc, ZIP ảnh gốc + manifest ghép cặp', async () => {
+        const ticket = await api('POST', '/api/tickets', { ticket_name: 'Bộ ảnh Vision', inspection_type: 'SOLAR_PANEL', target_facility: 'INV-01' });
+        const ticketId = ticket.body.data.ticket_id;
+        // 1 cặp nhiệt + thường (cùng lượt chụp) nằm trong khu INV-01, RTK FIX; 1 ảnh RTK kém
+        const form = new FormData();
+        form.append('ticket_id', String(ticketId));
+        form.append('files', new Blob([h.fakeDjiJpeg({ lat: 11.8510, lng: 107.0010, source: 'InfraredCamera' })]), 'DJI_20261026101530_0007_T.JPG');
+        form.append('files', new Blob([h.fakeDjiJpeg({ lat: 11.8510, lng: 107.0010, source: 'WideCamera' })]), 'DJI_20261026101530_0007_W.JPG');
+        form.append('files', new Blob([h.fakeDjiJpeg({ lat: 11.8511, lng: 107.0011, rtk: 16 })]), 'DJI_20261026101531_0008_W.JPG');
+        assert.equal((await api('POST', '/api/media/import', form)).body.data.created, 3);
+
+        const pv = await api('GET', `/api/datasets/preview?ticket_id=${ticketId}&area_id=${areaId}`);
+        assert.equal(pv.status, 200, JSON.stringify(pv.body));
+        assert.equal(pv.body.data.count, 3);
+        assert.equal(pv.body.data.pairs, 2);
+        assert.deepEqual(pv.body.data.by_lens, { IR: 1, WIDE: 2 });
+        const fix = await api('GET', `/api/datasets/preview?ticket_id=${ticketId}&quality=HIGH`);
+        assert.equal(fix.body.data.count, 2);
+        assert.equal((await api('GET', `/api/datasets/preview?ticket_id=${ticketId}&lens=THERMAL`)).status, 400);
+        assert.equal((await api('GET', `/api/datasets/preview?ticket_id=${ticketId}&from=26-10-2026`)).status, 400);
+
+        const res = await fetch(`${app.base}/api/datasets/export?ticket_id=${ticketId}&quality=HIGH`);
+        assert.equal(res.status, 200);
+        assert.match(res.headers.get('content-disposition'), /dataset_phieu\d+_/);
+        const zip = new AdmZip(Buffer.from(await res.arrayBuffer()));
+        const names = zip.getEntries().map(e => e.entryName).sort();
+        assert.ok(names.includes('manifest.json') && names.includes('manifest.csv') && names.includes('README.txt'));
+        assert.equal(names.filter(n => n.startsWith('images/IR/')).length, 1);
+        assert.equal(names.filter(n => n.startsWith('images/WIDE/')).length, 1);
+        const man = JSON.parse(zip.readAsText('manifest.json'));
+        assert.equal(man.count, 2);
+        assert.equal(new Set(man.images.map(i => i.pair_key)).size, 1, 'ảnh nhiệt và ảnh thường cùng lượt có cùng pair_key');
+        assert.equal(man.images[0].position_quality, 'HIGH');
+        assert.equal(man.images[0].ticket_code, ticket.body.data.ticket_code);
+        const csv = zip.readAsText('manifest.csv');
+        assert.equal(csv.trim().split('\r\n').length, 3);
+        // File ảnh trong ZIP giống hệt ảnh gốc
+        const irEntry = zip.getEntries().find(e => e.entryName.startsWith('images/IR/'));
+        const irRow = (await db.query("SELECT file_path_local FROM media_files WHERE original_name = 'DJI_20261026101530_0007_T.JPG'"))[0];
+        assert.ok(irEntry.getData().equals(fs.readFileSync(irRow.file_path_local)));
+        assert.equal((await api('GET', '/api/datasets/export?ticket_id=999999')).status, 400);
+    });
+
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
         await db.closePool();
         const r = await api('GET', '/api/solar/areas');
