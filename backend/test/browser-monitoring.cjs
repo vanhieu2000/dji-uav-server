@@ -4,10 +4,10 @@ const path=require('path');const req=require('module').createRequire(path.resolv
  const app=req('express')();app.use(req('express').static(path.resolve(__dirname,'../public/dashboard')));
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.on('listening',r));const base='http://127.0.0.1:'+server.address().port;
  const browser=await engine.launch({...(engineName==='chromium'?{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']}:{}),headless:true});
- const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));const commands=[];
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));const commands=[],externalLibraries=[];
  await page.addInitScript(()=>{window.WebSocket=class {constructor(){setTimeout(()=>this.onopen&&this.onopen(),10)} send(){} close(){}};});
  await page.route('**/*',async route=>{const u=new URL(route.request().url());
-  if(u.host!==new URL(base).host){if(u.pathname.endsWith('leaflet.js'))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(req.resolve('leaflet/dist/leaflet.js'))});if(u.pathname.endsWith('leaflet.css'))return route.fulfill({contentType:'text/css',body:fs.readFileSync(req.resolve('leaflet/dist/leaflet.css'))});return route.fulfill({status:200,body:''});}
+  if(u.host!==new URL(base).host){if(['script','stylesheet','font'].includes(route.request().resourceType()))externalLibraries.push(u.hostname);if(u.pathname.endsWith('leaflet.js'))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(req.resolve('leaflet/dist/leaflet.js'))});if(u.pathname.endsWith('leaflet.css'))return route.fulfill({contentType:'text/css',body:fs.readFileSync(req.resolve('leaflet/dist/leaflet.css'))});return route.fulfill({status:200,body:''});}
   if(u.pathname.startsWith('/api/')){
    if(route.request().method()!=='GET')commands.push(u.pathname);
    let data=[];
@@ -38,7 +38,7 @@ const path=require('path');const req=require('module').createRequire(path.resolv
   await page.waitForSelector('#task-form',{state:'attached'});
   await page.evaluate(()=>GIS.Insights.reports());
   await page.waitForSelector('#insights-reports-root .gis-empty',{state:'attached'});
-  assert.deepEqual(commands,[]);assert.deepEqual(errors,[]);
+  assert.deepEqual(commands,[]);assert.deepEqual(errors,[]);assert.deepEqual(externalLibraries,[]);assert.ok(await page.evaluate(()=>!!(window.L?.PM&&window.flvjs&&window.XLSX?.utils)));
   await page.goto(base+'/accounts.html');await page.waitForSelector('#permission-checks input');assert.equal(await page.locator('#permission-checks input').count(),6);assert.equal(await page.locator('#message').innerText(),'');assert.deepEqual(errors,[]);
   console.log('PASS '+engineName+': dashboard boots, two UAV markers, zero battery, offline event, realtime photo; task UI mounts, legacy simulation sends no commands; no page errors');
  }finally{await browser.close();server.close();}

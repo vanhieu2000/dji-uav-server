@@ -1390,7 +1390,6 @@ async function initDatabase() {
   dbInitRunning = true;
   try {
     await runMigrations(dbConfig);
-    dbInitDone = true;
     if (!visionStop && process.env.VISION_ENABLED === 'true') {
       const endpoint = process.env.VISION_ENDPOINT, publicBase = process.env.VISION_PUBLIC_BASE_URL, secret = process.env.VISION_WEBHOOK_SECRET;
       if (!endpoint || !publicBase || !secret) console.warn('[Vision] Chưa đủ VISION_ENDPOINT, VISION_PUBLIC_BASE_URL, VISION_WEBHOOK_SECRET; worker tắt.');
@@ -1412,7 +1411,8 @@ async function initDatabase() {
     if (legacy.fixed || legacy.missing) {
       console.log(`[Ảnh] Làm sạch dữ liệu cũ: đọc lại ${legacy.fixed} ảnh từ file, xóa giá trị giả của ${legacy.missing} ảnh mất file.`);
     }
-    initMediaLibraryFromDbAndDisk().catch(err => console.warn('[Media Init]', err.message));
+    await initMediaLibraryFromDbAndDisk();
+    dbInitDone = true;
   } catch (err) {
     console.error(`[Migration] ✗ Lỗi nâng cấp CSDL, thử lại sau ${MIGRATION_RETRY_MS / 1000}s:`, err.message);
     setTimeout(initDatabase, MIGRATION_RETRY_MS).unref();

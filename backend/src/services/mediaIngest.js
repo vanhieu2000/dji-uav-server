@@ -7,6 +7,7 @@
  * nhiệt độ đọc bằng DJI Thermal SDK; phiếu lấy từ phiên đăng nhập Pilot hoặc người nhập chọn.
  */
 const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 const { resolveAssignment } = require('./mediaAssignment');
 const { query } = require('../config/db');
@@ -177,7 +178,11 @@ async function backfillLegacy() {
     let missing = 0;
     const LENS_FROM_TYPE = { THERMAL_PHOTO: 'IR', RGB_PHOTO: 'WIDE', ZOOM_PHOTO: 'ZOOM' };
     for (const r of rows) {
-        const file = r.file_path_local;
+        let file = r.file_path_local;
+        if(!file&&r.file_name&&path.basename(r.file_name)===r.file_name){
+            const candidate=path.join(process.env.MEDIA_DIR||path.resolve(__dirname,'../../uploads/media'),r.file_name);
+            if(fs.existsSync(candidate)&&fs.statSync(candidate).isFile()){file=candidate;await query('UPDATE media_files SET file_path_local=? WHERE media_id=?',[candidate,r.media_id]);}
+        }
         if (!file || !fs.existsSync(file)) {
             await query(
                 `UPDATE media_files SET latitude = NULL, longitude = NULL, altitude = NULL, max_temperature = NULL, has_hotspot = 0,

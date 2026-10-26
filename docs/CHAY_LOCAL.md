@@ -43,7 +43,7 @@ VISION_ENABLED=false
 
 Thay đúng giá trị `MYSQL_PASSWORD` bằng mật khẩu bạn cung cấp; giữ dấu ngoặc kép. Mật khẩu có `@` không cần đổi thành `%40` trong `.env`. Đây là mật khẩu DB, **không phải mật khẩu đăng nhập Web**. Bỏ trống `JWT_SECRET` sẽ sinh khóa riêng trong `backend/data/`, không phải dùng một mật khẩu mặc định chung. Không commit `.env` hay `backend/data/`.
 
-Nếu cổng 8080/1883 đang dùng, đổi thành `PORT=8081`, `MQTT_PORT=1884`; mở Web bằng cổng đã đổi. Khi chỉ kiểm tra trên máy tính, không cần điền license DJI/AI/S3 và không cần mở firewall.
+Nếu cổng 8080/1883 đang dùng, đổi thành `PORT=8081`, `MQTT_PORT=1884`; mở Web bằng cổng đã đổi. Khi chỉ kiểm tra trên máy tính, không cần điền license DJI/AI/S3 và không cần mở firewall. Thư viện giao diện được phục vụ ngay trong repo, không cần CDN; ảnh nền bản đồ Internet vẫn cần mạng hoặc bộ tiles nhà máy đã nhập.
 
 ```powershell
 cd backend
@@ -114,4 +114,4 @@ Không chạy `admin:create` mỗi lần, không xóa `backend/data` (chứa kh�
 
 ## Bản chạy thử trong môi trường cloud này
 
-Repo được clone riêng tại `/workspace/dji-uav-local`, cấu hình ngoài git, DB `dji_uav_management`, Web8081/MQTT1884 để tránh cổng đang dùng. Bản sao lưu trước nâng cấp: `backend/data/pre-local-upgrade.sql`, chỉ có trên môi trường chạy, không nằm trên GitHub. Đây là máy cloud hiện tại; trợ lý không có kết nối điều khiển trực tiếp máy tính cá nhân của bạn. Dùng các bước bên trên để chạy bản tương tự trên máy của bạn.
+Repo được clone riêng tại `/workspace/dji-uav-local`, cấu hình ngoài git, DB `dji_uav_management`, Web8081/MQTT1884 để tránh cổng đang dùng. Tài khoản Web của bản chạy này: `local-admin`; mật khẩu hiện tại lưu riêng tại `backend/data/local-web-password` sau khi đã đổi mật khẩu bắt buộc trong kiểm thử. Không có file mật khẩu này trên GitHub. Bản sao lưu trước nâng cấp: `backend/data/pre-local-upgrade.sql`, chỉ có trên môi trường chạy, không nằm trên GitHub. Đây là máy cloud hiện tại; trợ lý không có kết nối điều khiển trực tiếp máy tính cá nhân của bạn. Dùng các bước bên trên để chạy bản tương tự trên máy của bạn.

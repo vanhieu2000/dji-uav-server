@@ -4,13 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hệ thống giám sát UAV – Pin mặt trời & Trạm biến áp</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- Leaflet GIS CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <!-- Công cụ vẽ ranh giới trên bản đồ (Leaflet-Geoman) -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.css"/>
+<link rel="stylesheet" href="vendor/geoman/leaflet-geoman.css"/>
 <link rel="stylesheet" href="css/gis.css"/>
 <style>
 :root{
@@ -1229,12 +1226,12 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
 </div>
 
 <!-- Leaflet GIS JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="vendor/leaflet/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <!-- FLV.js cho Luồng Video Live Stream Mavic 3T -->
-<script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.js"></script>
+<script src="vendor/flv/flv.min.js"></script>
+<script src="vendor/geoman/leaflet-geoman.min.js"></script>
 <!-- Đọc / ghi Excel trên trình duyệt (nhập danh mục tài sản) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="vendor/xlsx/xlsx.full.min.js"></script>
 <!-- Module bản đồ & tài sản (Giai đoạn 1) -->
 <script src="js/gis/gis-auth.js"></script>
 <script src="js/gis/gis-core.js"></script>

@@ -10,7 +10,8 @@
     "test:browser": "node test/browser-monitoring.cjs",
     "admin:create": "node scripts/create-admin.js",
     "test:mobile": "node test/browser-mobile.cjs",
-    "setup:local": "node scripts/setup-local.js"
+    "setup:local": "node scripts/setup-local.js",
+    "vendor:sync": "node scripts/vendor-ui.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",
@@ -33,6 +34,9 @@
     "yazl": "3.3.1"
   },
   "devDependencies": {
+    "@e965/xlsx": "0.20.3",
+    "@geoman-io/leaflet-geoman-free": "2.20.4",
+    "flv.js": "1.6.2",
     "leaflet": "1.9.4",
     "playwright-core": "1.64.1"
   },

@@ -1,0 +1,62 @@
+[
+  {
+    "package": "leaflet",
+    "version": "1.9.4",
+    "path": "leaflet/leaflet.js",
+    "sha256": "db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a"
+  },
+  {
+    "package": "leaflet",
+    "version": "1.9.4",
+    "path": "leaflet/leaflet.css",
+    "sha256": "a7837102824184820dfa198d1ebcd109ff6d0ff9a2672a074b9a1b4d147d04c6"
+  },
+  {
+    "package": "leaflet",
+    "version": "1.9.4",
+    "path": "leaflet/LICENSE",
+    "sha256": "53e8dc25862014e4324741ca18fbe3611e11d42ef69f59f86ea8c5389647d4cb"
+  },
+  {
+    "package": "@geoman-io/leaflet-geoman-free",
+    "version": "2.20.4",
+    "path": "geoman/leaflet-geoman.min.js",
+    "sha256": "467413c3d98ccb0a558ed1e262d7d4c737a575c8dae61adc09afcfc4a6879eb8"
+  },
+  {
+    "package": "@geoman-io/leaflet-geoman-free",
+    "version": "2.20.4",
+    "path": "geoman/leaflet-geoman.css",
+    "sha256": "a0df8e0f6301f9f71d772b2c61913bb9094ae0735fd2223ccd1aecd871ea250c"
+  },
+  {
+    "package": "@geoman-io/leaflet-geoman-free",
+    "version": "2.20.4",
+    "path": "geoman/LICENSE",
+    "sha256": "b8f81bc43788014a8be76982feb763d554b5b5218a1797fe4bedffd4df22e067"
+  },
+  {
+    "package": "flv.js",
+    "version": "1.6.2",
+    "path": "flv/flv.min.js",
+    "sha256": "733b9b325dbc59871a652c0a84f2f285a2cfd06cf2efcedcd87cb1e194cd1e8f"
+  },
+  {
+    "package": "flv.js",
+    "version": "1.6.2",
+    "path": "flv/LICENSE",
+    "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"
+  },
+  {
+    "package": "@e965/xlsx",
+    "version": "0.20.3",
+    "path": "xlsx/xlsx.full.min.js",
+    "sha256": "cc015130aa8521e7f088f88898eba949ccdcbfb38df0bd129b44b7273c3a6f41"
+  },
+  {
+    "package": "@e965/xlsx",
+    "version": "0.20.3",
+    "path": "xlsx/LICENSE",
+    "sha256": "4d2a38ac35cda06a555c84074a819d413339cd3691b822cae50f8f322fe01f64"
+  }
+]

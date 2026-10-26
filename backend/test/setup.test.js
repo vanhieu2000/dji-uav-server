@@ -19,6 +19,10 @@ test('local setup: init empty DB, preserve existing data, refuse unrelated DB',a
   const [[u]]=await root.query('SELECT role,must_change_password,password_hash FROM `'+name+"`.users WHERE username='setup-fixture-admin'");assert.equal(u.role,'ADMIN');assert.equal(u.must_change_password,1);assert.match(u.password_hash,/^\$2[aby]\$/);
   assert.notEqual(create().status,0);assert.equal(fs.readFileSync(passwordFile,'utf8'),secret);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
+ await root.query('ALTER TABLE `'+name+'`.media_files DROP COLUMN file_path_local');
+ await root.query('DELETE FROM `'+name+"`.schema_migrations WHERE name='014_legacy_media_paths.sql'");
+ const legacy=await setupLocal(config,{log:()=>{}});assert.deepEqual(legacy.migrations,['014_legacy_media_paths.sql']);
+ const [cols]=await root.query('SHOW COLUMNS FROM `'+name+'`.media_files');assert.ok(cols.some(c=>c.Field==='file_path_local'));
  const [[p]]=await root.query('SELECT plant_code FROM `'+name+'`.plants');assert.equal(p.plant_code,'KEEP');
  await root.query('CREATE DATABASE `'+partial+'`');await root.query('CREATE TABLE `'+partial+'`.unrelated (id INT)');
  await assert.rejects(setupLocal({...config,database:partial},{log:()=>{}}),/DB đang có bảng/);
