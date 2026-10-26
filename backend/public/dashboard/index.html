@@ -938,7 +938,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
               <div id="manual-live-placeholder" style="text-align:center;padding:10px;z-index:1">
                 <div style="font-size:22px">📡</div>
                 <div style="font-size:11px;color:#fff;font-weight:600;margin-top:2px">Chờ luồng video Wide...</div>
-                <div class="muted" style="font-size:9.5px">rtmp://10.20.28.50:1935/live/m3t_wide</div>
+                <div class="muted" id="manual-live-channel" style="font-size:9.5px">Kênh live tự theo phiếu của phiên Pilot</div>
                 <button class="btn sm primary" style="margin-top:6px;font-size:10.5px;padding:2px 10px;font-weight:700" onclick="manualStartLive()">▶️ BẬT LIVE STREAM</button>
               </div>
             </div>
@@ -951,7 +951,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
               <div id="thermal-live-placeholder" style="text-align:center;padding:10px;z-index:1">
                 <div style="font-size:22px">🌡️</div>
                 <div style="font-size:11px;color:#fff;font-weight:600;margin-top:2px">Chờ luồng camera Nhiệt...</div>
-                <div class="muted" style="font-size:9.5px">rtmp://10.20.28.50:1935/live/m3t_thermal</div>
+                <div class="muted" style="font-size:9.5px">Đổi camera trên DJI Pilot 2 (mỗi phiếu một luồng)</div>
               </div>
             </div>
 
@@ -963,7 +963,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
               <div id="zoom-live-placeholder" style="text-align:center;padding:10px;z-index:1">
                 <div style="font-size:22px">🔍</div>
                 <div style="font-size:11px;color:#fff;font-weight:600;margin-top:2px">Chờ luồng camera Zoom...</div>
-                <div class="muted" style="font-size:9.5px">rtmp://10.20.28.50:1935/live/m3t_zoom</div>
+                <div class="muted" style="font-size:9.5px">Đổi camera trên DJI Pilot 2 (mỗi phiếu một luồng)</div>
               </div>
             </div>
           </div>
@@ -1068,7 +1068,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
                 <div class="card stat" style="background:#0f172a;border-color:#1e293b;padding:10px"><span class="l" style="color:#94a3b8;font-size:11px">Tay Cầm RC Pro</span><span class="v num" style="color:var(--ok);font-size:18px">ĐÃ KẾT NỐI</span><span class="d muted" style="font-size:10.5px">SN: 5YSZM3K0031EYQ</span></div>
                 <div class="card stat" style="background:#0f172a;border-color:#1e293b;padding:10px"><span class="l" style="color:#94a3b8;font-size:11px">Sóng O3</span><span class="v num" style="color:var(--brand);font-size:18px">-68 dBm</span><span class="d muted" style="font-size:10.5px">Tín hiệu: 98%</span></div>
                 <div class="card stat" style="background:#0f172a;border-color:#1e293b;padding:10px"><span class="l" style="color:#94a3b8;font-size:11px">MQTT Broker</span><span class="v num" style="color:var(--ok);font-size:18px">ONLINE</span><span class="d muted" style="font-size:10.5px">Cổng: 1883</span></div>
-                <div class="card stat" style="background:#0f172a;border-color:#1e293b;padding:10px"><span class="l" style="color:#94a3b8;font-size:11px">RTMP Live Server</span><span class="v num" style="color:var(--brand);font-size:18px">CỔNG 1935</span><span class="d muted" style="font-size:10.5px">/live/m3t_live</span></div>
+                <div class="card stat" style="background:#0f172a;border-color:#1e293b;padding:10px"><span class="l" style="color:#94a3b8;font-size:11px">RTMP Live Server</span><span class="v num" style="color:var(--brand);font-size:18px">CỔNG 1935</span><span class="d muted" style="font-size:10.5px">/live/&lt;kênh phiếu&gt;</span></div>
               </div>
             </div>
 
@@ -2858,14 +2858,14 @@ async function manualStartLive(){
     });
     const d = await res.json();
     if(res.ok && d.code === 0){
-      toast('✓ Đã kích hoạt luồng phát RTMP trực tiếp từ Mavic 3T!');
+      toast(`✓ Đã gửi lệnh phát live, kênh ${d.channel}`);
     } else {
       toast('⚠️ ' + (d.message || 'Mavic 3T đang OFFLINE!'));
     }
   }catch(e){
     toast('Lỗi lệnh Live: ' + e.message);
   }
-  setTimeout(startFlvLivePlayer, 1200);
+  setTimeout(() => startFlvLivePlayer(), 1200);
 }
 
 /* ===================================================================
@@ -2873,7 +2873,36 @@ async function manualStartLive(){
    =================================================================== */
 let gFlvPlayer = null;
 
-function startFlvLivePlayer(){
+/** Luồng đang phát (server báo qua WebSocket hoặc /api/live). Mỗi phiếu một kênh. */
+let gLiveStreams = [];
+let gCurrentStreamPath = null;
+
+function destroyFlvPlayer(){
+  if(!gFlvPlayer) return;
+  try{ gFlvPlayer.pause(); gFlvPlayer.unload(); gFlvPlayer.detachMediaElement(); gFlvPlayer.destroy(); }catch(e){}
+  gFlvPlayer = null;
+}
+
+function showLivePlaceholder(text){
+  const videoEl = document.getElementById('manual-live-video');
+  const placeholderEl = document.getElementById('manual-live-placeholder');
+  const badgeEl = document.getElementById('manual-stream-badge');
+  const info = document.getElementById('manual-live-channel');
+  if(videoEl) videoEl.style.display = 'none';
+  if(placeholderEl) placeholderEl.style.display = '';
+  if(info) info.innerText = text;
+  if(badgeEl){ badgeEl.innerText = 'CHƯA CÓ LUỒNG'; badgeEl.style.background = 'rgba(0,0,0,0.65)'; badgeEl.style.color = '#fff'; }
+}
+
+function stopFlvLivePlayer(streamPath){
+  if(streamPath && gCurrentStreamPath && streamPath !== gCurrentStreamPath) return; // luồng khác vẫn phát
+  destroyFlvPlayer();
+  gCurrentStreamPath = null;
+  showLivePlaceholder('Luồng đã dừng. Bấm BẬT LIVE để phát lại (kênh theo phiếu đang bay).');
+}
+
+/** Phát luồng streamPath; không truyền thì lấy luồng đang có trên server (ưu tiên luồng mới nhất). */
+async function startFlvLivePlayer(streamPath){
   const videoEl = document.getElementById('manual-live-video');
   const placeholderEl = document.getElementById('manual-live-placeholder');
   const badgeEl = document.getElementById('manual-stream-badge');
@@ -2883,58 +2912,40 @@ function startFlvLivePlayer(){
     console.warn('[FLV Player] Thư viện flv.js chưa sẵn sàng hoặc trình duyệt không hỗ trợ');
     return;
   }
-
-  if(gFlvPlayer){
+  if(!streamPath){
     try{
-      gFlvPlayer.pause();
-      gFlvPlayer.unload();
-      gFlvPlayer.detachMediaElement();
-      gFlvPlayer.destroy();
-    }catch(e){}
-    gFlvPlayer = null;
+      const r = await fetch('/api/live').then(x => x.json());
+      gLiveStreams = r.data || [];
+    }catch(e){ gLiveStreams = []; }
+    const latest = gLiveStreams[gLiveStreams.length - 1];
+    if(!latest){ showLivePlaceholder('Chưa có luồng nào. Bấm BẬT LIVE – kênh tự theo phiếu của phiên Pilot.'); return; }
+    streamPath = latest.stream_path;
   }
+  const stream = gLiveStreams.find(x => x.stream_path === streamPath) || { stream_path: streamPath };
+  destroyFlvPlayer();
+  gCurrentStreamPath = streamPath;
 
-  const flvUrl = `http://${location.hostname}:8000/live/m3t_live.flv`;
+  const flvUrl = `http://${location.hostname}:8000${streamPath}.flv`;
   try{
-    gFlvPlayer = flvjs.createPlayer({
-      type: 'flv',
-      isLive: true,
-      url: flvUrl,
-      hasAudio: false,
-      enableStashBuffer: false
-    }, {
-      enableWorker: false,
-      lazyLoad: false,
-      autoCleanupSourceBuffer: true
-    });
-
+    gFlvPlayer = flvjs.createPlayer({ type: 'flv', isLive: true, url: flvUrl, hasAudio: false, enableStashBuffer: false },
+      { enableWorker: false, lazyLoad: false, autoCleanupSourceBuffer: true });
     gFlvPlayer.attachMediaElement(videoEl);
     gFlvPlayer.load();
 
     videoEl.style.display = 'block';
     if(placeholderEl) placeholderEl.style.display = 'none';
     if(badgeEl){
-      badgeEl.innerText = '● LIVE MAVIC 3T';
+      badgeEl.innerText = '● LIVE ' + (stream.ticket_code || stream.channel || streamPath.split('/').pop());
+      badgeEl.title = stream.ticket_name || '';
       badgeEl.style.background = '#cf2f5e';
       badgeEl.style.color = '#fff';
     }
-
     const p = videoEl.play();
-    if(p !== undefined){
-      p.then(()=>{
-        console.log('[FLV Player] Đang phát luồng video Mavic 3T');
-      }).catch(err=>{
-        console.warn('[FLV Player] Autoplay bị chặn hoặc đang chờ dữ liệu RTMP:', err);
-      });
-    }
+    if(p !== undefined) p.catch(err => console.warn('[FLV Player] Autoplay bị chặn hoặc đang chờ dữ liệu RTMP:', err));
 
     gFlvPlayer.on(flvjs.Events.ERROR, (errType, errDetail)=>{
       console.warn('[FLV Player Error]', errType, errDetail);
-      if(badgeEl){
-        badgeEl.innerText = 'CHỜ LUỒNG RTMP';
-        badgeEl.style.background = 'rgba(0,0,0,0.65)';
-        badgeEl.style.color = '#fff';
-      }
+      if(badgeEl){ badgeEl.innerText = 'CHỜ LUỒNG RTMP'; badgeEl.style.background = 'rgba(0,0,0,0.65)'; badgeEl.style.color = '#fff'; }
     });
   }catch(e){
     console.error('[FLV Init Error]', e);
@@ -3889,12 +3900,14 @@ function setupRealtimeTelemetry(){
 
    // 1.1 Luồng Live Stream video từ Mavic 3T
    if(msg.type === 'stream_started'){
-    toast('✓ Đã nhận luồng phát trực tiếp từ Mavic 3T! Đang hiển thị...');
-    startFlvLivePlayer();
+    gLiveStreams = gLiveStreams.filter(x => x.stream_path !== msg.stream_path).concat([msg]);
+    toast(`✓ Có luồng trực tiếp${msg.ticket_code ? ' của phiếu ' + msg.ticket_code : ''} (kênh ${msg.channel}). Đang hiển thị...`);
+    startFlvLivePlayer(msg.stream_path);
    }
    if(msg.type === 'stream_stopped'){
-    toast('Luồng phát trực tiếp từ Mavic 3T đã tạm dừng');
-    stopFlvLivePlayer();
+    gLiveStreams = gLiveStreams.filter(x => x.stream_path !== msg.stream_path);
+    toast(`Luồng trực tiếp kênh ${msg.channel || ''} đã dừng`);
+    stopFlvLivePlayer(msg.stream_path);
    }
 
    // 2. Ảnh chụp đồng bộ mới từ Mavic 3T

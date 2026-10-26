@@ -325,3 +325,12 @@ test('flights.thin giữ điểm đầu, cuối và giới hạn số điểm', 
     assert.equal(out[out.length - 1], 10000);
     assert.deepEqual(thin([1, 2], 5000), [1, 2]);
 });
+
+test('channelForTicket: kênh live riêng theo mã phiếu, giữ kênh đã đặt', () => {
+    const { channelForTicket } = require('../src/services/ticketService');
+    assert.equal(channelForTicket({ ticket_code: 'PKT-PIN-2026-001' }), 'pkt_pkt-pin-2026-001');
+    assert.equal(channelForTicket({ ticket_code: 'Phiếu A/1' }), 'pkt_phi_u_a_1');
+    assert.equal(channelForTicket({ ticket_code: 'X', livestream_channel: 'kenh_rieng' }), 'kenh_rieng');
+    assert.equal(channelForTicket({ ticket_code: 'A1', livestream_channel: 'm3t_live' }), 'pkt_a1');
+    assert.equal(channelForTicket({}), 'm3t_live');
+});

@@ -3,6 +3,7 @@ const router = express.Router();
 const { query, sendDbError } = require('../config/db');
 const ticketRoutes = require('../services/ticketRoutes');
 const { asyncHandler, ok } = require('../utils/http');
+const { channelForTicket } = require('../services/ticketService');
 
 // 1. Lấy danh sách phiếu kiểm tra
 router.get('/', async (req, res) => {
@@ -31,7 +32,7 @@ router.get('/', async (req, res) => {
         }
         sql += ' ORDER BY t.ticket_id DESC';
         const rows = await query(sql, params);
-        res.json({ code: 0, data: rows });
+        res.json({ code: 0, data: rows.map(r => ({ ...r, livestream_channel: channelForTicket(r) })) });
     } catch (err) {
         sendDbError(res, err);
     }
@@ -76,7 +77,7 @@ router.get('/:id', async (req, res) => {
             return res.status(404).json({ code: 404, message: 'Không tìm thấy phiếu kiểm tra' });
         }
 
-        const ticket = tickets[0];
+        const ticket = { ...tickets[0], livestream_channel: channelForTicket(tickets[0]) };
         // Lấy danh sách ảnh thuộc phiếu này
         const photos = await query('SELECT * FROM media_files WHERE ticket_id = ? ORDER BY captured_at DESC', [ticketId]);
         // Lấy danh sách phát hiện khiếm khuyết AI

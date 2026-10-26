@@ -35,7 +35,7 @@ const { runMigrations } = require('./src/db/migrate');
 const { authRouter, verifyLogin } = require('./src/routes/auth');
 const assetsRouter = require('./src/routes/assets');
 const basemapsRouter = require('./src/routes/basemaps');
-const { listActiveTickets, findTicketById } = require('./src/services/ticketService');
+const { listActiveTickets, findTicketById, findTicketByChannel } = require('./src/services/ticketService');
 const mediaIngest = require('./src/services/mediaIngest');
 const { createTracker } = require('./src/services/flightTracker');
 const mediaUploadRouter = require('./src/routes/mediaUpload');
@@ -331,28 +331,33 @@ function setupRtmpServer() {
       console.log(`[RTMP Server] Đang nhận luồng phát mới từ thiết bị: ${StreamPath}`);
     });
 
-    nmsServer.on('postPublish', (id, StreamPath, args) => {
-      console.log(`[RTMP Server] ✓ ĐÃ NHẬN LUỒNG VIDEO LIVE TỪ MAVIC 3T: ${StreamPath}`);
-      broadcastWebSocket({
-        type: 'stream_started',
-        streamPath: StreamPath,
-        flv_url: `http://${HOST_IP}:8000${StreamPath}.flv`,
-        timestamp: new Date().toLocaleTimeString()
-      });
+    nmsServer.on('postPublish', async (id, StreamPath) => {
+      console.log(`[RTMP Server] ✓ Nhận luồng video: ${StreamPath}`);
+      const channel = String(StreamPath).split('/').pop();
+      let ticket = null;
+      if (isDbConnected()) ticket = await findTicketByChannel(channel).catch(() => null);
+      const stream = {
+        stream_path: StreamPath,
+        channel,
+        ticket_id: ticket ? ticket.ticket_id : null,
+        ticket_code: ticket ? ticket.ticket_code : null,
+        ticket_name: ticket ? ticket.ticket_name : null,
+        started_at: new Date().toISOString()
+      };
+      liveStreams.set(StreamPath, stream);
+      broadcastWebSocket({ type: 'stream_started', ...stream, streamPath: StreamPath });
     });
 
-    nmsServer.on('donePublish', (id, StreamPath, args) => {
+    nmsServer.on('donePublish', (id, StreamPath) => {
       console.log(`[RTMP Server] Luồng video đã kết thúc: ${StreamPath}`);
-      broadcastWebSocket({
-        type: 'stream_stopped',
-        streamPath: StreamPath,
-        timestamp: new Date().toLocaleTimeString()
-      });
+      const stream = liveStreams.get(StreamPath) || { stream_path: StreamPath };
+      liveStreams.delete(StreamPath);
+      broadcastWebSocket({ type: 'stream_stopped', ...stream, streamPath: StreamPath });
     });
 
     nmsServer.run();
     console.log(`[RTMP Server] ✓ RTMP Server đã mở cổng tcp://0.0.0.0:${rtmpPort}`);
-    console.log(`[RTMP Server] ✓ HTTP-FLV Live Stream cho Web: http://${HOST_IP}:8000/live/m3t_live.flv`);
+    console.log(`[RTMP Server] ✓ HTTP-FLV cho Web: http://${HOST_IP}:8000/live/<kênh>.flv (mỗi phiếu một kênh)`);
   } catch (err) {
     console.error('[RTMP Server] Lỗi khởi động:', err.message);
   }
@@ -1016,14 +1021,38 @@ app.post('/api/routes/push-to-drone', async (req, res) => {
   });
 });
 
+// 6.0 Livestream theo phiếu (C4)
+const liveStreams = new Map(); // StreamPath -> { channel, ticket_id, ticket_code, started_at }
+
+async function liveChannelFor(ticketId, sn) {
+  try {
+    let ticket = null;
+    if (ticketId) ticket = await findTicketById(ticketId);
+    if (!ticket && isDbConnected()) {
+      const session = await mediaIngest.activeSession(sn);
+      if (session && session.ticket_id) ticket = await findTicketById(session.ticket_id);
+    }
+    if (ticket) return ticket.livestream_channel;
+  } catch (err) {
+    console.warn('[Live] Không xác định được phiếu:', err.message);
+  }
+  return 'm3t_live';
+}
+
+app.get('/api/live', (req, res) => {
+  res.json({ code: 0, data: [...liveStreams.values()] });
+});
+
 // 6. Điều khiển Bật/Tắt LiveStream Mavic 3T
-app.post('/api/control/live', (req, res) => {
+app.post('/api/control/live', async (req, res) => {
   const { action, video_type, device_sn } = req.body;
   const targetSn = device_sn || Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
-  const gatewaySn = Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
+  const gatewaySn = gatewayOfAircraft[targetSn] || Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
 
   const method = action === 'stop' ? 'live_stop_push' : 'live_start_push';
-  const rtmpUrl = `rtmp://${HOST_IP}:${systemConfig.rtmp_port || 1935}/live/m3t_live`;
+  // Kênh theo phiếu: phiếu chỉ định, hoặc phiếu của phiên Pilot đang mở trên máy bay này
+  const channel = await liveChannelFor(req.body.ticket_id, targetSn);
+  const rtmpUrl = `rtmp://${HOST_IP}:${systemConfig.rtmp_port || 1935}/live/${channel}`;
 
   // Cấu trúc video_id và video_type chuẩn DJI Cloud API cho Mavic 3T:
   // video_type: 'wide', 'zoom' hoặc 'thermal'
@@ -1055,7 +1084,7 @@ app.post('/api/control/live', (req, res) => {
     console.log(`[Control] Đã gửi lệnh ${method} (url_type: 1, VideoID: ${videoId}) tới Gateway ${gatewaySn} & UAV ${targetSn}`);
   }
 
-  res.json({ code: 0, message: `Đã gửi lệnh ${method} thành công`, data: payload, rtmpUrl: rtmpUrl });
+  res.json({ code: 0, message: `Đã gửi lệnh ${method} thành công`, data: payload, rtmpUrl, channel });
 });
 
 // 7. Lệnh chụp ảnh từ Web (Hỗ trợ chụp Kép RGB+Nhiệt, chỉ RGB, chỉ Nhiệt, hoặc Zoom)

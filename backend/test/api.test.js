@@ -292,10 +292,12 @@ test('API tài sản & bản đồ', async (t) => {
 
     await t.test('phiếu đang chờ cho Pilot 2 lấy từ CSDL', async () => {
         await api('POST', '/api/tickets', { ticket_name: 'Kiểm tra khu INV-01', inspection_type: 'SOLAR_PANEL', target_facility: 'INV-01' });
-        const { listActiveTickets, findTicketById } = require('../src/services/ticketService');
+        const { listActiveTickets, findTicketById, findTicketByChannel } = require('../src/services/ticketService');
         const list = await listActiveTickets();
         assert.equal(list.length, 1);
-        assert.equal(list[0].livestream_channel, 'm3t_live');
+        assert.equal(list[0].livestream_channel, `pkt_${list[0].ticket_code.toLowerCase()}`);
+        assert.equal((await findTicketByChannel(list[0].livestream_channel)).ticket_id, list[0].ticket_id);
+        assert.equal(await findTicketByChannel('khong_co'), null);
         assert.equal((await findTicketById(list[0].ticket_id)).ticket_name, 'Kiểm tra khu INV-01');
         assert.equal(await findTicketById('abc'), null);
     });

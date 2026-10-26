@@ -199,8 +199,11 @@ Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
   thanh trên cùng đếm số máy trực tuyến / đang bay. `GET /api/fleet` trạng thái realtime; `/api/devices` hết báo ONLINE sai.
   Bỏ marker máy bay đặt cứng (SN và tọa độ giả).
 - [ ] Cảnh báo HMS (sự kiện `hms` của DJI) – để sau.
-- [ ] Theo dõi tiến độ chụp realtime trên bản đồ (vị trí từng ảnh vừa về).
-- [ ] Livestream kênh theo mã phiếu.
+- [x] Theo dõi tiến độ chụp realtime trên bản đồ (vị trí từng ảnh vừa về) – làm trong C3.
+- [x] C4 – Livestream theo phiếu: kênh mặc định `pkt_<mã phiếu>` (`ticketService.channelForTicket`; kênh chung cũ `m3t_live` coi như chưa đặt).
+  `/api/control/live` chọn kênh theo `ticket_id` hoặc phiếu của phiên Pilot đang mở trên máy bay; gửi lệnh tới đúng tay điều khiển ghép với máy bay.
+  Server nhớ các luồng đang phát (`GET /api/live`, sự kiện `stream_started/stopped` kèm mã phiếu); dashboard phát đúng luồng, nhãn LIVE ghi mã phiếu.
+  Sửa lỗi cũ: `stopFlvLivePlayer` chưa từng được định nghĩa. Cần thử với Pilot 2 thật: lệnh `live_start_push` + URL kênh mới.
 - [ ] Sửa số giả còn sót: KPI "DCL vượt ngưỡng 83.5 °C" ở Tổng quan, thanh OSD "Dãy 01 · 3.36 MWp".
 
 ### Giai đoạn D – Tích hợp AI Vision (~4 ngày, sau khi chốt đặc tả)

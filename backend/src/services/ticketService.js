@@ -14,12 +14,27 @@ const TICKET_SELECT = `
     LEFT JOIN flight_routes r ON t.assigned_route_id = r.route_id
 `;
 
+/** Kênh live mặc định của phiếu: "pkt_" + mã phiếu (chỉ chữ, số, _ -), để mỗi phiếu xem luồng riêng. */
+function channelForTicket(row) {
+    // 'm3t_live' là kênh chung cũ (mọi phiếu dùng chung) → coi như chưa đặt
+    if (row.livestream_channel && row.livestream_channel !== DEFAULT_LIVE_CHANNEL) return row.livestream_channel;
+    const code = String(row.ticket_code || row.ticket_id || '').toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+    return code ? `pkt_${code}`.slice(0, 100) : DEFAULT_LIVE_CHANNEL;
+}
+
 function normalizeTicket(row) {
     if (!row) return null;
     return {
         ...row,
-        livestream_channel: row.livestream_channel || DEFAULT_LIVE_CHANNEL
+        livestream_channel: channelForTicket(row)
     };
+}
+
+/** Tìm phiếu theo tên kênh live (kênh lưu trong CSDL hoặc kênh mặc định sinh từ mã phiếu). */
+async function findTicketByChannel(channel) {
+    if (!channel) return null;
+    const rows = await query(`${TICKET_SELECT} ORDER BY t.ticket_id DESC LIMIT 1000`);
+    return rows.map(normalizeTicket).find(t => t.livestream_channel === channel) || null;
 }
 
 /** Phiếu đang chờ hoặc đang thực hiện, mới nhất lên đầu. */
@@ -40,4 +55,4 @@ async function findTicketById(ticketId) {
     return normalizeTicket(rows[0]);
 }
 
-module.exports = { listActiveTickets, findTicketById, ACTIVE_STATUSES, DEFAULT_LIVE_CHANNEL };
+module.exports = { listActiveTickets, findTicketById, findTicketByChannel, channelForTicket, ACTIVE_STATUSES, DEFAULT_LIVE_CHANNEL };
