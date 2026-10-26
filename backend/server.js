@@ -2004,6 +2004,11 @@ async function initDatabase() {
   try {
     await runMigrations(dbConfig);
     dbInitDone = true;
+    // Làm sạch ảnh nhận bằng code cũ (giá trị gán cứng) – chỉ chạm các dòng chưa có sha256
+    const legacy = await mediaIngest.backfillLegacy();
+    if (legacy.fixed || legacy.missing) {
+      console.log(`[Ảnh] Làm sạch dữ liệu cũ: đọc lại ${legacy.fixed} ảnh từ file, xóa giá trị giả của ${legacy.missing} ảnh mất file.`);
+    }
     initMediaLibraryFromDbAndDisk().catch(err => console.warn('[Media Init]', err.message));
   } catch (err) {
     console.error(`[Migration] ✗ Lỗi nâng cấp CSDL, thử lại sau ${MIGRATION_RETRY_MS / 1000}s:`, err.message);

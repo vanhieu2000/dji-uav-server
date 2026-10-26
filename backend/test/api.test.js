@@ -539,6 +539,33 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal((await api('GET', '/api/datasets/export?ticket_id=999999')).status, 400);
     });
 
+    await t.test('làm sạch ảnh cũ: đọc lại giá trị thật từ file, xóa giá trị giả khi mất file', async () => {
+        const ingest = require('../src/services/mediaIngest');
+        const file = path.join(process.env.MEDIA_DIR, 'legacy_DJI_0099_T.JPG');
+        fs.writeFileSync(file, h.fakeDjiJpeg({ lat: 11.8520, lng: 107.0020, source: 'InfraredCamera' }));
+        // Dòng do code cũ tạo: tọa độ Lộc Ninh và 68,5 °C viết sẵn, không có sha256
+        const a = await db.query(`INSERT INTO media_files (ticket_id, device_sn, file_name, file_url, file_path_local, media_type, latitude, longitude, max_temperature, has_hotspot)
+            VALUES (NULL, 'Mavic 3T', 'legacy_DJI_0099_T.JPG', '/u', ?, 'THERMAL_PHOTO', 11.8312, 106.5913, 68.5, 1)`, [file]);
+        const b = await db.query(`INSERT INTO media_files (ticket_id, device_sn, file_name, file_url, file_path_local, media_type, latitude, longitude, max_temperature, has_hotspot)
+            VALUES (NULL, 'Mavic 3T', 'gone.JPG', '/u', '/khong/con/gone.JPG', 'RGB_PHOTO', 11.8312, 106.5913, 36.5, 0)`);
+        const r = await ingest.backfillLegacy();
+        assert.ok(r.fixed >= 1 && r.missing >= 1);
+        const [ra] = await db.query('SELECT * FROM media_files WHERE media_id = ?', [a.insertId]);
+        assert.equal(ra.latitude, 11.852);
+        assert.equal(ra.lens, 'IR');
+        assert.equal(ra.position_quality, 'HIGH');
+        assert.equal(ra.has_hotspot, 0);
+        assert.ok(ra.sha256);
+        assert.notEqual(ra.max_temperature, 68.5); // ảnh giả lập không có dữ liệu nhiệt → không còn 68,5 viết sẵn
+        const [rb] = await db.query('SELECT * FROM media_files WHERE media_id = ?', [b.insertId]);
+        assert.equal(rb.latitude, null);
+        assert.equal(rb.max_temperature, null);
+        assert.equal(rb.lens, 'WIDE');
+        // Chạy lại không đụng gì nữa
+        const again = await ingest.backfillLegacy();
+        assert.equal(again.fixed, 0);
+    });
+
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
         await db.closePool();
         const r = await api('GET', '/api/solar/areas');

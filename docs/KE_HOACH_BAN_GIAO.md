@@ -163,8 +163,20 @@ Tài liệu: https://developer.dji.com/doc/cloud-api-tutorial/en/api-reference/d
 - [x] **A4. Kiểm tra đủ ảnh** – XONG (`services/coverage.js`, `routes/coverage.js`, tab "Kiểm tra đủ ảnh", tuyến bay bù cho vùng thiếu) – vệt chụp của từng ảnh vẽ lên bản đồ; so số ảnh dự kiến/đã nhận; khu chưa phủ;
   sinh tuyến bay bù cho vùng thiếu. Xong khi: hiện % phủ theo khu và tạo được tuyến bù.
 
-- [ ] **A5. Xuất bộ ảnh cho Vision** – theo phiếu / hồ sơ / khu / khoảng ngày: ZIP ảnh gốc + `manifest.json`
+- [x] **A5. Xuất bộ ảnh cho Vision** – XONG (`routes/datasets.js`, tab "Xuất ảnh cho Vision"; ZIP theo luồng + manifest.json/.csv + README, pair_key ghép ảnh nhiệt ↔ thường) – theo phiếu / hồ sơ / khu / khoảng ngày: ZIP ảnh gốc + `manifest.json`
   (metadata chụp, tài sản liên quan). Xong khi: tải được và đội Vision đọc được.
+
+**Kết quả Giai đoạn A (26/10/2026):** đủ 5 bước, 35 test. Các tab mới trong *Cài đặt tài sản*:
+Hồ sơ chụp · Lập đường bay · Nhập ảnh thẻ nhớ · Kiểm tra đủ ảnh · Xuất ảnh cho Vision.
+Đã làm sạch 24 ảnh cũ trong DB thật (giá trị gán cứng của code cũ được thay bằng giá trị đọc từ file;
+phiếu gán cũ giữ nguyên vì không xác định được phiếu đúng).
+**Việc bắt buộc khi bay thử lần đầu (checklist):**
+1. Nạp 1 tuyến quét lưới nhỏ + 1 tuyến điểm vào Pilot 2 (thư viện đường bay hoặc chép KMZ) – Pilot 2 mở được, độ cao đúng so với điểm cất cánh.
+2. Ảnh chụp đủ cả nhiệt + rộng (tham số `payloadLensIndex`), khoảng cách chụp đúng mét (không phải giây).
+3. Tên file ảnh có hậu tố điểm chụp (`fileSuffix`) → ảnh tự gắn điểm chụp.
+4. Ảnh tự tải về server trong lúc bay; tải ảnh rộng 48MP qua nhiều phần ghép đúng.
+5. XMP có `RtkFlag=50` khi RTK FIX; số serial tay điều khiển / máy bay đọc được qua djiBridge.
+Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
 
 ### Giai đoạn B – Bản đồ & quản lý đường bay (~4–5 ngày)
 - [ ] Thư viện đường bay (bảng `flight_routes` + bảng mới `route_targets`): danh sách, xem trước trên bản đồ, gắn khu/ngăn lộ/DCL, nhân bản, xóa.
@@ -317,3 +329,9 @@ Tổng ước lượng còn lại: ~45–55 ngày công lập trình (chưa tín
 | `a9d3c6a` | Đưa mã nguồn lên GitHub (đã tách khóa DJI, mật khẩu ra `.env`) |
 | `cad1cbc` | Giai đoạn 0 + 1: dữ liệu thật, migration, bản đồ & tài sản, 23 test |
 | `cc4bf73` | Tài liệu kế hoạch & bàn giao |
+| `0c3155a` | Kế hoạch đủ 42 hạng mục |
+| `8d63dd9` | A1 hồ sơ chụp |
+| `dfb77f2`, `e488f2d` | A2 sinh đường bay KMZ + giao diện |
+| `6513c8e`, `f625157` | A3 nhận ảnh đúng + nhập thẻ nhớ |
+| `6d509af`, `64155db` | A4 kiểm tra đủ ảnh + bay bù |
+| `02c35ae` + commit này | A5 xuất bộ ảnh Vision + làm sạch ảnh cũ |

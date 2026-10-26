@@ -148,6 +148,48 @@ async function ingestFile(o) {
     return { status: 'created', media: { media_id: r.insertId, ...row, meta_json: undefined } };
 }
 
+/**
+ * Làm sạch ảnh nhận bằng code cũ (trước Giai đoạn A3), nhận biết qua sha256 trống.
+ * Code cũ gán cứng tọa độ / nhiệt độ / camera. Còn file: đọc lại giá trị thật từ file.
+ * Mất file: xóa tọa độ và nhiệt độ giả (để trống). Phiếu cũ giữ nguyên (không biết phiếu đúng).
+ * @returns {Promise<{fixed: number, missing: number}>}
+ */
+async function backfillLegacy() {
+    const rows = await query('SELECT media_id, file_name, file_path_local, media_type FROM media_files WHERE sha256 IS NULL');
+    let fixed = 0;
+    let missing = 0;
+    const LENS_FROM_TYPE = { THERMAL_PHOTO: 'IR', RGB_PHOTO: 'WIDE', ZOOM_PHOTO: 'ZOOM' };
+    for (const r of rows) {
+        const file = r.file_path_local;
+        if (!file || !fs.existsSync(file)) {
+            await query(
+                `UPDATE media_files SET latitude = NULL, longitude = NULL, altitude = NULL, max_temperature = NULL, has_hotspot = 0,
+                    lens = ?, position_quality = 'UNKNOWN', meta_json = ? WHERE media_id = ?`,
+                [LENS_FROM_TYPE[r.media_type] || 'UNKNOWN', JSON.stringify({ legacy_missing_file: true }), r.media_id]
+            );
+            missing += 1;
+            continue;
+        }
+        const meta = readMeta(file, r.file_name);
+        const thermal = meta.lens === 'IR' ? parseThermal(file) : null;
+        const stat = fs.statSync(file);
+        await query(
+            `UPDATE media_files SET latitude = ?, longitude = ?, altitude = ?, relative_altitude = ?, gimbal_pitch = ?, gimbal_yaw = ?,
+                gimbal_roll = ?, flight_yaw = ?, rtk_flag = ?, rtk_std_m = ?, position_quality = ?, lens = ?, media_type = ?,
+                max_temperature = ?, min_temperature = ?, avg_temperature = ?, thermal_engine = ?, has_hotspot = 0,
+                sha256 = ?, file_size = ?, original_name = COALESCE(original_name, file_name), meta_json = ?
+             WHERE media_id = ?`,
+            [meta.latitude, meta.longitude, meta.absolute_altitude, meta.relative_altitude, meta.gimbal_pitch, meta.gimbal_yaw,
+                meta.gimbal_roll, meta.flight_yaw, meta.rtk_flag, meta.rtk_std_m, meta.position_quality, meta.lens, MEDIA_TYPE[meta.lens],
+                thermal ? thermal.maxTemp : null, thermal ? thermal.minTemp : null, thermal ? thermal.avgTemp : null, thermal ? thermal.engine : null,
+                await sha256File(file), stat.size, JSON.stringify({ ...meta, captured_at: meta.captured_at ? meta.captured_at.toISOString() : null, legacy_backfill: true }),
+                r.media_id]
+        );
+        fixed += 1;
+    }
+    return { fixed, missing };
+}
+
 /** Upload callback của DJI: gắn mã chuyến bay cho ảnh theo tên file. */
 async function attachFlightId(fileName, flightId) {
     if (!fileName || !flightId) return 0;
@@ -155,4 +197,4 @@ async function attachFlightId(fileName, flightId) {
     return r.affectedRows || 0;
 }
 
-module.exports = { ingestFile, startPilotSession, activeSession, attachFlightId, sha256File };
+module.exports = { ingestFile, startPilotSession, activeSession, attachFlightId, sha256File, backfillLegacy };
