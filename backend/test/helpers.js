@@ -14,6 +14,19 @@ if (!/test/i.test(TEST_DB)) throw new Error('Tên CSDL test phải chứa "test"
 process.env.MYSQL_DATABASE = TEST_DB;
 process.env.BASEMAP_TILES_DIR = path.join(require('os').tmpdir(), `uav-test-tiles-${process.pid}`);
 process.env.WAYLINE_DIR = path.join(require('os').tmpdir(), `uav-test-waylines-${process.pid}`);
+process.env.MEDIA_DIR = path.join(require('os').tmpdir(), `uav-test-media-${process.pid}`, 'media');
+
+/** JPEG giả lập có khối XMP drone-dji như ảnh M3T thật (đủ để đọc metadata, không phải ảnh xem được). */
+function fakeDjiJpeg({ lat, lng, rtk = 50, rel = 34.8, pitch = -90, yaw = 90, source = 'WideCamera', date = '2026:10:26 10:15:30', extra = '' }) {
+    const xmp = `<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF><rdf:Description xmlns:drone-dji="http://www.dji.com/drone-dji/1.0/"
+ xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmp:CreateDate="${date}"
+ drone-dji:GpsLatitude="${lat}" drone-dji:GpsLongitude="${lng}" drone-dji:AbsoluteAltitude="+120.5" drone-dji:RelativeAltitude="+${rel}"
+ drone-dji:GimbalPitchDegree="${pitch}" drone-dji:GimbalYawDegree="${yaw}" drone-dji:GimbalRollDegree="0.00" drone-dji:FlightYawDegree="${yaw}"
+ drone-dji:RtkFlag="${rtk}" drone-dji:RtkStdLon="0.012" drone-dji:RtkStdLat="0.015" drone-dji:RtkStdHgt="0.02" drone-dji:ImageSource="${source}"/></rdf:RDF></x:xmpmeta>${extra}`;
+    const body = Buffer.from(xmp, 'utf8');
+    const app1 = Buffer.concat([Buffer.from([0xff, 0xe1]), Buffer.from([(body.length + 2) >> 8, (body.length + 2) & 0xff]), body]);
+    return Buffer.concat([Buffer.from([0xff, 0xd8]), app1, Buffer.from(`noise-${Math.random()}`), Buffer.from([0xff, 0xd9])]);
+}
 
 const mysql = require('mysql2/promise');
 const express = require('express');
@@ -68,6 +81,7 @@ async function dropTestDatabase() {
 async function startTestApp() {
     const app = express();
     app.use(express.json({ limit: '50mb' }));
+    app.use(require('../src/routes/mediaUpload'));
     app.use('/api/solar', require('../src/routes/solar'));
     app.use('/api/substation', require('../src/routes/substation'));
     app.use('/api/assets', require('../src/routes/assets'));
@@ -94,4 +108,4 @@ async function startTestApp() {
     return { server, base, api, close: () => new Promise(r => server.close(r)) };
 }
 
-module.exports = { TEST_DB, rootConfig, mysqlAvailable, resetTestDatabase, dropTestDatabase, startTestApp };
+module.exports = { TEST_DB, rootConfig, mysqlAvailable, resetTestDatabase, dropTestDatabase, startTestApp, fakeDjiJpeg };

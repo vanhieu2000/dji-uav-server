@@ -296,11 +296,24 @@
       const password = document.getElementById('password').value;
       const ticketId = document.getElementById('ticketSelect').value;
 
+      // Số serial tay điều khiển / máy bay (chỉ có khi mở trong DJI Pilot 2) để gắn ảnh đúng máy
+      function bridgeValue(fn) {
+        try {
+          if (!window.djiBridge || typeof window.djiBridge[fn] !== 'function') return null;
+          const raw = window.djiBridge[fn]();
+          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          return (parsed && (parsed.data || parsed.sn)) || null;
+        } catch (e) { return null; }
+      }
+      const rcSn = bridgeValue('platformGetRemoteControllerSN');
+      const aircraftSn = bridgeValue('platformGetAircraftSN');
+      if (rcSn || aircraftSn) addLog('Tay điều khiển: ' + (rcSn || '?') + ' · Máy bay: ' + (aircraftSn || '?'));
+
       try {
         const res = await fetch('/api/pilot/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password, ticketId })
+          body: JSON.stringify({ username, password, ticketId, rc_sn: rcSn, aircraft_sn: aircraftSn })
         });
         const data = await res.json();
 

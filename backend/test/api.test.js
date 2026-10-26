@@ -276,11 +276,18 @@ test('API tài sản & bản đồ', async (t) => {
         const mysql = require('mysql2/promise');
         const c = await mysql.createConnection({ ...h.rootConfig(), database: h.TEST_DB });
         await c.query('DELETE FROM schema_migrations');
+        // DB "đã có một phần": thiếu 1 cột của câu ALTER gộp → chạy lại phải bổ sung đúng cột đó
+        await c.query('ALTER TABLE media_files DROP COLUMN original_name');
         await c.end();
         const { runMigrations, listMigrationFiles } = require('../src/db/migrate');
         // Mọi file chạy lại được trên DB đã có sẵn bảng/cột (không lỗi, không nhân đôi dữ liệu mẫu)
         assert.deepEqual(await runMigrations({ ...h.rootConfig(), database: h.TEST_DB }, { log: () => {} }), listMigrationFiles());
         assert.equal((await api('GET', '/api/capture-profiles')).body.data.length, 5);
+        const cols = await db.query("SELECT column_name AS c FROM information_schema.columns WHERE table_schema = ? AND table_name = 'media_files' AND column_name = 'original_name'", [h.TEST_DB]);
+        assert.equal(cols.length, 1, 'cột bị thiếu phải được bổ sung');
+        const { splitAlterClauses } = require('../src/db/migrate');
+        assert.deepEqual(splitAlterClauses("ALTER TABLE `t` ADD COLUMN `a` ENUM('x','y') DEFAULT 'x', ADD INDEX `i` (`a`, `b`)"),
+            ["ALTER TABLE `t` ADD COLUMN `a` ENUM('x','y') DEFAULT 'x'", 'ALTER TABLE `t` ADD INDEX `i` (`a`, `b`)']);
     });
 
     await t.test('phiếu đang chờ cho Pilot 2 lấy từ CSDL', async () => {
@@ -383,6 +390,80 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal(list.body.data.length, 2);
         assert.equal((await api('DELETE', `/api/flight-plans/${route.route_id}`)).status, 200);
         assert.equal((await fetch(`${app.base}${route.kmz_url}`)).status, 404);
+    });
+
+    await t.test('nhận ảnh: S3 nhiều phần, metadata thật, phiên Pilot, điểm chụp, trùng, thẻ nhớ, callback', async () => {
+        const ingest = require('../src/services/mediaIngest');
+        const ticket = await api('POST', '/api/tickets', { ticket_name: 'Bay thử nhận ảnh', inspection_type: 'SOLAR_PANEL', target_facility: 'INV-01' });
+        const ticketId = ticket.body.data.ticket_id;
+        await ingest.startPilotSession({ user: { user_id: null, username: 'pilot' }, ticketId, rcSn: 'RC123456', aircraftSn: 'AC987654' });
+
+        // Tải nhiều phần: 3 phần gửi lệch thứ tự phải ghép đúng
+        const img = h.fakeDjiJpeg({ lat: 11.8505, lng: 107.0007, source: 'WideCamera' });
+        const cut = [0, 100, 250, img.length];
+        const key = '/dji-media/media/DJI_20261026101530_0001_W.JPG';
+        const init = await fetch(`${app.base}${key}?uploads`, { method: 'POST' });
+        const uploadId = /<UploadId>([a-f0-9]+)<\/UploadId>/.exec(await init.text())[1];
+        for (const i of [2, 0, 1]) {
+            const r = await fetch(`${app.base}${key}?partNumber=${i + 1}&uploadId=${uploadId}`, { method: 'PUT', body: img.subarray(cut[i], cut[i + 1]) });
+            assert.equal(r.status, 200);
+        }
+        const done = await fetch(`${app.base}${key}?uploadId=${uploadId}`, { method: 'POST' });
+        assert.equal(done.status, 200);
+        const rows = await db.query("SELECT * FROM media_files WHERE original_name = 'DJI_20261026101530_0001_W.JPG'");
+        assert.equal(rows.length, 1);
+        const m = rows[0];
+        assert.equal(fs.readFileSync(m.file_path_local).equals(img), true, 'file ghép phải giống hệt file gốc');
+        assert.equal(m.ticket_id, ticketId);          // từ phiên Pilot, không còn gán cứng phiếu 1
+        assert.equal(m.device_sn, 'AC987654');
+        assert.equal(m.latitude, 11.8505);
+        assert.equal(m.lens, 'WIDE');
+        assert.equal(m.position_quality, 'HIGH');
+        assert.equal(m.max_temperature, null);         // ảnh thường không có nhiệt độ giả
+        assert.equal(m.source, 'CLOUD');
+
+        // Gửi lại đúng ảnh đó (PUT 1 lần) → nhận là trùng, không thêm dòng
+        await fetch(`${app.base}/dji-media/media/copy.JPG`, { method: 'PUT', body: img });
+        assert.equal((await db.query('SELECT COUNT(*) n FROM media_files WHERE sha256 = ?', [m.sha256]))[0].n, 1);
+
+        // Callback DJI gắn mã chuyến bay
+        await api('POST', '/media/api/v1/workspaces/ws/upload-callback', { name: 'DJI_20261026101530_0001_W.JPG', ext: { flight_id: 'flight-abc' } });
+        assert.equal((await db.query('SELECT flight_id FROM media_files WHERE media_id = ?', [m.media_id]))[0].flight_id, 'flight-abc');
+        // fast-upload: đã có → 0, chưa có → 513000
+        assert.equal((await api('POST', '/media/api/v1/workspaces/ws/fast-upload', { name: 'DJI_20261026101530_0001_W.JPG' })).body.code, 0);
+        assert.equal((await api('POST', '/media/api/v1/workspaces/ws/fast-upload', { name: 'NEW.JPG' })).body.code, 513000);
+
+        // Nhập thẻ nhớ: ghép điểm chụp theo hậu tố tên file và theo vị trí (RTK FIX, ≤ 2 m)
+        const pt = await api('POST', '/api/assets/photo-points', { asset_type: 'SOLAR_AREA', asset_id: areaId, latitude: 11.851, longitude: 107.001, altitude_m: 30 });
+        const pointId = pt.body.data.point_id;
+        const form = new FormData();
+        form.append('ticket_id', String(ticketId));
+        form.append('files', new Blob([h.fakeDjiJpeg({ lat: 11.86, lng: 107.01, source: 'InfraredCamera' })]), `DJI_20261026_0002_T_P${areaId}_${pointId}.JPG`);
+        form.append('files', new Blob([h.fakeDjiJpeg({ lat: 11.851005, lng: 107.001005 })]), 'DJI_20261026_0003_W.JPG');
+        form.append('files', new Blob([h.fakeDjiJpeg({ lat: 11.851005, lng: 107.001005, rtk: 16 })]), 'DJI_20261026_0004_W.JPG');
+        form.append('files', new Blob([img]), 'DJI_dup_W.JPG');
+        form.append('files', new Blob(['x']), 'notes.txt');
+        const imp = await api('POST', '/api/media/import', form);
+        assert.equal(imp.status, 200, JSON.stringify(imp.body));
+        const s = imp.body.data;
+        assert.equal(s.created, 3);
+        assert.equal(s.duplicate, 1);
+        assert.equal(s.skipped, 1);
+        const byName = Object.fromEntries(s.items.map(i => [i.name, i]));
+        assert.equal(byName[`DJI_20261026_0002_T_P${areaId}_${pointId}.JPG`].photo_point_id, pointId);
+        assert.equal(byName[`DJI_20261026_0002_T_P${areaId}_${pointId}.JPG`].lens, 'IR');
+        assert.equal(byName['DJI_20261026_0003_W.JPG'].photo_point_id, pointId);   // cách ~0,7 m, RTK FIX
+        assert.equal(byName['DJI_20261026_0004_W.JPG'].photo_point_id, null);      // RTK chưa FIX → không ghép theo vị trí
+        assert.equal(byName['DJI_20261026_0004_W.JPG'].position_quality, 'LOW');
+        const sdRows = await db.query("SELECT source, ticket_id FROM media_files WHERE source = 'SD_IMPORT'");
+        assert.ok(sdRows.every(r => r.ticket_id === ticketId));
+
+        const noTicket = new FormData();
+        noTicket.append('files', new Blob([h.fakeDjiJpeg({ lat: 1, lng: 1 })]), 'a.JPG');
+        assert.equal((await api('POST', '/api/media/import', noTicket)).status, 400);
+        // Tên file độc hại không ghi ra ngoài thư mục media
+        await fetch(`${app.base}/dji-media/media/..%2F..%2Fevil.JPG`, { method: 'PUT', body: h.fakeDjiJpeg({ lat: 2, lng: 2 }) });
+        assert.ok(!fs.existsSync(path.join(path.dirname(process.env.MEDIA_DIR), 'evil.JPG')));
     });
 
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {

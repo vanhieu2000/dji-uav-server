@@ -139,6 +139,31 @@ test('wpmlBuilder: KMZ độ cao so với điểm cất cánh, chụp theo kho�
     assert.throws(() => buildPointsKmz({ name: 'x', speed: 4, profile: { lenses: 'ir' }, points: [{ lat: 1, lng: 1, altitude_m: 10, gimbal_pitch: 0 }] }));
 });
 
+test('djiImageMeta: đọc XMP M3T (RTK, gimbal, ống kính, giờ chụp), hậu tố điểm chụp', () => {
+    const h = require('./helpers');
+    const m = require('../src/services/djiImageMeta');
+    const meta = m.readMetaFromBuffer(h.fakeDjiJpeg({ lat: 11.85, lng: 107.001, source: 'InfraredCamera' }), 'DJI_20261026101530_0001_T.JPG');
+    assert.equal(meta.latitude, 11.85);
+    assert.equal(meta.longitude, 107.001);
+    assert.equal(meta.relative_altitude, 34.8);
+    assert.equal(meta.gimbal_pitch, -90);
+    assert.equal(meta.rtk_flag, 50);
+    assert.equal(meta.position_quality, 'HIGH');
+    assert.equal(meta.rtk_std_m, 0.015);
+    assert.equal(meta.lens, 'IR');
+    assert.equal(meta.captured_at.getFullYear(), 2026);
+    // RTK chưa FIX → LOW; bản firmware cũ viết sai GpsLongtitude
+    const old = m.readMetaFromBuffer(Buffer.from('<x:xmpmeta drone-dji:GpsLatitude="11.8" drone-dji:GpsLongtitude="107" drone-dji:RtkFlag="16"></x:xmpmeta>'), 'DJI_0002_W.JPG');
+    assert.equal(old.longitude, 107);
+    assert.equal(old.position_quality, 'LOW');
+    assert.equal(old.lens, 'WIDE');
+    assert.equal(m.readMetaFromBuffer(Buffer.from('no xmp'), 'x.jpg').position_quality, 'UNKNOWN');
+    assert.equal(m.lensOf(null, 'DJI_20261026_0003_Z_D12_34.JPG'), 'ZOOM');
+    assert.equal(m.photoPointFromName('DJI_20261026_0003_T_D12_34.JPG'), 34);
+    assert.equal(m.photoPointFromName('DJI_20261026_0003_D12_34_2_T.JPG'), 34);
+    assert.equal(m.photoPointFromName('DJI_20261026_0003_T.JPG'), null);
+});
+
 test('parseTilePath chỉ nhận đường dẫn ô ảnh hợp lệ', () => {
     assert.deepEqual(parseTilePath('tiles/18/215000/123000.PNG'), { z: 18, x: 215000, y: 123000, ext: 'png' });
     assert.deepEqual(parseTilePath('3/1/2.jpeg'), { z: 3, x: 1, y: 2, ext: 'jpg' });

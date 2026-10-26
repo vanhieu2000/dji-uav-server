@@ -36,6 +36,8 @@ const { authRouter, verifyLogin } = require('./src/routes/auth');
 const assetsRouter = require('./src/routes/assets');
 const basemapsRouter = require('./src/routes/basemaps');
 const { listActiveTickets, findTicketById } = require('./src/services/ticketService');
+const mediaIngest = require('./src/services/mediaIngest');
+const mediaUploadRouter = require('./src/routes/mediaUpload');
 const solarRouter = require('./src/routes/solar');
 const substationRouter = require('./src/routes/substation');
 const ticketsRouter = require('./src/routes/tickets');
@@ -152,117 +154,9 @@ app.head(['/dji-media/*', '/media/*', '/*/media/*', '/uploads/media/*'], (req, r
   res.status(200).end();
 });
 
-// B. S3 Multipart Upload Handle (Initiate & Complete)
-app.post(['/dji-media/*', '/media/*', '/*/media/*'], (req, res, next) => {
-  if (req.query.uploads !== undefined) {
-    const uploadId = crypto.randomUUID().replace(/-/g, '');
-    const key = req.path;
-    res.set({
-      'Content-Type': 'application/xml',
-      'Access-Control-Allow-Origin': '*'
-    });
-    return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
-<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-  <Bucket>dji-media</Bucket>
-  <Key>${key}</Key>
-  <UploadId>${uploadId}</UploadId>
-</InitiateMultipartUploadResult>`);
-  }
-  if (req.query.uploadId) {
-    const key = req.path;
-    const rawFileName = path.basename(key) || `DJI_${Date.now()}.JPG`;
-    const isThermal = rawFileName.includes('_T') || rawFileName.includes('thermal');
-    const isZoom = rawFileName.includes('_Z') || rawFileName.includes('zoom');
-    const record = {
-      media_id: memoryStore.mediaFiles.length + 1,
-      ticket_id: 1,
-      device_sn: 'Mavic 3T',
-      file_name: rawFileName,
-      file_url: `/uploads/media/${rawFileName}`,
-      media_type: isThermal ? 'THERMAL_PHOTO' : (isZoom ? 'ZOOM_PHOTO' : 'RGB_PHOTO'),
-      max_temperature: isThermal ? 65.5 : null,
-      captured_at: new Date()
-    };
-    memoryStore.mediaFiles.unshift(record);
-    saveMediaToDb(record);
-    broadcastWebSocket({
-      type: 'media_synced',
-      data: record
-    });
-    res.set({
-      'Content-Type': 'application/xml',
-      'Access-Control-Allow-Origin': '*'
-    });
-    return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
-<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-  <Location>http://${HOST_IP}:${PORT}${key}</Location>
-  <Bucket>dji-media</Bucket>
-  <Key>${key}</Key>
-  <ETag>"${crypto.randomUUID().replace(/-/g, '')}"</ETag>
-</CompleteMultipartUploadResult>`);
-  }
-  next();
-});
-
-// C. Xử lý tải ảnh nhị phân HTTP PUT từ DJI Pilot 2 (S3 / MinIO & Media Mock)
-app.put(['/dji-media/*', '/media/*', '/*/media/*', '/api/media/*', '/uploads/media/*'], (req, res) => {
-  const urlPath = req.originalUrl.split('?')[0];
-  let rawName = path.basename(urlPath);
-  if (!rawName || rawName === 'upload' || rawName === 'media') {
-    rawName = `DJI_${Date.now()}.JPG`;
-  }
-  if (!path.extname(rawName)) rawName += '.JPG';
-  const safeFileName = rawName.startsWith('DJI_') ? rawName : ('DJI_' + Date.now() + '_' + rawName.replace(/[^a-zA-Z0-9._-]/g, '_'));
-  const uploadDir = path.join(__dirname, 'uploads', 'media');
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-  const targetFilePath = path.join(uploadDir, safeFileName);
-
-  const writeStream = fs.createWriteStream(targetFilePath);
-  req.pipe(writeStream);
-
-  writeStream.on('finish', () => {
-    const fileUrl = `/uploads/media/${safeFileName}`;
-    console.log(`[Media PUT Upload] ✓ Đã nhận và lưu ảnh thật từ Pilot 2: ${safeFileName}`);
-
-    const isThermal = safeFileName.includes('_T') || safeFileName.includes('thermal');
-    const isZoom = safeFileName.includes('_Z') || safeFileName.includes('zoom');
-    const mediaType = isThermal ? 'THERMAL_PHOTO' : (isZoom ? 'ZOOM_PHOTO' : 'RGB_PHOTO');
-
-    const record = {
-      media_id: memoryStore.mediaFiles.length + 1,
-      ticket_id: 1,
-      device_sn: 'Mavic 3T',
-      file_name: safeFileName,
-      file_url: fileUrl,
-      media_type: mediaType,
-      latitude: null,
-      longitude: null,
-      max_temperature: isThermal ? 65.5 : null,
-      has_hotspot: false,
-      captured_at: new Date()
-    };
-
-    memoryStore.mediaFiles.unshift(record);
-    saveMediaToDb(record);
-    broadcastWebSocket({
-      type: 'media_synced',
-      data: record
-    });
-
-    res.set({
-      'Access-Control-Allow-Origin': '*',
-      'ETag': `"${crypto.randomUUID().replace(/-/g, '')}"`,
-      'Content-Length': '0',
-      'Connection': 'keep-alive'
-    });
-    res.status(200).send('<UploadResult><Status>Success</Status></UploadResult>');
-  });
-
-  writeStream.on('error', (err) => {
-    console.error('[Media PUT Upload] Lỗi lưu file ảnh:', err.message);
-    res.status(500).send('Error saving file');
-  });
-});
+// B–C. Nhận ảnh từ DJI Pilot 2 (S3 giả lập, tải nhiều phần), upload form, nhập thẻ nhớ:
+//      xem src/routes/mediaUpload.js (không gán cứng phiếu / tọa độ / nhiệt độ)
+app.use(mediaUploadRouter);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -486,45 +380,7 @@ async function saveTelemetryToDb(sn, d, dev) {
   }
 }
 
-async function saveMediaToDb(record) {
-  const filePathLocal = record.file_path_local || path.join(__dirname, 'uploads', 'media', record.file_name);
-  record.file_path_local = filePathLocal;
-
-  try {
-    // 1. Lưu hoặc cập nhật thông tin ảnh vào bảng media_files trong Database
-    await query(
-      `INSERT INTO media_files (ticket_id, device_sn, file_name, file_url, file_path_local, media_type, latitude, longitude, max_temperature, has_hotspot, captured_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-      [
-        record.ticket_id || 1,
-        record.device_sn || 'Mavic 3T',
-        record.file_name,
-        record.file_url,
-        filePathLocal,
-        record.media_type || 'RGB_PHOTO',
-        record.latitude || null,
-        record.longitude || null,
-        record.max_temperature || null,
-        record.has_hotspot ? 1 : 0
-      ]
-    );
-    console.log(`[Hệ Thống Dữ Liệu] ✓ Đã lưu ảnh vào Database: ${record.file_name} (PC: ${filePathLocal})`);
-
-    // 2. Nếu phát hiện nhiệt độ vượt ngưỡng an toàn (>= 65°C) hoặc có Hotspot -> Ghi nhận cảnh báo lỗi vào defect_alerts
-    if (record.has_hotspot || (record.max_temperature && record.max_temperature >= 65.0)) {
-      const alertTitle = `Cảnh báo quá nhiệt: ${record.max_temperature}°C trên ảnh ${record.file_name}`;
-      const alertMsg = `Phát hiện điểm phát nhiệt bất thường (${record.max_temperature}°C) trong đợt kiểm tra phiếu #${record.ticket_id || 1}. Ảnh lưu tại: ${record.file_url}`;
-      await query(
-        `INSERT INTO defect_alerts (ticket_id, alert_level, title, message, status, created_at)
-         VALUES (?, 'WARNING', ?, ?, 'UNREAD', NOW())`,
-        [record.ticket_id || 1, alertTitle, alertMsg]
-      );
-      console.log(`[Nhật Ký Giám Sát] ⚠️ Đã ghi nhận cảnh báo quá nhiệt vào bảng defect_alerts: ${alertTitle}`);
-    }
-  } catch (err) {
-    console.warn('[DB Media Insert]', err.message);
-  }
-}
+// saveMediaToDb (cũ, gán cứng phiếu 1 và tự tạo cảnh báo 65 °C) đã thay bằng src/services/mediaIngest.js
 
 // Khởi tạo và đồng bộ kho ảnh từ Database và thư mục đĩa cục bộ
 async function initMediaLibraryFromDbAndDisk() {
@@ -545,39 +401,16 @@ async function initMediaLibraryFromDbAndDisk() {
     console.warn('[DB Media Init]', err.message);
   }
 
-  // 2. Quét các file thực tế có trên ổ đĩa PC: nếu chưa có trong DB thì tự động bổ sung
+  // 2. File ảnh có trên ổ đĩa nhưng chưa có trong DB: nhận vào bằng service chung
+  //    (đọc vị trí / RTK / nhiệt độ thật trong ảnh; không gán phiếu, tọa độ hay nhiệt độ giả)
   try {
-    const diskFiles = fs.readdirSync(uploadDir).filter(f => /\.(jpe?g|png)$/i.test(f));
+    const known = new Set(memoryStore.mediaFiles.map(m => m.file_name));
+    const diskFiles = fs.readdirSync(uploadDir).filter(f => /\.(jpe?g)$/i.test(f) && !known.has(f));
     for (const f of diskFiles) {
-      const exists = memoryStore.mediaFiles.some(m => m.file_name === f);
-      if (!exists) {
-        const isThermal = f.includes('_T') || f.toLowerCase().includes('thermal');
-        const isZoom = f.includes('_Z') || f.toLowerCase().includes('zoom');
-        const mediaType = isThermal ? 'THERMAL_PHOTO' : (isZoom ? 'ZOOM_PHOTO' : 'RGB_PHOTO');
-        const localPath = path.join(uploadDir, f);
-        let realThermal = null;
-        if (isThermal) {
-          realThermal = parseDjiThermalJpeg(localPath);
-        }
-        const maxTemp = realThermal ? realThermal.maxTemp : (isThermal ? 68.5 : null);
-        const record = {
-          media_id: memoryStore.mediaFiles.length + 1,
-          ticket_id: 1,
-          device_sn: 'Mavic 3T',
-          file_name: f,
-          file_url: `/uploads/media/${f}`,
-          file_path_local: localPath,
-          media_type: mediaType,
-          latitude: 11.831200,
-          longitude: 106.591300,
-          max_temperature: maxTemp,
-          has_hotspot: isThermal && maxTemp >= 65.0,
-          captured_at: new Date()
-        };
-        memoryStore.mediaFiles.push(record);
-        await saveMediaToDb(record);
-      }
+      const r = await mediaIngest.ingestFile({ localPath: path.join(uploadDir, f), fileName: f, originalName: f, source: 'DISK_SCAN' });
+      if (r.status === 'created') memoryStore.mediaFiles.push(r.media);
     }
+    if (diskFiles.length) console.log(`[Ảnh] Đã quét ${diskFiles.length} file ảnh chưa có trong CSDL.`);
   } catch (err) {
     console.warn('[Disk Media Scan]', err.message);
   }
@@ -896,12 +729,15 @@ function triggerMediaSync() {
   }
 }
 
-// Chạy tiến trình nền kiểm tra và kích hoạt đồng bộ ảnh tự động liên tục mỗi 4 giây
-setInterval(() => {
-  if (Object.keys(memoryStore.gateways).length > 0 || Object.keys(memoryStore.devices).length > 0) {
-    triggerMediaSync();
-  }
-}, 4000);
+// Đã bỏ vòng lặp gửi "media_files_sync" mỗi 4 giây: method này không có trong tài liệu DJI Cloud API.
+// Ảnh về server nhờ Pilot 2 tự tải lên (mediaSetAutoUploadPhoto ở trang pilot-login) + nhập thẻ nhớ.
+// Nút "Đồng bộ ảnh" trên dashboard vẫn gọi triggerMediaSync() thủ công khi cần thử.
+
+// Ảnh mới nhận (Pilot 2 / thẻ nhớ): cập nhật danh sách trong bộ nhớ và báo dashboard
+mediaUploadRouter.setOnIngested((media) => {
+  memoryStore.mediaFiles.unshift(media);
+  broadcastWebSocket({ type: 'media_synced', data: media });
+});
 
 // ===================================================================
 // REST API CHO ĐIỀU KHIỂN & QUẢN LÝ THỦ CÔNG TRÊN WEB
@@ -928,7 +764,7 @@ app.get('/api/pilot/tickets', async (req, res) => {
 
 // 1.0 Endpoint đăng nhập Pilot 2: kiểm tra tài khoản và phiếu trong MySQL
 app.post('/api/pilot/login', async (req, res) => {
-  const { username, password, ticketId } = req.body || {};
+  const { username, password, ticketId, rc_sn: rcSn, aircraft_sn: aircraftSn } = req.body || {};
   console.log(`[Pilot 2 Login] Remote yêu cầu đăng nhập: User=${username}, TicketID=${ticketId}`);
 
   let auth;
@@ -949,6 +785,15 @@ app.post('/api/pilot/login', async (req, res) => {
     return res.status(409).json({ code: 409, message: `Phiếu ${ticket.ticket_code} đã ${ticket.status === 'COMPLETED' ? 'hoàn thành' : 'hủy'}, chọn phiếu khác.` });
   }
 
+  // Ghi phiên đăng nhập: ảnh tự tải lên sau đó được gắn vào phiếu này
+  let sessionId = null;
+  try {
+    const sn = v => (typeof v === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(v) ? v : null);
+    sessionId = await mediaIngest.startPilotSession({ user: auth.user, ticketId: ticket.ticket_id, rcSn: sn(rcSn), aircraftSn: sn(aircraftSn) });
+  } catch (err) {
+    return sendDbError(res, err);
+  }
+
   // THÔNG BÁO TỨC THÌ LÊN DASHBOARD TRÊN MÁY TÍNH
   broadcastWebSocket({
     type: 'client_connected',
@@ -966,6 +811,7 @@ app.post('/api/pilot/login', async (req, res) => {
       workspace_name: systemConfig.workspace_name,
       workspace_id: systemConfig.workspace_id,
       ticket_id: ticket.ticket_id,
+      pilot_session_id: sessionId,
       assigned_ticket: `${ticket.ticket_code} - ${ticket.ticket_name}`,
       user: auth.user,
       license: systemConfig.dji_license,
@@ -1426,7 +1272,7 @@ app.post('/api/control/photo', (req, res) => {
 // 7.0 Tiếp nhận ảnh chụp tức thời (Live Stream Realtime Snapshot) từ giao diện Web
 app.post('/api/media/snapshot', async (req, res) => {
   try {
-    const { image_base64, mode = 'thermal', lat, lng, alt, max_temperature, ticket_id = 1 } = req.body;
+    const { image_base64, mode = 'thermal', lat, lng, alt, max_temperature, ticket_id } = req.body;
     if (!image_base64) {
       return res.status(400).json({ code: -1, message: 'Thiếu dữ liệu hình ảnh' });
     }
@@ -1435,7 +1281,7 @@ app.post('/api/media/snapshot', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     const suffix = mode === 'thermal' ? '_T' : (mode === 'wide' ? '_W' : '_Z');
-    const fileName = `DJI_${Date.now()}${suffix}.JPG`;
+    const fileName = `SNAP_${Date.now()}${suffix}.JPG`; // ảnh chụp màn hình livestream, không phải ảnh gốc DJI
     const uploadDir = path.join(__dirname, 'uploads', 'media');
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
     const localFilePath = path.join(uploadDir, fileName);
@@ -1447,31 +1293,29 @@ app.post('/api/media/snapshot', async (req, res) => {
     const isZoom = mode === 'zoom';
     const mediaType = isThermal ? 'THERMAL_PHOTO' : (isZoom ? 'ZOOM_PHOTO' : 'RGB_PHOTO');
 
-    // Lấy thông số OSD thực tế của Mavic 3T nếu có
-    const targetSn = Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
-    const dev = memoryStore.devices[targetSn] || {};
-    const finalLat = parseFloat(lat) || dev.lat || 11.831200;
-    const finalLng = parseFloat(lng) || dev.lng || 106.591300;
-    const finalTemp = parseFloat(max_temperature) || (isThermal ? 68.5 : 36.5);
-    const hasHotspot = finalTemp >= 65.0;
-
-    const record = {
-      media_id: memoryStore.mediaFiles.length + 1,
-      ticket_id: parseInt(ticket_id) || 1,
-      device_sn: targetSn,
-      file_name: fileName,
-      file_url: `/uploads/media/${fileName}`,
-      file_path_local: localFilePath,
-      media_type: mediaType,
-      latitude: finalLat,
-      longitude: finalLng,
-      max_temperature: finalTemp,
-      has_hotspot: hasHotspot,
-      captured_at: new Date()
+    // Ảnh chụp màn hình livestream không có XMP: lấy vị trí / nhiệt độ thật từ OSD đang nhận, không có thì để trống
+    const targetSn = Object.keys(memoryStore.devices)[0] || null;
+    const dev = (targetSn && memoryStore.devices[targetSn]) || {};
+    const num = v => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+    const ing = await mediaIngest.ingestFile({
+      localPath: localFilePath, fileName, originalName: fileName, source: 'MANUAL',
+      ticketId: num(ticket_id), deviceSn: targetSn || undefined
+    });
+    const lens = isThermal ? 'IR' : (isZoom ? 'ZOOM' : 'WIDE');
+    const fields = {
+      latitude: num(lat) ?? (dev.lat ?? null),
+      longitude: num(lng) ?? (dev.lng ?? null),
+      relative_altitude: num(alt) ?? (dev.rel_alt ?? null),
+      max_temperature: num(max_temperature) ?? (isThermal ? (dev.thermal_max ?? null) : null),
+      lens, media_type: mediaType
     };
+    await query(
+      'UPDATE media_files SET latitude = ?, longitude = ?, relative_altitude = ?, max_temperature = ?, lens = ?, media_type = ? WHERE media_id = ?',
+      [fields.latitude, fields.longitude, fields.relative_altitude, fields.max_temperature, fields.lens, fields.media_type, ing.media.media_id]
+    );
+    const record = { ...ing.media, ...fields };
 
     memoryStore.mediaFiles.unshift(record);
-    await saveMediaToDb(record);
 
     broadcastWebSocket({
       type: 'media_synced',
@@ -1626,35 +1470,7 @@ app.post('/api/mqtt/test-publish', (req, res) => {
   });
 });
 
-// 10. Tiếp nhận upload ảnh chụp đồng bộ từ UAV / Pilot 2 (Hỗ trợ đa đường dẫn)
-app.post(['/api/media/upload', '/api/dji/media', '/media/upload'], uploadMedia.single('file'), (req, res) => {
-  const file = req.file;
-  const { ticketId, deviceSn, mediaType, lat, lng, tempMax, hasHotspot } = req.body;
-
-  const record = {
-    media_id: memoryStore.mediaFiles.length + 1,
-    ticket_id: parseInt(ticketId) || 1,
-    device_sn: deviceSn || 'Mavic 3T',
-    file_name: file ? file.filename : `DJI_${Date.now()}.JPG`,
-    file_url: file ? `/uploads/media/${file.filename}` : '',
-    media_type: mediaType || (file && file.originalname.includes('_T') ? 'THERMAL_PHOTO' : 'RGB_PHOTO'),
-    latitude: parseFloat(lat) || null,
-    longitude: parseFloat(lng) || null,
-    max_temperature: parseFloat(tempMax) || (hasHotspot ? 68.5 : null),
-    has_hotspot: hasHotspot === 'true' || hasHotspot === true,
-    captured_at: new Date()
-  };
-
-  memoryStore.mediaFiles.unshift(record);
-  console.log(`[Media Synced] Nhận ảnh kiểm tra thật: ${record.file_name}`);
-
-  broadcastWebSocket({
-    type: 'media_synced',
-    data: record
-  });
-
-  res.json({ code: 0, message: 'Upload success', data: record });
-});
+// 10. Nhận ảnh dạng form: xem src/routes/mediaUpload.js
 
 // 11. Lấy danh sách ảnh kiểm tra (Ưu tiên từ Database, kèm đường dẫn PC local)
 app.get('/api/media', async (req, res) => {
@@ -2122,45 +1938,7 @@ app.post('/wayline/api/v1/workspaces/:workspace_id/upload-callback', (req, res) 
 // D. DJI CLOUD API - MEDIA SERVICE (HỨNG ẢNH THẬT 100% TỪ MAVIC 3T)
 // ===================================================================
 
-// D1. Kiểm tra file nhanh (Fast Upload Check chuẩn DJI Cloud API)
-app.post(['/media/api/v1/workspaces/:workspace_id/fast-upload', '/manage/api/v1/workspaces/:workspace_id/fast-upload'], (req, res) => {
-  const { name, fingerprint } = req.body || {};
-  
-  // Kiểm tra xem ảnh này đã tồn tại trong hệ thống chưa
-  const isExist = memoryStore.mediaFiles.some(m => 
-    (name && m.file_name === name) || 
-    (fingerprint && m.file_name && m.file_name.includes(fingerprint))
-  );
-
-  if (isExist) {
-    console.log(`[Media Fast Upload] ✓ Ảnh ${name || fingerprint} ĐÃ CÓ trên server -> Bỏ qua tải trùng lặp.`);
-    return res.json({
-      code: 0,
-      message: 'success',
-      data: {}
-    });
-  }
-
-  // Chuẩn DJI Cloud API (MediaController.java dòng 38): 
-  // Nếu file chưa có, BẮT BUỘC trả về lỗi (code != 0, mã 513000) để Pilot 2 bắt đầu quy trình upload ảnh thực sự!
-  console.log(`[Media Fast Upload] 📸 Ảnh mới từ Mavic 3T: ${name || 'N/A'} (Fingerprint: ${fingerprint || 'N/A'}) CHƯA có -> Yêu cầu Pilot 2 upload thực sự.`);
-  res.json({
-    code: 513000,
-    message: `${fingerprint || name || 'file'} don't exist.`,
-    data: null
-  });
-});
-
-// D2. Kiểm tra danh sách tiny-fingerprints
-app.post(['/media/api/v1/workspaces/:workspace_id/files/tiny-fingerprints', '/manage/api/v1/workspaces/:workspace_id/files/tiny-fingerprints'], (req, res) => {
-  res.json({
-    code: 0,
-    message: 'success',
-    data: {
-      tiny_fingerprints: []
-    }
-  });
-});
+// D1–D2 (fast-upload, tiny-fingerprints): xem src/routes/mediaUpload.js
 
 // D3. Cấp STS Token upload (Chuẩn MinIO/S3 cho DJI Pilot 2)
 app.all(['/storage/api/v1/workspaces/:workspace_id/sts', '/media/api/v1/workspaces/:workspace_id/storage-configs'], (req, res) => {
@@ -2184,129 +1962,7 @@ app.all(['/storage/api/v1/workspaces/:workspace_id/sts', '/media/api/v1/workspac
   });
 });
 
-// D3.1 Hứng trực tiếp S3/MinIO HTTP PUT Binary Stream tải ảnh từ DJI Pilot 2
-app.put(['/dji-media/*', '/media/*'], (req, res) => {
-  const rawPath = req.path;
-  const fileName = path.basename(rawPath) || `DJI_${Date.now()}.JPG`;
-  const uploadDir = path.join(__dirname, 'uploads', 'media');
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-  const targetFile = path.join(uploadDir, fileName);
-
-  const writeStream = fs.createWriteStream(targetFile);
-  req.pipe(writeStream);
-
-  writeStream.on('finish', async () => {
-    const stat = fs.statSync(targetFile);
-    console.log(`[DJI S3 PUT Real Photo] 📸 ĐÃ NHẬN ẢNH THẬT TỪ MAVIC 3T (S3 PUT): ${fileName} (${(stat.size / 1024).toFixed(1)} KB)`);
-
-    const isThermal = fileName.includes('_T') || fileName.toLowerCase().includes('thermal');
-    const isZoom = fileName.includes('_Z') || fileName.toLowerCase().includes('zoom');
-    const mediaType = isThermal ? 'THERMAL_PHOTO' : (isZoom ? 'ZOOM_PHOTO' : 'RGB_PHOTO');
-    let realThermal = null;
-    if (isThermal) {
-      realThermal = parseDjiThermalJpeg(targetFile);
-    }
-    const maxTemp = realThermal ? realThermal.maxTemp : (isThermal ? 68.5 : 36.5);
-
-    const record = {
-      media_id: memoryStore.mediaFiles.length + 1,
-      ticket_id: 1,
-      device_sn: '1581F5FJC243K00DNRRT',
-      file_name: fileName,
-      file_url: `/uploads/media/${fileName}`,
-      file_path_local: targetFile,
-      media_type: mediaType,
-      latitude: 11.831200,
-      longitude: 106.591300,
-      max_temperature: maxTemp,
-      has_hotspot: isThermal && maxTemp >= 65.0,
-      captured_at: new Date()
-    };
-
-    memoryStore.mediaFiles.unshift(record);
-    await saveMediaToDb(record);
-
-    broadcastWebSocket({
-      type: 'media_synced',
-      data: record
-    });
-
-    res.setHeader('ETag', `"${crypto.createHash('md5').update(fileName).digest('hex')}"`);
-    res.status(200).send('');
-  });
-
-  writeStream.on('error', (err) => {
-    console.error('[DJI S3 PUT Error]', err);
-    res.status(500).send(err.message);
-  });
-});
-
-// D4. Tiếp nhận File Ảnh Thật từ Mavic 3T (Multipart Form)
-app.post([
-  '/media/api/v1/workspaces/:workspace_id/files/upload',
-  '/manage/api/v1/workspaces/:workspace_id/files/upload',
-  '/api/dji/media',
-  '/api/media/upload'
-], uploadMedia.single('file'), async (req, res) => {
-  try {
-    const file = req.file;
-    if (!file) {
-      console.warn('[DJI Media Upload] Không có file đính kèm trong request');
-      return res.status(400).json({ code: -1, message: 'No file received' });
-    }
-
-    const fileName = file.filename;
-    const fileUrl = `/uploads/media/${fileName}`;
-    const localFilePath = path.join(__dirname, 'uploads', 'media', fileName);
-    const isThermal = fileName.includes('_T') || fileName.toLowerCase().includes('thermal');
-    const isZoom = fileName.includes('_Z') || fileName.toLowerCase().includes('zoom');
-    const mediaType = isThermal ? 'THERMAL_PHOTO' : (isZoom ? 'ZOOM_PHOTO' : 'RGB_PHOTO');
-    const maxTemp = isThermal ? 68.5 : 36.5;
-
-    console.log(`[DJI Media Real Photo] 📸 ĐÃ NHẬN ẢNH THẬT TỪ MAVIC 3T: ${fileName} (${(file.size / 1024).toFixed(1)} KB)`);
-
-    const record = {
-      media_id: memoryStore.mediaFiles.length + 1,
-      ticket_id: 1,
-      device_sn: '1581F5FJC243K00DNRRT',
-      file_name: fileName,
-      file_url: fileUrl,
-      file_path_local: localFilePath,
-      media_type: mediaType,
-      latitude: 11.831200,
-      longitude: 106.591300,
-      max_temperature: maxTemp,
-      has_hotspot: isThermal,
-      captured_at: new Date()
-    };
-
-    memoryStore.mediaFiles.unshift(record);
-    await saveMediaToDb(record);
-
-    broadcastWebSocket({
-      type: 'media_synced',
-      data: record
-    });
-
-    res.json({
-      code: 0,
-      message: 'success',
-      data: {
-        file_id: String(record.media_id),
-        file_url: `http://${HOST_IP}:${PORT}${fileUrl}`
-      }
-    });
-  } catch (err) {
-    console.error('[DJI Media Upload Error]', err);
-    res.status(500).json({ code: -1, message: err.message });
-  }
-});
-
-// D5. Báo cáo hoàn tất tải ảnh (Upload Callback)
-app.post(['/media/api/v1/workspaces/:workspace_id/upload-callback', '/manage/api/v1/workspaces/:workspace_id/upload-callback'], (req, res) => {
-  console.log(`[DJI Media Callback] ✓ Pilot 2 đã hoàn tất đồng bộ ảnh:`, req.body ? req.body.name || req.body : '');
-  res.json({ code: 0, message: 'success' });
-});
+// D3.1, D4, D5 (PUT S3, upload form, upload-callback): xem src/routes/mediaUpload.js
 
 // D6. Danh sách ảnh cho Pilot 2 Media Library
 app.get(['/media/api/v1/workspaces/:workspace_id/files', '/manage/api/v1/workspaces/:workspace_id/files'], (req, res) => {

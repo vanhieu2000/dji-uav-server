@@ -33,6 +33,67 @@ function splitStatements(sql) {
         .filter(Boolean);
 }
 
+/**
+ * Tách "ALTER TABLE t ADD ..., ADD ..., ADD ..." thành từng câu ALTER một phần.
+ * Dùng khi câu gộp báo "đã tồn tại": chạy lại từng phần để không bỏ sót phần chưa có.
+ * Trả null nếu không phải ALTER TABLE nhiều phần.
+ */
+function splitAlterClauses(stmt) {
+    const m = /^\s*ALTER\s+TABLE\s+(`[^`]+`|\w+)\s+([\s\S]+)$/i.exec(stmt);
+    if (!m) return null;
+    const parts = [];
+    let depth = 0;
+    let quote = null;
+    let cur = '';
+    for (const ch of m[2]) {
+        if (quote) {
+            if (ch === quote) quote = null;
+        } else if (ch === "'" || ch === '"' || ch === '`') {
+            quote = ch;
+        } else if (ch === '(') {
+            depth += 1;
+        } else if (ch === ')') {
+            depth -= 1;
+        } else if (ch === ',' && depth === 0) {
+            parts.push(cur.trim());
+            cur = '';
+            continue;
+        }
+        cur += ch;
+    }
+    if (cur.trim()) parts.push(cur.trim());
+    return parts.length > 1 ? parts.map(p => `ALTER TABLE ${m[1]} ${p}`) : null;
+}
+
+/** Chạy 1 câu; lỗi "đã tồn tại" ở câu ALTER gộp thì chạy lại từng phần. */
+async function runStatement(conn, stmt, file, log) {
+    try {
+        await conn.query(stmt);
+        return;
+    } catch (err) {
+        if (!ALREADY_APPLIED_CODES.has(err.code)) {
+            err.message = `${file}: ${err.message}`;
+            throw err;
+        }
+        const pieces = splitAlterClauses(stmt);
+        if (!pieces) {
+            log(`[Migration]   bỏ qua (đã có): ${stmt.split('\n')[0].slice(0, 80)}`);
+            return;
+        }
+        for (const piece of pieces) {
+            try {
+                await conn.query(piece);
+            } catch (e) {
+                if (!ALREADY_APPLIED_CODES.has(e.code)) {
+                    e.message = `${file}: ${e.message}`;
+                    throw e;
+                }
+                log(`[Migration]   bỏ qua (đã có): ${piece.slice(0, 100)}`);
+            }
+        }
+    }
+}
+
 function listMigrationFiles(dir = MIGRATIONS_DIR) {
     if (!fs.existsSync(dir)) return [];
     return fs.readdirSync(dir).filter(f => /^\d{3}_.+\.sql$/.test(f)).sort();
@@ -74,15 +135,7 @@ async function runMigrations(config, options = {}) {
             log(`[Migration] Đang áp dụng ${file}...`);
             // Chạy từng câu: lần trước dừng giữa chừng thì các câu đã xong được bỏ qua
             for (const stmt of splitStatements(sql)) {
-                try {
-                    await conn.query(stmt);
-                } catch (err) {
-                    if (!ALREADY_APPLIED_CODES.has(err.code)) {
-                        err.message = `${file}: ${err.message}`;
-                        throw err;
-                    }
-                    log(`[Migration]   bỏ qua (đã có): ${stmt.split('\n')[0].slice(0, 80)}`);
-                }
+                await runStatement(conn, stmt, file, log);
             }
             await conn.query('INSERT INTO schema_migrations (name) VALUES (?)', [file]);
             applied.push(file);
@@ -97,7 +150,7 @@ async function runMigrations(config, options = {}) {
     return applied;
 }
 
-module.exports = { runMigrations, listMigrationFiles, splitStatements, MIGRATIONS_DIR };
+module.exports = { runMigrations, listMigrationFiles, splitStatements, splitAlterClauses, MIGRATIONS_DIR };
 
 if (require.main === module) {
     try { process.loadEnvFile(path.join(__dirname, '..', '..', '..', '.env')); } catch (e) { /* không có .env */ }
