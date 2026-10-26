@@ -185,9 +185,97 @@ Tài liệu: https://developer.dji.com/doc/cloud-api-tutorial/en/api-reference/d
 - [ ] Đổi pixel → tọa độ mặt đất (dùng RTK + gimbal + FOV), gắn đúng tấm pin / mối nối, cập nhật trạng thái tấm.
 - [ ] Ngưỡng cảnh báo lấy từ cấu hình (bỏ 65 °C cứng trong `ai_bridge.js`).
 
-### Để sau (chủ dự án chưa cần)
-Phân quyền & tài khoản (nhóm I, gồm bỏ mật khẩu chung `admin123` trong `auth.js`), báo cáo Word/PDF, thống kê,
-xu hướng nhiệt, web điện thoại (#11, #33, #34), API mở, bảo mật HTTPS, kiểm thử tải.
+### Giai đoạn F – Phiếu kiểm tra & dữ liệu nhiệm vụ (~4 ngày) – hạng mục #20, #21, #24, #25
+- [ ] Phiếu pin: chọn khu / chuỗi cụ thể (bảng `ticket_details`), tổ công tác (người), thời gian kế hoạch / thực tế, hồ sơ chụp, tuyến bay.
+- [ ] Phiếu DCL: chọn ngăn lộ / DCL / mối nối, tổ công tác, phạm vi.
+- [ ] Màn chi tiết phiếu: ảnh theo thời gian thực, trạng thái nhận ảnh, ảnh trùng (sha256) / lỗi / đến muộn (#24).
+- [ ] Nhiều lượt bay cho 1 phiếu (#25): danh sách chuyến bay của phiếu, phạm vi đã phủ / bay bổ sung.
+- Tiêu chí xong: tạo phiếu → bay 2 lượt → ảnh và lỗi của cả 2 lượt nằm đúng phiếu.
+
+### Giai đoạn G – Cảnh báo, dashboard, xu hướng nhiệt (~6 ngày) – hạng mục #28–32, #5 (phần ngưỡng)
+- [ ] Bảng cấu hình ngưỡng (theo loại tài sản, theo DCL/mối nối, ΔT pin) thay giá trị cứng 65 °C; nút "Lưu cấu hình" ghi thật.
+- [ ] Cảnh báo: sinh từ kết quả AI + ngưỡng nhiệt; danh sách, đánh dấu đã xử lý, lịch sử (#29); thông báo realtime.
+- [ ] Danh sách DCL đã kiểm tra + nhiệt độ cao nhất + vượt ngưỡng theo phiếu (#28).
+- [ ] Dashboard Tổng quan & Báo cáo dùng số thật (bỏ biểu đồ và KPI viết tay) (#30).
+- [ ] Lịch sử nhiệt theo từng mối nối / chu kỳ bay (bảng `temperature_history`) (#31).
+- [ ] Xu hướng tăng nhiệt + cảnh báo sớm trước ngưỡng (tốc độ tăng °C/chu kỳ, dự báo chạm ngưỡng) (#32).
+- Tiêu chí xong: 2 chu kỳ bay DCL → biểu đồ nhiệt theo mối nối, cảnh báo sớm khi tăng nhanh.
+
+### Giai đoạn E – Tài khoản, phân quyền, cấu hình (~6 ngày) – hạng mục #1–5, #39 (phần quyền)
+- [ ] Màn đăng nhập / đăng xuất / thông tin tài khoản trên dashboard (#1); bỏ mật khẩu chung `admin123`, sửa hash mẫu.
+- [ ] Đổi mật khẩu, quên mật khẩu qua email (#2).
+- [ ] Quản lý đơn vị (bảng `units`) và người dùng: thêm / sửa / khóa / khôi phục (#3).
+- [ ] Vai trò + quyền chức năng + phạm vi dữ liệu theo nhà máy / đơn vị; middleware JWT cho mọi API (#4, #39).
+- [ ] Danh mục chung (loại lỗi, tổ công tác...), cấu hình lưu ảnh (thời gian giữ, dung lượng) (#5).
+- Tiêu chí xong: tài khoản vận hành không sửa được tài sản; API không token → 401.
+
+### Giai đoạn H – Web điện thoại, báo cáo, API mở (~7 ngày) – hạng mục #11, #33–37
+- [ ] Trang điện thoại `/m`: bản đồ, ẩn/hiện lớp, định vị người dùng, chỉ hướng + khoảng cách tới tấm pin / DCL (#11).
+- [ ] Phiếu pin / DCL trên điện thoại: tạo phiếu, tải ảnh chụp tay, xem kết quả AI / nhiệt độ (#33, #34).
+- [ ] Báo cáo từng phiếu ra Word và PDF (ảnh, vị trí, kết quả, chữ ký) (#35).
+- [ ] Thống kê lỗi theo khu pin, DCL vượt ngưỡng, theo kỳ (#36).
+- [ ] API mở có khóa truy cập + tài liệu OpenAPI, đồng bộ hai chiều với hệ thống bên thứ ba (PMIS...) (#37) – cần chốt bên thứ ba.
+
+### Giai đoạn I – Triển khai, bảo mật, vận hành (~5 ngày + thời gian hiện trường) – hạng mục #38–42
+- [ ] Gói triển khai tại nhà máy: Docker compose đủ dịch vụ + container AI Vision; sao lưu MySQL & ảnh (#38).
+- [ ] HTTPS, mã hóa mật khẩu/bí mật, nhật ký truy cập, CORS giới hạn, giới hạn tần suất (#39).
+- [ ] Chế độ offline: bản đồ nền offline (đã có), hàng đợi ảnh khi mất mạng, đồng bộ lại khi có kết nối (#40).
+- [ ] Kiểm thử Chrome / Edge / Firefox / Safari + điện thoại Android / iOS (#41).
+- [ ] Kiểm thử tải nhiều UAV bằng bộ giả lập MQTT (vd. 5–10 máy cùng lúc) (#42).
+
+---
+
+## 5b. BẢNG THEO DÕI 42 HẠNG MỤC (file Excel)
+
+Trạng thái sau commit `cad1cbc`: ✅ xong · 🟡 một phần · ⬜ chưa.
+Thứ tự làm: **A → B → C → D → F → G → E → H → I** (ưu tiên nghiệp vụ drone theo yêu cầu chủ dự án).
+
+| # | Hạng mục | TT | Giai đoạn | Còn thiếu |
+|---|---|---|---|---|
+| 1 | Đăng nhập, đăng xuất, thông tin tài khoản | 🟡 | E | Màn đăng nhập dashboard, đăng xuất, bỏ mật khẩu chung |
+| 2 | Đổi / khôi phục mật khẩu | 🟡 | E | Giao diện, quên mật khẩu qua email |
+| 3 | Quản lý đơn vị và người dùng | ⬜ | E | Toàn bộ |
+| 4 | Phân quyền chức năng & phạm vi dữ liệu | ⬜ | E | Toàn bộ |
+| 5 | Danh mục chung & cấu hình hệ thống | 🟡 | E, G | Bản đồ nền ✅; ngưỡng cảnh báo, danh mục, cấu hình lưu ảnh |
+| 6 | Nhập & hiển thị bản đồ phân giải cao | ✅ | B | Quy trình quét 2D → DJI Terra; MBTiles (tùy chọn) |
+| 7 | Quản lý khu vực, chuỗi, tấm pin | ✅ | – | (Sau) tự nhận vị trí tấm từ bản đồ trực ảnh |
+| 8 | Tìm kiếm khu, chuỗi, tấm pin | ✅ | – | – |
+| 9 | Bản đồ trạm, ngăn lộ, DCL, mối nối | ✅ | – | – |
+| 10 | Hiển thị & tra cứu bất thường trên bản đồ | 🟡 | D | Lớp đã có, chờ dữ liệu AI gắn tài sản |
+| 11 | Bản đồ & chỉ đường trên điện thoại | ⬜ | H | Toàn bộ |
+| 12 | Quản lý danh sách UAV | 🟡 | C | Đa máy bay, OFFLINE, bỏ SN gán cứng |
+| 13 | Kết nối UAV / tay điều khiển | 🟡 | C | Bay thử với RTK, phiên đăng nhập máy bay ↔ phiếu |
+| 14 | Thiết lập đường bay pin & DCL | 🟡 | A | Sinh tuyến theo hồ sơ chụp (lưới / điểm) |
+| 15 | Quản lý đường bay & danh sách DCL trên tuyến | ⬜ | B | Thư viện tuyến trong MySQL, gắn tài sản |
+| 16 | Đồng bộ đường bay UAV ↔ server | 🟡 | B | Pilot 2 chỉ thấy tuyến của phiếu |
+| 17 | Giám sát trạng thái UAV & nhật ký bay | 🟡 | C | Chuyến bay, lịch sử, xem lại vết |
+| 18 | Vị trí UAV trên bản đồ theo phiếu | 🟡 | C | Gắn vị trí với phiếu đang bay |
+| 19 | Livestream trong phiếu | 🟡 | C | Kênh theo phiếu, xem trong màn phiếu |
+| 20 | Phiếu kiểm tra pin | 🟡 | F | Chọn khu/chuỗi, tổ công tác, thời gian |
+| 21 | Phiếu kiểm tra DCL | 🟡 | F | Chọn ngăn lộ/DCL, tổ công tác |
+| 22 | Chọn phiếu nhận ảnh trên phần mềm điều khiển | 🟡 | A | Pilot chọn phiếu ✅; ảnh chưa gắn phiếu |
+| 23 | Tự đồng bộ ảnh RGB & nhiệt về server | 🟡 | A | Đọc metadata thật, nhập thẻ nhớ |
+| 24 | Hiển thị ảnh, trạng thái nhận, đối soát | 🟡 | A, F | Kiểm tra đủ ảnh, ảnh trùng / lỗi / muộn |
+| 25 | Liên kết nhiều lượt bay với 1 nhiệm vụ | ⬜ | F | Toàn bộ |
+| 26 | Tự chuyển ảnh sang AI & nhận kết quả | 🟡 | D | Gửi job tự động, webhook v2 |
+| 27 | Phân loại lỗi pin & vị trí tài sản lỗi | 🟡 | D | Pixel → tọa độ → tấm pin |
+| 28 | Thiết bị đã kiểm tra & nhiệt độ cao nhất | 🟡 | G | Danh sách DCL theo phiếu |
+| 29 | Cấu hình, phát, lưu cảnh báo | 🟡 | G | Ngưỡng cấu hình được, xử lý cảnh báo |
+| 30 | Dashboard giám sát & lịch sử bất thường | 🟡 | G | Thay số viết tay bằng số thật |
+| 31 | Lịch sử nhiệt theo mối nối & chu kỳ | ⬜ | G | Toàn bộ |
+| 32 | Xu hướng tăng nhiệt & cảnh báo sớm | ⬜ | G | Toàn bộ |
+| 33 | Phiếu pin trên điện thoại | ⬜ | H | Toàn bộ |
+| 34 | Phiếu DCL trên điện thoại | ⬜ | H | Toàn bộ |
+| 35 | Báo cáo Word & PDF | 🟡 | H | Chỉ có in trình duyệt / CSV |
+| 36 | Thống kê lỗi khu pin & DCL | 🟡 | H | API có, giao diện số thật |
+| 37 | API mở & đồng bộ hai chiều | 🟡 | H | Khóa API, OpenAPI, chốt bên thứ ba |
+| 38 | Triển khai phần mềm + AI tại nhà máy | 🟡 | I | Container AI, sao lưu |
+| 39 | Mã hóa dữ liệu & kiểm soát truy cập | ⬜ | E, I | Quyền, HTTPS, nhật ký |
+| 40 | Offline & đồng bộ khi có mạng | 🟡 | I | Hàng đợi ảnh, đồng bộ lại |
+| 41 | Kiểm thử nhiều trình duyệt & thiết bị | ⬜ | I | Toàn bộ (đã có 23 test API) |
+| 42 | Kiểm thử mở rộng số UAV | ⬜ | I | Toàn bộ |
+
+Tổng ước lượng còn lại: ~45–55 ngày công lập trình (chưa tính bay thử hiện trường và chờ đội Vision).
 
 ---
 
@@ -228,3 +316,4 @@ xu hướng nhiệt, web điện thoại (#11, #33, #34), API mở, bảo mật 
 |---|---|
 | `a9d3c6a` | Đưa mã nguồn lên GitHub (đã tách khóa DJI, mật khẩu ra `.env`) |
 | `cad1cbc` | Giai đoạn 0 + 1: dữ liệu thật, migration, bản đồ & tài sản, 23 test |
+| `cc4bf73` | Tài liệu kế hoạch & bàn giao |
