@@ -353,3 +353,4 @@ Tổng ước lượng còn lại: ~45–55 ngày công lập trình (chưa tín
 | `6d509af`, `64155db` | A4 kiểm tra đủ ảnh + bay bù |
 | `02c35ae`, `6ea9550` | A5 xuất bộ ảnh Vision + làm sạch ảnh cũ |
 | `016972c`, `ab2f92a`, `589fc03`, `b4aaec1` + commit B5 | Giai đoạn B: thư viện đường bay, gán phiếu, API Pilot 2, vẽ tay, quét 2D |
+| `456354b`, `384ff56`, `8c74f25`, `275a3ce`, `bf85026` | Giai đoạn C: chuyến bay, lịch sử + phát lại, đội bay realtime, live theo phiếu, gỡ số giả |
