@@ -378,3 +378,5 @@ Tài khoản thật, session SQL/thu hồi/WS filter, đơn vị và phạm vi p
 Đã clone riêng nhánh triển khai; cấu hình MySQL root/DB dji_uav_management ngoài git, sao lưu trước khi áp dụng 13 migration. Bổ sung setup:local chỉ init DB rỗng, bảo toàn dữ liệu DB hiện hữu; kiểm thử CLI admin thật và từ chối ghi đè tài khoản. 77 test đạt, 0 skip. Xem docs/CHAY_LOCAL.md; không đưa mật khẩu người dùng vào tài liệu/git.
 
 Kiểm tra local thực phát hiện DB cũ thiếu file_path_local dù schema mới có: đã thêm migration014 additive và test nâng cấp giữ dữ liệu. Dashboard chuyển Leaflet/Geoman/flv/Excel sang asset local có lockfile/license/manifest, không lỗi L undefined khi CDN bị chặn. Health chỉ báo sẵn sàng sau khởi tạo DB/thư viện ảnh.
+
+Bản clone local cuối cùng đã qua Chromium với API thật: login/change-password/dashboard/map/accounts/mobile/logout, 7 API nghiệp vụ trả200/code0, không lỗi JS/CDN. Server chạy8081/MQTT1884 để người dùng kiểm tra trong cloud; hướng dẫn clone về máy cá nhân có trong CHAY_LOCAL.md.

@@ -1,7 +1,7 @@
 /* Session trình duyệt dùng cookie HttpOnly; không lưu token vào localStorage. */
 (()=>{
  localStorage.removeItem('uav_token');
- const style=document.createElement('style');style.textContent='#account-overlay{position:fixed;inset:0;z-index:100000;background:#0d1625;display:grid;place-items:center;color:#eaf2ff}#account-overlay form{width:min(400px,90vw);display:grid;gap:12px}#account-overlay input,#account-overlay button{padding:12px;font:inherit}#account-tools{position:fixed;bottom:8px;right:8px;z-index:9000;background:#182b40;color:white;padding:8px;border-radius:8px}#account-tools button,#account-tools a{margin:4px;color:inherit}';document.head.append(style);
+ const style=document.createElement('style');style.textContent='#account-overlay{position:fixed;inset:0;z-index:100000;background:#0d1625;display:grid;place-items:center;color:#eaf2ff}#account-overlay form{width:min(400px,90vw);display:grid;gap:12px}#account-overlay input,#account-overlay button{padding:12px;font:inherit}#account-tools{position:fixed;bottom:8px;right:8px;z-index:9000;background:#182b40;color:white;padding:8px;border-radius:8px}#account-tools button,#account-tools a{margin:4px;color:inherit}#account-tools button{background:#245473;border:1px solid #6d90a9;border-radius:5px;padding:6px 9px;cursor:pointer;font:inherit}';document.head.append(style);
  async function api(path,body){const r=await fetch('/api/auth/'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const j=await r.json();if(!r.ok)throw Error(j.message||'Không thể thực hiện');return j.data;}
  const overlay=document.createElement('div');overlay.id='account-overlay';document.body.append(overlay);
  function form(mode,user){
