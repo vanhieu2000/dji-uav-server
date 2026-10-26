@@ -5,11 +5,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test --test-concurrency=1 test/unit.test.js test/api.test.js test/security.test.js test/production.test.js",
+    "test": "node --test --test-concurrency=1 test/unit.test.js test/api.test.js test/security.test.js test/production.test.js test/setup.test.js",
     "migrate": "node src/db/migrate.js",
     "test:browser": "node test/browser-monitoring.cjs",
     "admin:create": "node scripts/create-admin.js",
-    "test:mobile": "node test/browser-mobile.cjs"
+    "test:mobile": "node test/browser-mobile.cjs",
+    "setup:local": "node scripts/setup-local.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",

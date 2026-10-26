@@ -6,12 +6,14 @@ Node.js 24 / MySQL 8, dashboard `/dashboard/`, hiện trường `/m/`, cổng Pi
 
 ## Chạy local
 
-Dùng MySQL đã cấu hình; `.env.example` → `.env` và điền tài khoản DB riêng. Với DB mới, khởi tạo schema một lần; `mysql_init/01_schema.sql` có DROP TABLE, **không chạy lại trên DB đang dùng**. Các lần nâng cấp chỉ chạy migration additive. Không dùng seed dữ liệu nhà máy mẫu trong production.
+Hướng dẫn từng bước clone/điền MySQL/khởi tạo an toàn/đăng nhập trên Windows, macOS, Linux: [CHAY_LOCAL.md](docs/CHAY_LOCAL.md).
+
+Dùng MySQL đã cấu hình; `.env.example` → `.env` và điền tài khoản DB riêng. `setup:local` khởi tạo khi DB rỗng; DB đang có dữ liệu chỉ chạy migration additive. `mysql_init/01_schema.sql` có DROP TABLE, **không nhập lại trên DB đang dùng**. Không dùng seed dữ liệu nhà máy mẫu trong production.
 
 ```sh
 cd backend
 npm ci
-npm run migrate
+npm run setup:local
 npm run admin:create
 npm start
 ```
@@ -34,3 +36,5 @@ node scripts/verify-live.cjs # ffmpeg + NMS trên cổng loopback ngẫu nhiên,
 Kết quả tại 26/10/2026: 76 Node/MySQL test đạt, 0 skip; Chromium dashboard/mobile đạt; NMS+ffmpeg thật và backup mã hóa/restore vào DB test có đối chiếu ảnh SHA256 đạt. 10 UAV fixture gửi tổng 400 OSD vào server thật, đúng từng phiếu. Đây là baseline nhiều máy, chưa đo giới hạn tải tối đa.
 
 Chưa thể nghiệm thu toàn bộ hệ thống: cần thiết bị M3T/RTK/RC, license/SDK và calibration thật, endpoint/model Vision, SMTP/PMIS, domain/cert nhà máy. Registry/binary MinIO và tải Firefox bị mạng môi trường từ chối; full Docker/MinIO STS và Firefox/WebKit/Edge/Android/iOS thật chưa được xác nhận. Không có lệnh bay được gửi khi kiểm thử.
+
+Kiểm tra clone sạch ngày 27/10/2026: bổ sung `setup:local` và sửa CLI tạo admin mở kết nối DB; 77 test đạt, 0 skip. Hướng dẫn local ở docs/CHAY_LOCAL.md.

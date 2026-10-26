@@ -154,6 +154,7 @@ module.exports = { runMigrations, listMigrationFiles, splitStatements, splitAlte
 
 if (require.main === module) {
     try { process.loadEnvFile(path.join(__dirname, '..', '..', '..', '.env')); } catch (e) { /* không có .env */ }
+    require('../services/runtimeEnv').load();
     const { dbConfig } = require('../config/db');
     runMigrations(dbConfig)
         .then(list => {

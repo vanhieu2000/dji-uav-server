@@ -373,3 +373,6 @@ Tài khoản thật, session SQL/thu hồi/WS filter, đơn vị và phạm vi p
 
 ### I – 26/10/2026
 76 kiểm thử Node/MySQL đạt, 0 skip; Chromium dashboard/mobile đạt; 10 UAV fixture/400 OSD vào server thật. NMS+ffmpeg có grant đúng mục đích/phiếu và thu hồi. Backup AES-GCM + SQL restore DB test riêng và SHA256 ảnh đạt. Compose profiles validate; audit npm 0. Không mở Docker stack production vì registry/binary MinIO bị từ chối; tải Firefox cũng bị403, không tính CI matrix là đã đạt. Các việc cần Vision/RC/RTK/calibration/SMTP/PMIS/domain/CA giữ 🟡; không có lệnh bay gửi trong test.
+
+### Chạy local – 27/10/2026
+Đã clone riêng nhánh triển khai; cấu hình MySQL root/DB dji_uav_management ngoài git, sao lưu trước khi áp dụng 13 migration. Bổ sung setup:local chỉ init DB rỗng, bảo toàn dữ liệu DB hiện hữu; kiểm thử CLI admin thật và từ chối ghi đè tài khoản. 77 test đạt, 0 skip. Xem docs/CHAY_LOCAL.md; không đưa mật khẩu người dùng vào tài liệu/git.
