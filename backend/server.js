@@ -38,6 +38,7 @@ const basemapsRouter = require('./src/routes/basemaps');
 const { listActiveTickets, findTicketById } = require('./src/services/ticketService');
 const mediaIngest = require('./src/services/mediaIngest');
 const mediaUploadRouter = require('./src/routes/mediaUpload');
+const routeLibrary = require('./src/services/routeLibrary');
 const solarRouter = require('./src/routes/solar');
 const substationRouter = require('./src/routes/substation');
 const ticketsRouter = require('./src/routes/tickets');
@@ -858,30 +859,34 @@ app.post('/api/pilot/log', (req, res) => {
 
 // Phiếu kiểm tra: xem src/routes/tickets.js (lưu trong MySQL, /api/tickets)
 
-// 4. Danh sách Đường bay KMZ
-app.get('/api/routes', (req, res) => {
-  res.json(memoryStore.routes);
+// 4. Danh sách Đường bay KMZ (thư viện trong MySQL; chi tiết: /api/flight-plans)
+app.get('/api/routes', async (req, res) => {
+  try {
+    const rows = await query('SELECT route_id, route_uuid, route_name, route_kind, kmz_file_name, waypoint_count, altitude_m, created_at FROM flight_routes ORDER BY route_id DESC');
+    res.json(rows.map(r => ({ ...r, file_name: r.kmz_file_name, file_url: `/uploads/waylines/${r.kmz_file_name}` })));
+  } catch (err) {
+    sendDbError(res, err);
+  }
 });
 
-// 5. Nạp thủ công file đường bay KMZ
-app.post('/api/routes/upload', uploadWayline.single('kmz_file'), (req, res) => {
+// 5. Nạp thủ công file đường bay KMZ (vẽ bằng DJI Pilot 2 / phần mềm khác) vào thư viện
+app.post('/api/routes/upload', uploadWayline.single('kmz_file'), async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ code: -1, message: 'Chưa chọn file KMZ!' });
+    return res.status(400).json({ code: 400, message: 'Chưa chọn file KMZ!' });
   }
-
-  const { route_name, route_type } = req.body;
-  const newRoute = {
-    route_id: memoryStore.routes.length + 1,
-    route_name: route_name || req.file.originalname,
-    route_type: route_type || 'SOLAR_FARM_MAPPING',
-    file_name: req.file.filename,
-    file_url: `/uploads/waylines/${req.file.filename}`,
-    uploaded_at: new Date()
-  };
-
-  memoryStore.routes.push(newRoute);
-  console.log(`[Wayline Uploaded] Đã nạp file đường bay: ${newRoute.route_name}`);
-  res.json({ code: 0, message: 'Nạp đường bay KMZ thành công', data: newRoute });
+  if (!/\.kmz$/i.test(req.file.originalname)) {
+    fs.rm(req.file.path, { force: true }, () => {});
+    return res.status(400).json({ code: 400, message: 'Chỉ nhận file .kmz' });
+  }
+  try {
+    const name = String((req.body && req.body.route_name) || '').trim().slice(0, 150) || routeLibrary.nameFromFile(req.file.originalname);
+    const route = await routeLibrary.addKmz({ fileName: req.file.filename, routeName: name, kind: 'MANUAL', description: 'Tải lên thủ công' });
+    console.log(`[Wayline Uploaded] Đã nạp file đường bay: ${route.route_name}`);
+    res.json({ code: 0, message: 'Nạp đường bay KMZ thành công', data: route });
+  } catch (err) {
+    fs.rm(req.file.path, { force: true }, () => {});
+    sendDbError(res, err);
+  }
 });
 
 // 5.1 Tự động tạo và đóng gói file KMZ chuẩn DJI Enterprise WPML v1.0
@@ -2005,6 +2010,8 @@ async function initDatabase() {
     await runMigrations(dbConfig);
     dbInitDone = true;
     // Làm sạch ảnh nhận bằng code cũ (giá trị gán cứng) – chỉ chạm các dòng chưa có sha256
+    const imported = await routeLibrary.importDiskKmz();
+    if (imported) console.log(`[Đường bay] Đã đưa ${imported} file KMZ cũ trong uploads/waylines vào thư viện.`);
     const legacy = await mediaIngest.backfillLegacy();
     if (legacy.fixed || legacy.missing) {
       console.log(`[Ảnh] Làm sạch dữ liệu cũ: đọc lại ${legacy.fixed} ảnh từ file, xóa giá trị giả của ${legacy.missing} ảnh mất file.`);

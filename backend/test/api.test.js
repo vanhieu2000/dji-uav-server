@@ -566,6 +566,22 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal(again.fixed, 0);
     });
 
+    await t.test('thư viện đường bay: nhập KMZ cũ từ thư mục, tìm theo mã cố định, không đoán tuyến', async () => {
+        const lib = require('../src/services/routeLibrary');
+        fs.mkdirSync(lib.WAYLINE_DIR, { recursive: true });
+        fs.writeFileSync(path.join(lib.WAYLINE_DIR, 'DJI_Mission_1700000000_Tuyen_cu_A.kmz'), new AdmZip().toBuffer());
+        assert.equal(await lib.importDiskKmz(), 1);
+        assert.equal(await lib.importDiskKmz(), 0); // chạy lại không nhân đôi
+        const [row] = await db.query("SELECT * FROM flight_routes WHERE kmz_file_name = 'DJI_Mission_1700000000_Tuyen_cu_A.kmz'");
+        assert.equal(row.route_name, 'Tuyen cu A');
+        assert.equal(row.route_kind, 'MANUAL');
+        assert.match(row.route_uuid, /^[0-9a-f-]{36}$/);
+        assert.equal((await lib.findRoute(row.route_uuid)).route_id, row.route_id);
+        assert.equal((await lib.findRoute(String(row.route_id))).route_uuid, row.route_uuid);
+        assert.equal(await lib.findRoute('khong-ton-tai'), null);
+        assert.equal(await lib.findRoute(''), null);
+    });
+
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
         await db.closePool();
         const r = await api('GET', '/api/solar/areas');
