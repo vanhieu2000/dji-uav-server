@@ -229,11 +229,11 @@ Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
 - Tiêu chí xong: tài khoản vận hành không sửa được tài sản; API không token → 401.
 
 ### Giai đoạn H – Web điện thoại, báo cáo, API mở (~7 ngày) – hạng mục #11, #33–37
-- [ ] Trang điện thoại `/m`: bản đồ, ẩn/hiện lớp, định vị người dùng, chỉ hướng + khoảng cách tới tấm pin / DCL (#11).
-- [ ] Phiếu pin / DCL trên điện thoại: tạo phiếu, tải ảnh chụp tay, xem kết quả AI / nhiệt độ (#33, #34).
-- [ ] Báo cáo từng phiếu ra Word và PDF (ảnh, vị trí, kết quả, chữ ký) (#35).
-- [ ] Thống kê lỗi theo khu pin, DCL vượt ngưỡng, theo kỳ (#36).
-- [ ] API mở có khóa truy cập + tài liệu OpenAPI, đồng bộ hai chiều với hệ thống bên thứ ba (PMIS...) (#37) – cần chốt bên thứ ba.
+- [x] Trang điện thoại `/m`: bản đồ, ẩn/hiện lớp, định vị người dùng, chỉ hướng + khoảng cách tới tấm pin / DCL (#11).
+- [x] Phiếu pin / DCL trên điện thoại: tạo phiếu, tải ảnh chụp tay, xem kết quả AI / nhiệt độ (#33, #34).
+- [x] Báo cáo từng phiếu ra Word và PDF (ảnh, vị trí, kết quả, chữ ký) (#35).
+- [x] Thống kê lỗi theo khu pin, DCL vượt ngưỡng, theo kỳ (#36).
+- [ ] API mở có khóa truy cập + tài liệu OpenAPI, đồng bộ hai chiều với hệ thống bên thứ ba (PMIS...) (#37) – API key/OpenAPI và sync chung đã có; adapter PMIS cần đặc tả bên thứ ba.
 
 ### Giai đoạn I – Triển khai, bảo mật, vận hành (~5 ngày + thời gian hiện trường) – hạng mục #38–42
 - [ ] Gói triển khai tại nhà máy: Docker compose đủ dịch vụ + container AI Vision; sao lưu MySQL & ảnh (#38).
@@ -365,3 +365,6 @@ Xem docs/TEMPERATURE_ALERTS.md. 61 test Node/MySQL đã đạt trước hoàn th
 
 ### E – 26/10/2026
 Tài khoản thật, session SQL/thu hồi/WS filter, đơn vị và phạm vi phiếu/UAV, API workspace fail-closed, quản trị/UI, email reset token hash. 69 test đạt, Chromium smoke đạt. Xem docs/ACCOUNTS_AND_SCOPES.md; SMTP thực cần cấu hình và thử riêng.
+
+### H – 26/10/2026
+/m, báo cáo DOCX/PDF và API key scoped/sync external-id/revision đã có; adapter PMIS giữ chưa nghiệm thu. 71 test Node/MySQL đạt; mobile Chromium kiểm tra queue ảnh lỗi/reload/retry/đúng owner. Xem docs/MOBILE_REPORTS_API.md.

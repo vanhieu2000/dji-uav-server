@@ -133,6 +133,8 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 if(process.env.TRUST_PROXY==='1')app.set('trust proxy',1);
 app.use(require('./src/middleware/accessControl').audit);
 app.use(require('./src/middleware/accessControl').accessControl);
+app.use('/api/open/v1',require('./src/routes/openApi'));
+app.get('/openapi.json',(req,res)=>res.sendFile(path.join(__dirname,'public','openapi.json')));
 app.use('/api/workspace',require('./src/routes/workspace'));
 const administrationRouter=require('./src/routes/administration');
 administrationRouter.setOnUserChanged(id=>{for(const c of wss.clients)if(c.user?.user_id===id)c.close(1008,'Quyền tài khoản đã thay đổi');});
@@ -228,6 +230,7 @@ app.delete('/api/mqtt/logs', (req, res) => {
 
 // Thư mục static cho Pilot 2 và Dashboard
 app.use('/pilot-login', express.static(path.join(__dirname, 'public', 'pilot-login')));
+app.use('/m',express.static(path.join(__dirname,'public','mobile')));
 app.use('/dashboard', express.static(path.join(__dirname, 'public', 'dashboard')));
 // Bản đồ nền nhà máy (thư mục có thể đổi bằng BASEMAP_TILES_DIR)
 app.use('/tiles/basemaps', express.static(basemapsRouter.TILES_ROOT, { fallthrough: false }));

@@ -75,4 +75,16 @@ router.put('/settings',asyncHandler(async(req,res)=>{
     await withTransaction(async conn=>{for(const [k,x]of entries)await conn.execute('INSERT INTO system_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',[k,String(x)]);});ok(res,{});
 }));
 router.get('/audit',asyncHandler(async(req,res)=>ok(res,await query('SELECT * FROM access_audit ORDER BY audit_id DESC LIMIT 500'))));
+router.get('/api-keys',asyncHandler(async(req,res)=>ok(res,await query('SELECT key_id,user_id,label,expires_at,revoked_at,created_at,last_used_at,permissions_json,plant_ids_json FROM api_keys ORDER BY created_at DESC'))));
+router.post('/api-keys',asyncHandler(async(req,res)=>{
+ const b=req.body,uid=v.parseId(b.user_id,'người dùng'),[u]=await query('SELECT * FROM users WHERE user_id=?',[uid]);
+ if(!u||u.status!=='ACTIVE'||u.must_change_password||u.role==='ADMIN')throw new v.ValidationError('API key cần tài khoản dịch vụ không ADMIN, đã đổi mật khẩu và đang hoạt động');
+ const ps=b.permissions,ids=b.plant_ids;if(!Array.isArray(ps)||!ps.length||ps.some(p=>!PERMISSIONS.includes(p))||!Array.isArray(ids)||!ids.length)throw new v.ValidationError('Cần quyền và phạm vi nhà máy cụ thể');
+ const allowed=await query('SELECT permission FROM role_permissions WHERE role=?',[u.role]),plants=await query('SELECT plant_id FROM user_plant_scopes WHERE user_id=?',[uid]);
+ if(ps.some(p=>!allowed.some(x=>x.permission===p))||ids.some(id=>!plants.some(x=>x.plant_id===id)))throw new v.ValidationError('API key không được vượt quyền tài khoản');
+ const days=v.optionalInt(b.expires_days,'số ngày',{min:1,max:365})||30,crypto=require('crypto'),token='uavk_'+crypto.randomBytes(32).toString('hex'),id=crypto.randomUUID();
+ await query('INSERT INTO api_keys (key_id,user_id,label,key_hash,auth_version,permissions_json,plant_ids_json,expires_at) VALUES (?,?,?,?,?,?,?,DATE_ADD(NOW(),INTERVAL ? DAY))',[id,uid,v.requiredString(b.label,'tên khóa',100),require('../services/apiKeys').sha(token),u.auth_version,JSON.stringify([...new Set(ps)]),JSON.stringify([...new Set(ids)]),days]);
+ res.set('Cache-Control','no-store');ok(res,{key_id:id,token,message:'Chỉ hiện khóa một lần; lưu trong kho bí mật của hệ thống tích hợp'});
+}));
+router.delete('/api-keys/:id',asyncHandler(async(req,res)=>{await query('UPDATE api_keys SET revoked_at=NOW() WHERE key_id=?',[v.requiredString(req.params.id,'mã khóa',36)]);ok(res,{});}));
 module.exports=router;

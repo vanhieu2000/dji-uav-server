@@ -5,7 +5,7 @@
  const options=(rows,id,label)=>'<option value="">Chưa gán</option>'+rows.map(r=>`<option value="${esc(r[id])}">${esc(r[label])}</option>`).join('');
  async function load(){
   const [us,units,ctx,ps,ds,cat,settings]=await Promise.all(['/api/admin/users','/api/admin/units','/api/workspace/context','/api/admin/permissions','/api/workspace/devices','/api/admin/catalog','/api/admin/settings'].map(p=>api(p)));
-  users=us;permissions=ps;$('#users').innerHTML=us.map(u=>`<tr><td>${esc(u.username)}</td><td>${esc(u.full_name)}</td><td>${esc(u.role)}</td><td>${esc(units.find(x=>x.unit_id===u.unit_id)?.unit_name)}</td><td>${esc(u.status)}</td><td><button data-user="${u.user_id}">Sửa</button></td></tr>`).join('');
+  users=us;permissions=ps;$('#api-key [name=user_id]').innerHTML=options(us.filter(u=>u.role!=='ADMIN'&&u.status==='ACTIVE'&&!u.must_change_password),'user_id','username');await keyList();$('#users').innerHTML=us.map(u=>`<tr><td>${esc(u.username)}</td><td>${esc(u.full_name)}</td><td>${esc(u.role)}</td><td>${esc(units.find(x=>x.unit_id===u.unit_id)?.unit_name)}</td><td>${esc(u.status)}</td><td><button data-user="${u.user_id}">Sửa</button></td></tr>`).join('');
   $('#units-list').textContent=units.map(x=>`${x.unit_id}: ${x.unit_code} — ${x.unit_name}`).join(' · ');
   document.querySelectorAll('[name=unit_id]').forEach(el=>el.innerHTML=options(units,'unit_id','unit_name'));
   document.querySelectorAll('[name=plant_id],[name=plant_ids]').forEach(el=>el.innerHTML=options(ctx.plants,'plant_id','plant_name'));
@@ -25,5 +25,8 @@
  $('#catalog').onsubmit=e=>{e.preventDefault();const f=e.target;run(async()=>{await api('/api/admin/catalog',{catalog_type:f.type.value,code:f.code.value,label:f.label.value,enabled:f.enabled.checked});await load();});};
  $('#settings').onsubmit=e=>{e.preventDefault();const b={};for(const x of e.target.querySelectorAll('input'))b[x.name]=Number(x.value);run(async()=>{await api('/api/admin/settings',b,'PUT');$('#message').textContent='Đã lưu cấu hình';});};
  $('#audit').onclick=()=>run(async()=>{$('#audit-list').textContent=(await api('/api/admin/audit')).map(x=>`${x.created_at} | ${x.user_id??'anonymous'} | ${x.method} ${x.path} | ${x.status_code}`).join('\n');});
+ async function keyList(){const rows=await api('/api/admin/api-keys');$('#api-key-list').innerHTML=rows.map(k=>`<p>${esc(k.label)} · user #${k.user_id} · hạn ${esc(k.expires_at)} · ${k.revoked_at?'Đã thu hồi':`<button data-key="${esc(k.key_id)}">Thu hồi</button>`}</p>`).join('');}
+ $('#api-key').onsubmit=e=>{e.preventDefault();const f=e.target;run(async()=>{const d=await api('/api/admin/api-keys',{user_id:Number(f.user_id.value),label:f.label.value,expires_days:Number(f.days.value),plant_ids:f.plants.value.split(',').map(x=>Number(x.trim())),permissions:f.permissions.value.split(',').map(x=>x.trim())});$('#new-api-key').value=d.token;await keyList();});};
+ $('#api-key-list').onclick=e=>{if(e.target.dataset.key)run(async()=>{await api('/api/admin/api-keys/'+e.target.dataset.key,{},'DELETE');await keyList();});};
  run(load);
 })();

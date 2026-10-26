@@ -257,3 +257,7 @@ router.post('/api/media/import', receiveFiles, asyncHandler(async (req, res) => 
 
 module.exports = router;
 module.exports.MEDIA_DIR = MEDIA_DIR;
+// Tái sử dụng bộ nhận ảnh thật cho endpoint đã kiểm tra phạm vi trước khi đọc multipart.
+module.exports.receiveFiles=receiveFiles;
+module.exports.moveIn=moveIn;
+module.exports.ingestSaved=ingestSaved;

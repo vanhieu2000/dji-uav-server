@@ -5,6 +5,7 @@ const PUBLIC_AUTH=new Set(['/api/auth/login','/api/auth/forgot-password','/api/a
 function protectedPath(p){return /^\/(api|wayline|manage|storage|media|dji-media|uploads)(\/|$)/.test(p);}
 function accessControl(req,res,next){
     if(!protectedPath(req.path)||PUBLIC_AUTH.has(req.path)||req.path==='/api/health'||req.path==='/api/vision/results'||/^\/api\/vision\/jobs\/[a-f0-9-]+\/input$/.test(req.path))return next();
+    if(req.path.startsWith('/api/open/v1/'))return require('../services/apiKeys').authenticateApiKey(req,res,next);
     authenticateToken(req,res,()=>{
         const safeAccount=/^\/api\/auth\/(me|logout|change-password)$/.test(req.path);
         if(req.user.must_change_password&&!safeAccount)return res.status(428).json({code:428,message:'Cần đổi mật khẩu trước khi tiếp tục'});

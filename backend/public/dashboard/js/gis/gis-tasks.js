@@ -20,7 +20,7 @@
     crew=d.crew.map(x=>x.user_id);scope=d.scope.map(s=>{const a=scopeOf(s);return a?{type:a[0],id:a[1],label:s.label||'Tài sản đã xóa'}:null;}).filter(s=>s&&s.id);drawScope();
     }
     const p=d.progress;
-    root.querySelector('#task-detail').innerHTML=`<h3>${esc(current.ticket_code)}</h3><p>Bay: ${p.flight_state==='AIRBORNE'?'Đang bay':'Không có lượt đang mở'} · Ảnh: ${({RECONCILED:'Đã đối soát',RECEIVING:'Chờ đối soát',NOT_STARTED:'Chưa nhận ảnh'})[p.sync_state]} · Vision: ${p.vision_ready?'Đạt điều kiện':'Chưa đủ kết quả'}</p>
+    root.querySelector('#task-detail').innerHTML=`<h3>${esc(current.ticket_code)}</h3><p><a href="/api/workspace/tasks/${id}/report.docx">Tải Word</a> · <a href="/api/workspace/tasks/${id}/report.pdf">Tải PDF</a></p><p>Bay: ${p.flight_state==='AIRBORNE'?'Đang bay':'Không có lượt đang mở'} · Ảnh: ${({RECONCILED:'Đã đối soát',RECEIVING:'Chờ đối soát',NOT_STARTED:'Chưa nhận ảnh'})[p.sync_state]} · Vision: ${p.vision_ready?'Đạt điều kiện':'Chưa đủ kết quả'}</p>
       <p>${p.photos.originals} ảnh gốc · ${p.photos.duplicates} lượt tải trùng · ${p.photos.failed_attempts} lỗi tải · ${p.photos.late} ảnh đến muộn · ${p.photos.unassigned_flight} ảnh chưa gắn lượt bay</p>
       <div class="actions">${['ASSIGNED','EXECUTING','COMPLETED','CANCELLED'].map(s=>`<button class="btn sm" data-status="${s}" ${s==='COMPLETED'&&!p.can_complete?'disabled':''}>${label[s]}</button>`).join('')}</div>
       <h4>${p.flights.length} lượt bay của phiếu</h4>${p.flights.map(f=>`<div>Lượt #${f.flight_session_id} · ${esc(f.device_sn)} · ${esc(new Date(f.started_at).toLocaleString('vi-VN'))} · ${esc(f.end_reason||'Đang bay')}</div>`).join('')||'<p>Chưa có chuyến bay.</p>'}

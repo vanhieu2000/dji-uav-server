@@ -1,0 +1,388 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "UAV scoped integration API",
+    "version": "1.0.0",
+    "description": "Khóa Bearer do ADMIN cấp cho tài khoản dịch vụ không ADMIN; một lần hiển thị, lưu SHA256, tối đa 365 ngày. Mã externalId có namespace theo user để luân chuyển khóa không đổi mapping. Đây là giao diện tích hợp chung; chưa có adapter/đặc tả PMIS thực."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/open/v1/context": {
+      "get": {
+        "summary": "Tài khoản và nhà máy được giao",
+        "description": "Quyền assets:read; đồng thời kiểm tra đơn vị và nhà máy của tài khoản dịch vụ.",
+        "security": [
+          {
+            "ApiKeyBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công; JSON {code:0,data:...} hoặc tệp báo cáo"
+          },
+          "400": {
+            "description": "Dữ liệu không hợp lệ"
+          },
+          "401": {
+            "description": "Khóa hết hạn/thu hồi/tài khoản không hoạt động"
+          },
+          "403": {
+            "description": "Ngoài phạm vi hoặc thiếu quyền"
+          },
+          "409": {
+            "description": "Revision xung đột; GET lại trước khi sửa"
+          },
+          "429": {
+            "description": "Vượt 120 yêu cầu/phút"
+          }
+        }
+      }
+    },
+    "/api/open/v1/tasks": {
+      "get": {
+        "summary": "Danh sách phiếu trong phạm vi",
+        "description": "Quyền tasks:read; đồng thời kiểm tra đơn vị và nhà máy của tài khoản dịch vụ.",
+        "security": [
+          {
+            "ApiKeyBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công; JSON {code:0,data:...} hoặc tệp báo cáo"
+          },
+          "400": {
+            "description": "Dữ liệu không hợp lệ"
+          },
+          "401": {
+            "description": "Khóa hết hạn/thu hồi/tài khoản không hoạt động"
+          },
+          "403": {
+            "description": "Ngoài phạm vi hoặc thiếu quyền"
+          },
+          "409": {
+            "description": "Revision xung đột; GET lại trước khi sửa"
+          },
+          "429": {
+            "description": "Vượt 120 yêu cầu/phút"
+          }
+        }
+      }
+    },
+    "/api/open/v1/tasks/{id}": {
+      "get": {
+        "summary": "Phiếu, lượt bay, ảnh và kết quả Vision",
+        "description": "Quyền tasks:read; đồng thời kiểm tra đơn vị và nhà máy của tài khoản dịch vụ.",
+        "security": [
+          {
+            "ApiKeyBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công; JSON {code:0,data:...} hoặc tệp báo cáo"
+          },
+          "400": {
+            "description": "Dữ liệu không hợp lệ"
+          },
+          "401": {
+            "description": "Khóa hết hạn/thu hồi/tài khoản không hoạt động"
+          },
+          "403": {
+            "description": "Ngoài phạm vi hoặc thiếu quyền"
+          },
+          "409": {
+            "description": "Revision xung đột; GET lại trước khi sửa"
+          },
+          "429": {
+            "description": "Vượt 120 yêu cầu/phút"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ]
+      }
+    },
+    "/api/open/v1/tasks/{id}/report.{format}": {
+      "get": {
+        "summary": "Báo cáo có ảnh/vị trí/kết quả và ô ký chưa ký",
+        "description": "Quyền reports:read; đồng thời kiểm tra đơn vị và nhà máy của tài khoản dịch vụ.",
+        "security": [
+          {
+            "ApiKeyBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công; JSON {code:0,data:...} hoặc tệp báo cáo"
+          },
+          "400": {
+            "description": "Dữ liệu không hợp lệ"
+          },
+          "401": {
+            "description": "Khóa hết hạn/thu hồi/tài khoản không hoạt động"
+          },
+          "403": {
+            "description": "Ngoài phạm vi hoặc thiếu quyền"
+          },
+          "409": {
+            "description": "Revision xung đột; GET lại trước khi sửa"
+          },
+          "429": {
+            "description": "Vượt 120 yêu cầu/phút"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "format",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "docx",
+                "pdf"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/api/open/v1/statistics": {
+      "get": {
+        "summary": "Thống kê lỗi/nhiệt theo kỳ",
+        "description": "Quyền reports:read; đồng thời kiểm tra đơn vị và nhà máy của tài khoản dịch vụ.",
+        "security": [
+          {
+            "ApiKeyBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công; JSON {code:0,data:...} hoặc tệp báo cáo"
+          },
+          "400": {
+            "description": "Dữ liệu không hợp lệ"
+          },
+          "401": {
+            "description": "Khóa hết hạn/thu hồi/tài khoản không hoạt động"
+          },
+          "403": {
+            "description": "Ngoài phạm vi hoặc thiếu quyền"
+          },
+          "409": {
+            "description": "Revision xung đột; GET lại trước khi sửa"
+          },
+          "429": {
+            "description": "Vượt 120 yêu cầu/phút"
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3660,
+              "default": 30
+            }
+          }
+        ]
+      }
+    },
+    "/api/open/v1/external-tasks/{externalId}": {
+      "get": {
+        "summary": "Đọc phiếu theo mã hệ thống tích hợp",
+        "description": "Quyền tasks:read; đồng thời kiểm tra đơn vị và nhà máy của tài khoản dịch vụ.",
+        "security": [
+          {
+            "ApiKeyBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công; JSON {code:0,data:...} hoặc tệp báo cáo"
+          },
+          "400": {
+            "description": "Dữ liệu không hợp lệ"
+          },
+          "401": {
+            "description": "Khóa hết hạn/thu hồi/tài khoản không hoạt động"
+          },
+          "403": {
+            "description": "Ngoài phạm vi hoặc thiếu quyền"
+          },
+          "409": {
+            "description": "Revision xung đột; GET lại trước khi sửa"
+          },
+          "429": {
+            "description": "Vượt 120 yêu cầu/phút"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "externalId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "put": {
+        "summary": "Tạo/sửa phiếu; cùng payload phát lại không tạo trùng",
+        "description": "Quyền tasks:write; đồng thời kiểm tra đơn vị và nhà máy của tài khoản dịch vụ.",
+        "security": [
+          {
+            "ApiKeyBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công; JSON {code:0,data:...} hoặc tệp báo cáo"
+          },
+          "400": {
+            "description": "Dữ liệu không hợp lệ"
+          },
+          "401": {
+            "description": "Khóa hết hạn/thu hồi/tài khoản không hoạt động"
+          },
+          "403": {
+            "description": "Ngoài phạm vi hoặc thiếu quyền"
+          },
+          "409": {
+            "description": "Revision xung đột; GET lại trước khi sửa"
+          },
+          "429": {
+            "description": "Vượt 120 yêu cầu/phút"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "externalId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "plant_id",
+                  "ticket_name",
+                  "inspection_type",
+                  "target_facility"
+                ],
+                "properties": {
+                  "plant_id": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "ticket_name": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "inspection_type": {
+                    "type": "string",
+                    "enum": [
+                      "SOLAR_PANEL",
+                      "DISCONNECTOR",
+                      "OVERALL_SURVEY"
+                    ]
+                  },
+                  "target_facility": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Bắt buộc khi sửa phiếu đã tồn tại; không dùng last-write-wins"
+                  },
+                  "vision_required": {
+                    "type": "boolean"
+                  },
+                  "scope": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "AREA",
+                            "STRING",
+                            "PANEL",
+                            "BAY",
+                            "DISCONNECTOR",
+                            "CONTACT"
+                          ]
+                        },
+                        "id": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      }
+                    }
+                  },
+                  "planned_start_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "planned_end_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 5000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "uavk_<64 hex>"
+      }
+    }
+  }
+}

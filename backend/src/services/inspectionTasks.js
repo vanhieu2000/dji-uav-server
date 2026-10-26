@@ -19,8 +19,14 @@ async function exists(conn,table,col,id,label){
     const [rows]=await conn.execute(`SELECT ${col} FROM ${table} WHERE ${col}=?`,[id]);
     if(!rows.length)throw new v.ValidationError(`Không tìm thấy ${label}`);
 }
-async function saveTask(body,id=null){
+async function saveTask(body,id=null,external=null){
     return withTransaction(async conn=>{
+        let externalSha=null;
+        if(external){
+            externalSha=crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
+        const [rows]=await conn.execute('SELECT ticket_id,ticket_code,revision,external_request_sha FROM inspection_tickets WHERE external_source=? AND external_id=? FOR UPDATE',[external.source,external.id]);
+            if(rows[0]){if(rows[0].external_request_sha===externalSha)return {ticket_id:rows[0].ticket_id,ticket_code:rows[0].ticket_code,revision:rows[0].revision,replayed:true};id=rows[0].ticket_id;}
+        }
         let current=null;
         if(id){const [rows]=await conn.execute('SELECT * FROM inspection_tickets WHERE ticket_id=? FOR UPDATE',[id]);current=rows[0];if(!current)throw new NotFoundError('Không tìm thấy phiếu');
             if(body.revision!==current.revision)throw conflict('Phiếu đã thay đổi, tải lại trước khi lưu');
@@ -78,6 +84,7 @@ async function saveTask(body,id=null){
             await conn.execute('UPDATE inspection_tickets SET assigned_route_id=? WHERE ticket_id=?',[routes[0]||null,id]);
         }
         await conn.execute('INSERT INTO ticket_changes (ticket_id,revision,change_type,details_json) VALUES (?,?,?,?)',[id,revision,current?'UPDATED':'CREATED',JSON.stringify({scope:body.scope??null,team_id:team,member_ids:body.member_ids??null})]);
+        if(external)await conn.execute('UPDATE inspection_tickets SET external_source=?,external_id=?,external_request_sha=? WHERE ticket_id=?',[external.source,external.id,externalSha,id]);
         const [rows]=await conn.execute('SELECT ticket_id,ticket_code,revision FROM inspection_tickets WHERE ticket_id=?',[id]);return rows[0];
     });
 }
