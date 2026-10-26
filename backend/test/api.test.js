@@ -337,6 +337,54 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal((await api('DELETE', `/api/capture-profiles/${created.body.data.profile_id}`)).status, 200);
     });
 
+    await t.test('lập đường bay: quét lưới khu pin + tuyến điểm DCL → KMZ', async () => {
+        const profiles = (await api('GET', '/api/capture-profiles')).body.data;
+        const grid = profiles.find(p => p.profile_code === 'SOLAR_THERMAL');
+        const pts = profiles.find(p => p.profile_code === 'DCL_POINT');
+
+        // Khu chưa có ranh giới → báo rõ
+        const noPoly = await api('POST', '/api/solar/areas', { area_code: 'NOPOLY', area_name: 'Chưa vẽ' });
+        const e1 = await api('POST', '/api/flight-plans/preview', { profile_id: grid.profile_id, area_id: noPoly.body.data.area_id });
+        assert.equal(e1.status, 400);
+        assert.match(e1.body.message, /chưa vẽ ranh giới/);
+
+        const pv = await api('POST', '/api/flight-plans/preview', { profile_id: grid.profile_id, area_id: areaId });
+        assert.equal(pv.status, 200, JSON.stringify(pv.body));
+        assert.equal(pv.body.data.kind, 'GRID');
+        assert.ok(pv.body.data.stats.line_count >= 1 && pv.body.data.stats.photo_count > 0);
+        assert.ok(pv.body.data.geojson.path.coordinates.length >= 2);
+
+        const created = await api('POST', '/api/flight-plans', { profile_id: grid.profile_id, area_id: areaId, route_name: 'Quét nhiệt INV-01' });
+        assert.equal(created.status, 200, JSON.stringify(created.body));
+        const route = created.body.data;
+        assert.equal(route.route_kind, 'GRID');
+        assert.ok(route.route_uuid && route.kmz_md5);
+        assert.match(route.kmz_file_name, /^DJI_Mission_\d+_Quet_nhiet_INV_01\.kmz$/);
+        const fileRes = await fetch(`${app.base}${route.kmz_url}`);
+        assert.equal(fileRes.status, 200);
+        const zip = new AdmZip(Buffer.from(await fileRes.arrayBuffer()));
+        assert.match(zip.readAsText('wpmz/waylines.wpml'), /multipleDistance/);
+
+        // Tuyến điểm: thêm 2 điểm chụp cho 1 ngăn lộ (lấy cả DCL bên trong)
+        const bay2 = await api('POST', '/api/substation/bays', { substation_id: subId, bay_code: '172', bay_name: 'Ngăn 172' });
+        const d1 = await api('POST', '/api/substation/disconnectors', { bay_id: bay2.body.data.bay_id, dcl_code: '172-1', phase: 'A' });
+        for (const lat of [11.8541, 11.8542]) {
+            const pp = await api('POST', '/api/assets/photo-points', { asset_type: 'DISCONNECTOR', asset_id: d1.body.data.disconnector_id, latitude: lat, longitude: 107.004, altitude_m: 12, gimbal_pitch: -20 });
+            assert.equal(pp.status, 200, JSON.stringify(pp.body));
+        }
+        const e2 = await api('POST', '/api/flight-plans/preview', { profile_id: pts.profile_id, targets: [] });
+        assert.equal(e2.status, 400);
+        const ptRoute = await api('POST', '/api/flight-plans', { profile_id: pts.profile_id, targets: [{ asset_type: 'BAY', asset_id: bay2.body.data.bay_id }], route_name: 'DCL ngăn 172' });
+        assert.equal(ptRoute.status, 200, JSON.stringify(ptRoute.body));
+        assert.equal(ptRoute.body.data.route_kind, 'POINTS');
+        assert.equal(ptRoute.body.data.plan.stats.point_count, 2);
+
+        const list = await api('GET', '/api/flight-plans');
+        assert.equal(list.body.data.length, 2);
+        assert.equal((await api('DELETE', `/api/flight-plans/${route.route_id}`)).status, 200);
+        assert.equal((await fetch(`${app.base}${route.kmz_url}`)).status, 404);
+    });
+
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
         await db.closePool();
         const r = await api('GET', '/api/solar/areas');

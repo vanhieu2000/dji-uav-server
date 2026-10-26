@@ -73,6 +73,72 @@ test('captureMath: GSD ↔ độ cao, vệt chụp, khoảng cách đường bay
     assert.ok(coarse.warnings.some(w => /thô hơn mức 5 cm/.test(w)));
 });
 
+test('flightPlanner: lưới luống cày phủ kín, hướng dọc dãy pin, đếm ảnh', () => {
+    const fp = require('../src/services/flightPlanner');
+    // Hình chữ nhật ~ 200 m (Đông–Tây) × 100 m (Bắc–Nam) ở vĩ độ 11.85
+    const dLat = 100 / 111195;
+    const dLng = 200 / (111195 * Math.cos(11.85 * Math.PI / 180));
+    const poly = { type: 'Polygon', coordinates: [[[107, 11.85], [107 + dLng, 11.85], [107 + dLng, 11.85 + dLat], [107, 11.85 + dLat], [107, 11.85]]] };
+    // Dãy pin chạy Đông–Tây (90°) → đường bay Đông–Tây, xếp theo hướng Bắc–Nam
+    const rows = [{ type: 'LineString', coordinates: [[107, 11.8505], [107 + dLng, 11.8505]] }];
+    const p = fp.gridPlan({ polygon: poly, lineSpacingM: 20, triggerDistanceM: 10, speedMps: 5, marginM: 0, headingMode: 'ALONG_ROWS', rowLines: rows });
+    assert.ok(Math.abs(p.heading_deg - 90) < 0.5, `hướng ${p.heading_deg}`);
+    assert.equal(p.stats.line_count, 5); // 100 m / 20 m
+    p.lines.forEach(l => assert.ok(Math.abs(l.length_m - 200) < 1, `dài ${l.length_m}`));
+    assert.equal(p.stats.photo_count, 5 * 21);
+    // Luống cày: đường 1 Tây→Đông, đường 2 Đông→Tây
+    assert.ok(p.lines[0].end.lng > p.lines[0].start.lng);
+    assert.ok(p.lines[1].end.lng < p.lines[1].start.lng);
+    // Nới biên 10 m: thêm đường và dài thêm 20 m
+    const m = fp.gridPlan({ polygon: poly, lineSpacingM: 20, triggerDistanceM: 10, speedMps: 5, marginM: 10, headingMode: 'FIXED', headingDeg: 90 });
+    assert.equal(m.stats.line_count, 6);
+    assert.ok(Math.abs(m.lines[0].length_m - 220) < 1);
+    // Không có dãy pin: lấy cạnh dài nhất + cảnh báo
+    const a = fp.gridPlan({ polygon: poly, lineSpacingM: 20, triggerDistanceM: 10, speedMps: 5, headingMode: 'ALONG_ROWS', rowLines: [] });
+    assert.ok(Math.abs(a.heading_deg - 90) < 0.5);
+    assert.ok(a.warnings.length === 1);
+    assert.throws(() => fp.gridPlan({ polygon: { type: 'Point', coordinates: [1, 2] }, lineSpacingM: 20 }));
+});
+
+test('flightPlanner: tuyến điểm sắp theo điểm gần nhất', () => {
+    const fp = require('../src/services/flightPlanner');
+    const pts = [{ lat: 11.85, lng: 107 }, { lat: 11.8510, lng: 107 }, { lat: 11.8501, lng: 107 }];
+    const r = fp.pointsPlan(pts, { speedMps: 4, hoverSeconds: 2, photosPerPoint: 2 });
+    assert.deepEqual(r.points.map(p => p.lat), [11.85, 11.8501, 11.851]);
+    assert.ok(Math.abs(r.stats.distance_m - 111) < 2);
+    assert.equal(r.stats.photo_count, 6);
+});
+
+test('wpmlBuilder: KMZ độ cao so với điểm cất cánh, chụp theo khoảng cách trên từng đường bay', () => {
+    const { buildGridKmz, buildPointsKmz } = require('../src/services/wpmlBuilder');
+    const AdmZipLocal = require('adm-zip');
+    const plan = { waypoints: [{ lat: 11.85, lng: 107 }, { lat: 11.85, lng: 107.002 }, { lat: 11.8502, lng: 107.002 }, { lat: 11.8502, lng: 107 }] };
+    const k = buildGridKmz({ name: 'Khu <A>', plan, geometry: { altitude_m: 34.8, max_speed_mps: 5, trigger_distance_m: 7.68 }, profile: { lenses: 'ir,wide', gimbal_pitch: -90, trigger_mode: 'DISTANCE' } });
+    const zip = new AdmZipLocal(k.buffer);
+    assert.deepEqual(zip.getEntries().map(e => e.entryName).sort(), ['wpmz/template.kml', 'wpmz/waylines.wpml']);
+    const w = k.waylines;
+    assert.match(w, /<wpml:executeHeightMode>relativeToStartPoint<\/wpml:executeHeightMode>/);
+    assert.match(k.template, /<wpml:heightMode>relativeToStartPoint<\/wpml:heightMode>/);
+    assert.doesNotMatch(w + k.template, /EGM96/);
+    assert.equal((w.match(/<wpml:actionTriggerType>multipleDistance</g) || []).length, 2); // 2 đường bay
+    assert.match(w, /<wpml:actionTriggerParam>7.68<\/wpml:actionTriggerParam>/);
+    assert.match(w, /<wpml:payloadLensIndex>ir,wide<\/wpml:payloadLensIndex>/);
+    assert.match(w, /<wpml:actionGroupStartIndex>2<\/wpml:actionGroupStartIndex>\s*<wpml:actionGroupEndIndex>3</);
+    assert.match(w, /Khu &lt;A&gt;/);
+
+    const pk = buildPointsKmz({
+        name: 'DCL', speed: 4,
+        profile: { lenses: 'ir,zoom', zoom_factor: 5, hover_seconds: 3, photos_per_point: 2 },
+        points: [{ lat: 11.85, lng: 107, altitude_m: 12, gimbal_pitch: -20, aircraft_heading: 270, label: 'D4_1' },
+            { lat: 11.8501, lng: 107, altitude_m: 12, gimbal_pitch: -20, label: 'D4_2' }]
+    });
+    assert.match(pk.waylines, /<wpml:focalLength>120<\/wpml:focalLength>/); // 24 mm × 5
+    assert.match(pk.waylines, /<wpml:hoverTime>3<\/wpml:hoverTime>/);
+    assert.equal((pk.waylines.match(/<wpml:actionActuatorFunc>takePhoto</g) || []).length, 4);
+    assert.match(pk.waylines, /<wpml:waypointHeadingAngle>-90<\/wpml:waypointHeadingAngle>/);
+    assert.throws(() => buildPointsKmz({ name: 'x', speed: 4, profile: { lenses: 'ir' }, points: [{ lat: 1, lng: 1, altitude_m: 10, gimbal_pitch: 0 }] }));
+});
+
 test('parseTilePath chỉ nhận đường dẫn ô ảnh hợp lệ', () => {
     assert.deepEqual(parseTilePath('tiles/18/215000/123000.PNG'), { z: 18, x: 215000, y: 123000, ext: 'png' });
     assert.deepEqual(parseTilePath('3/1/2.jpeg'), { z: 3, x: 1, y: 2, ext: 'jpg' });

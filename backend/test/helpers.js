@@ -13,6 +13,7 @@ if (!/test/i.test(TEST_DB)) throw new Error('Tên CSDL test phải chứa "test"
 // Phải đặt trước khi nạp src/config/db.js
 process.env.MYSQL_DATABASE = TEST_DB;
 process.env.BASEMAP_TILES_DIR = path.join(require('os').tmpdir(), `uav-test-tiles-${process.pid}`);
+process.env.WAYLINE_DIR = path.join(require('os').tmpdir(), `uav-test-waylines-${process.pid}`);
 
 const mysql = require('mysql2/promise');
 const express = require('express');
@@ -73,6 +74,7 @@ async function startTestApp() {
     app.use('/api/basemaps', require('../src/routes/basemaps'));
     app.use('/api/tickets', require('../src/routes/tickets'));
     app.use('/api/capture-profiles', require('../src/routes/captureProfiles'));
+    app.use('/api/flight-plans', require('../src/routes/flightPlans'));
     const server = await new Promise(resolve => {
         const s = app.listen(0, '127.0.0.1', () => resolve(s));
     });
