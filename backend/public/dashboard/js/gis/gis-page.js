@@ -11,6 +11,7 @@
     ['profiles', 'Hồ sơ chụp'],
     ['flights', 'Lập đường bay'],
     ['media', 'Nhập ảnh thẻ nhớ'],
+    ['coverage', 'Kiểm tra đủ ảnh'],
     ['import', 'Nhập Excel'],
     ['basemaps', 'Bản đồ nền']
   ];
@@ -25,6 +26,7 @@
     if (tab === 'profiles') GIS.Profiles.render(pane);
     if (tab === 'flights') GIS.FlightPlans.render(pane);
     if (tab === 'media') GIS.MediaImport.render(pane);
+    if (tab === 'coverage') GIS.Coverage.render(pane);
     if (tab === 'import') GIS.Import.render(pane);
     if (tab === 'basemaps') GIS.BaseMaps.render(pane);
   }

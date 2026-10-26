@@ -160,7 +160,7 @@ Tài liệu: https://developer.dji.com/doc/cloud-api-tutorial/en/api-reference/d
     flight_session_id, photo_point_id, capture_profile_id, sha256 chống trùng).
   - Xong khi: test với ảnh mẫu M3T thật (cần chủ dự án cung cấp 5–10 ảnh R-JPEG + ảnh rộng có RTK).
 
-- [ ] **A4. Kiểm tra đủ ảnh** – vệt chụp của từng ảnh vẽ lên bản đồ; so số ảnh dự kiến/đã nhận; khu chưa phủ;
+- [x] **A4. Kiểm tra đủ ảnh** – XONG (`services/coverage.js`, `routes/coverage.js`, tab "Kiểm tra đủ ảnh", tuyến bay bù cho vùng thiếu) – vệt chụp của từng ảnh vẽ lên bản đồ; so số ảnh dự kiến/đã nhận; khu chưa phủ;
   sinh tuyến bay bù cho vùng thiếu. Xong khi: hiện % phủ theo khu và tạo được tuyến bù.
 
 - [ ] **A5. Xuất bộ ảnh cho Vision** – theo phiếu / hồ sơ / khu / khoảng ngày: ZIP ảnh gốc + `manifest.json`
