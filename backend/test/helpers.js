@@ -82,6 +82,7 @@ async function startTestApp() {
     const app = express();
     app.use(express.json({ limit: '50mb' }));
     app.use(require('../src/routes/mediaUpload'));
+    app.use(require('../src/routes/pilotWaylines'));
     app.use('/api/solar', require('../src/routes/solar'));
     app.use('/api/substation', require('../src/routes/substation'));
     app.use('/api/assets', require('../src/routes/assets'));

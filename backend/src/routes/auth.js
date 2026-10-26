@@ -152,8 +152,15 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     }
 });
 
+/** Đọc token (Web hoặc DJI Pilot 2 gửi qua header x-auth-token). Trả payload hoặc null. */
+function decodeToken(token) {
+    if (!token) return null;
+    try { return jwt.verify(String(token), JWT_SECRET); } catch (e) { return null; }
+}
+
 module.exports = {
     authRouter: router,
     authenticateToken,
-    verifyLogin
+    verifyLogin,
+    decodeToken
 };

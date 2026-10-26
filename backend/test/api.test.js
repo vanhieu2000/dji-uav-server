@@ -615,6 +615,41 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal(detail.ticket.assigned_route_id, null);
     });
 
+    await t.test('Pilot 2: thư viện đường bay chỉ gồm tuyến của phiếu đang bay', async () => {
+        const ingest = require('../src/services/mediaIngest');
+        const grid = (await api('GET', '/api/capture-profiles')).body.data.find(p => p.profile_code === 'SOLAR_THERMAL');
+        const tkA = (await api('POST', '/api/tickets', { ticket_name: 'Pilot A', inspection_type: 'SOLAR_PANEL', target_facility: 'INV-01' })).body.data;
+        const tkB = (await api('POST', '/api/tickets', { ticket_name: 'Pilot B', inspection_type: 'SOLAR_PANEL', target_facility: 'INV-01' })).body.data;
+        const rA = (await api('POST', '/api/flight-plans', { profile_id: grid.profile_id, area_id: areaId, route_name: 'Tuyến của A', ticket_id: tkA.ticket_id })).body.data;
+        await api('POST', '/api/flight-plans', { profile_id: grid.profile_id, area_id: areaId, route_name: 'Tuyến khác' });
+        const base = '/wayline/api/v1/workspaces/ws1/waylines';
+
+        await ingest.startPilotSession({ user: null, ticketId: tkA.ticket_id, rcSn: 'RCPILOT1' });
+        let list = (await api('GET', base)).body.data;
+        assert.deepEqual(list.list.map(w => w.name), ['Tuyến của A']);
+        assert.equal(list.list[0].id, rA.route_uuid);
+        assert.equal(list.list[0].drone_model_key, '0-77-1');
+
+        // Phiếu chưa gán tuyến: thấy cả thư viện
+        await ingest.startPilotSession({ user: null, ticketId: tkB.ticket_id, rcSn: 'RCPILOT1' });
+        list = (await api('GET', base)).body.data;
+        assert.ok(list.list.length >= 2);
+        assert.equal((await api('GET', `${base}?key=khác`)).body.data.list.length, 1);
+
+        const detail = await api('GET', `${base}/${rA.route_uuid}`);
+        assert.equal(detail.body.data.name, 'Tuyến của A');
+        const url = await api('GET', `${base}/${rA.route_uuid}/url?format=json`);
+        assert.match(url.body.data.url, /\/uploads\/waylines\/DJI_Mission_.+\.kmz$/);
+        assert.equal(url.body.data.md5, rA.kmz_md5);
+        const redirect = await fetch(`${app.base}${base}/${rA.route_uuid}/url`, { redirect: 'manual' });
+        assert.equal(redirect.status, 302);
+        const dl = await fetch(`${app.base}${base}/${rA.route_uuid}/download`);
+        assert.equal(dl.status, 200);
+        assert.equal((await api('GET', `${base}/khong-co-tuyen-nay`)).status, 404);
+        assert.equal((await api('GET', `${base}/khong-co-tuyen-nay/url?format=json`)).status, 404);
+        assert.equal((await api('GET', `/manage/api/v1/workspaces/ws1/waylines/duplicate-names`)).body.code, 0);
+    });
+
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
         await db.closePool();
         const r = await api('GET', '/api/solar/areas');

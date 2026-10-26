@@ -790,9 +790,11 @@ app.post('/api/pilot/login', async (req, res) => {
 
   // Ghi phiên đăng nhập: ảnh tự tải lên sau đó được gắn vào phiếu này
   let sessionId = null;
+  let ticketRouteList = [];
   try {
     const sn = v => (typeof v === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(v) ? v : null);
     sessionId = await mediaIngest.startPilotSession({ user: auth.user, ticketId: ticket.ticket_id, rcSn: sn(rcSn), aircraftSn: sn(aircraftSn) });
+    ticketRouteList = await require('./src/services/ticketRoutes').routesOfTicket(ticket.ticket_id);
   } catch (err) {
     return sendDbError(res, err);
   }
@@ -807,6 +809,7 @@ app.post('/api/pilot/login', async (req, res) => {
     timestamp: new Date().toLocaleTimeString()
   });
 
+  const firstRoute = ticketRouteList[0] || null;
   res.json({
     code: 0,
     message: 'Login successful',
@@ -828,15 +831,13 @@ app.post('/api/pilot/login', async (req, res) => {
       livestream: {
         rtmpUrl: `rtmp://${HOST_IP}:${systemConfig.rtmp_port || 1935}/live/${ticket.livestream_channel}`
       },
-      route: (() => {
-        const routes = syncDiskWaylines();
-        const activeRoute = routes[0];
-        return {
-          id: activeRoute ? activeRoute.route_id : 1,
-          name: activeRoute ? activeRoute.route_name : 'Tuyến bay Mavic 3T',
-          url: activeRoute ? activeRoute.full_url : `http://${HOST_IP}:${PORT}/uploads/waylines/`
-        };
-      })()
+      // Tuyến đầu tiên của phiếu (null nếu phiếu chưa gán tuyến): Pilot 2 thấy đủ các tuyến trong thư viện đường bay
+      route: firstRoute ? {
+        id: firstRoute.route_uuid,
+        name: firstRoute.route_name,
+        url: `http://${HOST_IP}:${PORT}/uploads/waylines/${encodeURIComponent(firstRoute.kmz_file_name)}`
+      } : null,
+      route_count: ticketRouteList.length
     }
   });
 });
@@ -1753,193 +1754,8 @@ app.post('/api/settings/office-location', (req, res) => {
 });
 
 
-// C. Wayline Management Service - Danh sách & Tải file KMZ cho Pilot 2 Mission
-function getRouteUuid(fileName) {
-  const hash = crypto.createHash('md5').update(fileName).digest('hex');
-  return `${hash.substring(0,8)}-${hash.substring(8,12)}-4${hash.substring(13,16)}-a${hash.substring(17,20)}-${hash.substring(20,32)}`;
-}
-
-function syncDiskWaylines() {
-  const waylinesDir = path.join(__dirname, 'uploads', 'waylines');
-  if (!fs.existsSync(waylinesDir)) fs.mkdirSync(waylinesDir, { recursive: true });
-
-  const files = fs.readdirSync(waylinesDir).filter(f => f.endsWith('.kmz'));
-
-  // Chỉ giữ các route mà file thực tế tồn tại trên đĩa
-  memoryStore.routes = memoryStore.routes.filter(r => {
-    return fs.existsSync(path.join(waylinesDir, r.file_name));
-  });
-
-  files.forEach((f) => {
-    const filePath = path.join(waylinesDir, f);
-    let md5 = 'd41d8cd98f00b204e9800998ecf8427e';
-    try {
-      md5 = crypto.createHash('md5').update(fs.readFileSync(filePath)).digest('hex');
-    } catch(e){}
-
-    const routeUuid = getRouteUuid(f);
-    const existing = memoryStore.routes.find(r => r.file_name === f || r.route_id === routeUuid);
-    const cleanName = f.replace(/^DJI_Mission_\d+_/, '').replace(/\.kmz$/, '').replace(/_/g, ' ');
-    const stat = fs.statSync(filePath);
-
-    if (!existing) {
-      memoryStore.routes.push({
-        route_id: routeUuid,
-        route_name: `Tuyến: ${cleanName}`,
-        route_type: 'WAYLINE_MISSION',
-        file_name: f,
-        file_url: `/uploads/waylines/${f}`,
-        full_url: `http://${HOST_IP}:${PORT}/uploads/waylines/${f}`,
-        md5: md5,
-        created_at: stat.mtime
-      });
-    } else {
-      existing.route_id = routeUuid;
-      existing.md5 = md5;
-      existing.full_url = `http://${HOST_IP}:${PORT}${existing.file_url}`;
-      existing.created_at = stat.mtime;
-    }
-  });
-
-  // Ưu tiên xếp các tuyến bay mới nhất lên đầu danh sách
-  memoryStore.routes.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-  return memoryStore.routes;
-}
-
-// 1. Danh sách Waylines cho Pilot 2 Cloud Mission
-app.get(['/wayline/api/v1/workspaces/:workspace_id/waylines', '/manage/api/v1/workspaces/:workspace_id/waylines'], (req, res) => {
-  console.log(`[Wayline] Pilot 2 truy vấn danh sách tuyến bay cho workspace: ${req.params.workspace_id}`);
-  const routes = syncDiskWaylines();
-
-  const list = routes.map(r => ({
-    id: String(r.route_id),
-    name: r.route_name,
-    drone_model_key: "0-77-1", // Chuẩn Mavic 3 Thermal (Pilot 2 hiển thị 'M3')
-    payload_model_keys: ["1-67-0"], // Chuẩn Cụm Camera Nhiệt M3T (Pilot 2 hiển thị 'M3T')
-    update_time: new Date(r.created_at || Date.now()).getTime(),
-    create_time: new Date(r.created_at || Date.now()).getTime(),
-    favorited: false,
-    template_types: [0]
-  }));
-
-  res.json({
-    code: 0,
-    message: 'success',
-    data: {
-      pagination: {
-        page: 1,
-        total: list.length,
-        total_page: 1
-      },
-      list: list
-    }
-  });
-});
-
-// 2. Chi tiết 1 Wayline
-app.get(['/wayline/api/v1/workspaces/:workspace_id/waylines/:wayline_id', '/manage/api/v1/workspaces/:workspace_id/waylines/:wayline_id'], (req, res, next) => {
-  if (req.params.wayline_id === 'duplicate-names') return next();
-  const routeId = req.params.wayline_id;
-  const routes = syncDiskWaylines();
-  let route = routes.find(r => String(r.route_id) === String(routeId) || r.file_name === routeId) || routes[0];
-
-  if (!route) {
-    return res.status(404).json({ code: -1, message: 'Route not found' });
-  }
-
-  res.json({
-    code: 0,
-    message: 'success',
-    data: {
-      id: String(route.route_id),
-      name: route.route_name,
-      drone_model_key: "0-77-1",
-      payload_model_keys: ["1-67-0"],
-      update_time: new Date(route.created_at || Date.now()).getTime(),
-      create_time: new Date(route.created_at || Date.now()).getTime(),
-      favorited: false,
-      template_types: [0]
-    }
-  });
-});
-
-// 3. Cấp link tải file KMZ cho Pilot 2
-app.get(['/wayline/api/v1/workspaces/:workspace_id/waylines/:wayline_id/url', '/manage/api/v1/workspaces/:workspace_id/waylines/:wayline_id/url'], (req, res) => {
-  const routeId = req.params.wayline_id;
-  const routes = syncDiskWaylines();
-
-  let route = routes.find(r => String(r.route_id) === String(routeId) || r.file_name === routeId || r.file_name.includes(routeId));
-  if (!route && routes.length > 0) {
-    route = routes[0];
-  }
-
-  if (!route) {
-    return res.status(404).json({ code: -1, message: 'Không tìm thấy file tuyến bay KMZ trên server!' });
-  }
-
-  const filePath = path.join(__dirname, 'uploads', 'waylines', route.file_name);
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ code: -1, message: 'File KMZ không tồn tại trên ổ cứng!' });
-  }
-
-  let md5 = 'd41d8cd98f00b204e9800998ecf8427e';
-  try {
-    md5 = crypto.createHash('md5').update(fs.readFileSync(filePath)).digest('hex');
-  } catch(e){}
-
-  // Cung cấp URL file tĩnh kết thúc bằng .kmz chuẩn để DownloadManager của Android / Pilot 2 nhận diện
-  const fileUrl = `http://${HOST_IP}:${PORT}${route.file_url}`;
-  console.log(`[Wayline Download URL] Chuyển hướng tải KMZ chuẩn DJI Cloud API: ${route.route_name} -> ${fileUrl} (MD5: ${md5})`);
-
-  // Chuẩn DJI Cloud API (WaylineFileController.java dòng 98: rsp.sendRedirect(url)):
-  // Khi Pilot 2 gọi endpoint /url, nó mong đợi HTTP 302 Redirect thẳng tới file KMZ để DownloadManager của Android tải về.
-  if (req.query.format === 'json') {
-    return res.json({
-      code: 0,
-      message: 'success',
-      data: {
-        url: fileUrl,
-        md5: md5
-      }
-    });
-  }
-
-  // Mặc định chuyển hướng 302 trực tiếp theo chuẩn chính hãng DJI
-  res.redirect(302, fileUrl);
-});
-
-// 4. Download file KMZ trực tiếp kèm đầy đủ Header
-app.get(['/wayline/api/v1/workspaces/:workspace_id/waylines/:wayline_id/download', '/manage/api/v1/workspaces/:workspace_id/waylines/:wayline_id/download'], (req, res) => {
-  const routeId = req.params.wayline_id;
-  const routes = syncDiskWaylines();
-
-  let route = routes.find(r => String(r.route_id) === String(routeId) || r.file_name === routeId || r.file_name.includes(routeId));
-  if (!route && routes.length > 0) route = routes[0];
-
-  if (!route) {
-    return res.status(404).send('Không tìm thấy tuyến bay!');
-  }
-
-  const filePath = path.join(__dirname, 'uploads', 'waylines', route.file_name);
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).send('File KMZ không tồn tại trên máy chủ!');
-  }
-
-  console.log(`[Wayline Direct Download] Pilot 2 đang tải file KMZ: ${route.file_name}`);
-  res.setHeader('Content-Type', 'application/vnd.google-earth.kmz');
-  res.setHeader('Content-Disposition', `attachment; filename="${route.file_name}"`);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Content-Length', fs.statSync(filePath).size);
-  fs.createReadStream(filePath).pipe(res);
-});
-
-app.get(['/wayline/api/v1/workspaces/:workspace_id/waylines/duplicate-names', '/manage/api/v1/workspaces/:workspace_id/waylines/duplicate-names'], (req, res) => {
-  res.json({ code: 0, message: 'success', data: [] });
-});
-
-app.post('/wayline/api/v1/workspaces/:workspace_id/upload-callback', (req, res) => {
-  res.json({ code: 0, message: 'success' });
-});
+// C. Thư viện đường bay cho DJI Pilot 2: xem src/routes/pilotWaylines.js (MySQL, theo phiếu đang bay)
+app.use(require('./src/routes/pilotWaylines'));
 
 // ===================================================================
 // D. DJI CLOUD API - MEDIA SERVICE (HỨNG ẢNH THẬT 100% TỪ MAVIC 3T)
