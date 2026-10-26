@@ -8,6 +8,7 @@
  */
 const fs = require('fs');
 const crypto = require('crypto');
+const { resolveAssignment } = require('./mediaAssignment');
 const { query } = require('../config/db');
 const { readMeta, photoPointFromName } = require('./djiImageMeta');
 
@@ -34,8 +35,8 @@ async function startPilotSession({ user, ticketId, rcSn, aircraftSn }) {
     // Một tay điều khiển chỉ có 1 phiên đang mở
     if (rcSn) await query('UPDATE pilot_sessions SET ended_at = NOW() WHERE ended_at IS NULL AND rc_sn = ?', [rcSn]);
     const r = await query(
-        'INSERT INTO pilot_sessions (user_id, username, ticket_id, rc_sn, aircraft_sn) VALUES (?, ?, ?, ?, ?)',
-        [user && user.user_id ? user.user_id : null, user ? user.username : null, ticketId || null, rcSn || null, aircraftSn || null]
+        'INSERT INTO pilot_sessions (user_id, username, ticket_id, rc_sn, aircraft_sn, upload_namespace) VALUES (?, ?, ?, ?, ?, ?)',
+        [user && user.user_id ? user.user_id : null, user ? user.username : null, ticketId || null, rcSn || null, aircraftSn || null, crypto.randomUUID()]
     );
     return r.insertId;
 }
@@ -100,10 +101,10 @@ async function ingestFile(o) {
     let thermal = null;
     if (meta.lens === 'IR') thermal = parseThermal(o.localPath);
 
-    const session = o.ticketId ? null : await activeSession(o.deviceSn || null);
-    const ticketId = o.ticketId || (session ? session.ticket_id : null);
+    const assignment = await resolveAssignment(query, o, meta);
+    const ticketId = assignment.ticketId;
     const pointId = await matchPhotoPoint(o.originalName || o.fileName, meta);
-    const deviceSn = o.deviceSn || (session && session.aircraft_sn) || 'UNKNOWN';
+    const deviceSn = assignment.deviceSn;
 
     const row = {
         ticket_id: ticketId,
@@ -137,7 +138,9 @@ async function ingestFile(o) {
         flight_id: o.flightId || null,
         route_id: o.routeId || null,
         photo_point_id: pointId,
-        pilot_session_id: session ? session.session_id : null,
+        pilot_session_id: assignment.pilotSessionId,
+        flight_session_id: assignment.flightSessionId,
+        assignment_status: assignment.status,
         meta_json: JSON.stringify({ ...meta, captured_at: meta.captured_at ? meta.captured_at.toISOString() : null })
     };
     const cols = Object.keys(row);
@@ -145,6 +148,7 @@ async function ingestFile(o) {
         `INSERT INTO media_files (${cols.map(c => `\`${c}\``).join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
         cols.map(c => row[c])
     );
+    if (ticketId) await query('UPDATE inspection_tickets SET reconciled_at=NULL WHERE ticket_id=?',[ticketId]);
     return { status: 'created', media: { media_id: r.insertId, ...row, meta_json: undefined } };
 }
 

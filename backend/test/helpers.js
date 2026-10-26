@@ -88,6 +88,7 @@ async function startTestApp() {
     app.use('/api/substation', require('../src/routes/substation'));
     app.use('/api/assets', require('../src/routes/assets'));
     app.use('/api/basemaps', require('../src/routes/basemaps'));
+    app.use('/api/teams', require('../src/routes/teams'));
     app.use('/api/tickets', require('../src/routes/tickets'));
     app.use('/api/capture-profiles', require('../src/routes/captureProfiles'));
     app.use('/api/flight-plans', require('../src/routes/flightPlans'));

@@ -31,7 +31,9 @@ const path=require('path');const req=require('module').createRequire(path.resolv
   assert.match(await page.locator('#uav-live-devices').innerText(),/UAV-B · OFFLINE/);
   assert.match(await page.locator('#uav-live-devices').innerText(),/UAV-A · ONLINE · 0%/);
   if(process.env.BROWSER_SCREENSHOT) await page.screenshot({path:process.env.BROWSER_SCREENSHOT,fullPage:false});
+  await page.evaluate(()=>{triggerPhoto();startSimulatedMissionFlight();toggleSimulated3Cams();GIS.Tasks.render(document.getElementById('gis-assets-root'));});
+  await page.waitForSelector('#task-form',{state:'attached'});
   assert.deepEqual(commands,[]);assert.deepEqual(errors,[]);
-  console.log('PASS Chromium: dashboard boots, two UAV markers, zero battery, offline event, realtime photo; no commands or page errors');
+  console.log('PASS Chromium: dashboard boots, two UAV markers, zero battery, offline event, realtime photo; task UI mounts, legacy simulation sends no commands; no page errors');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});

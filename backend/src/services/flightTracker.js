@@ -47,14 +47,21 @@ function createTracker({ query, now = () => Date.now(), onEvent = () => {}, find
      * Ảnh có device_sn thì phải trùng máy bay; ảnh nhập thẻ nhớ không có SN thì chỉ theo thời gian.
      */
     async function attachMedia(flightId) {
+        // Chỉ ghép khi đúng serial + phiếu (nếu đã biết), và chỉ có đúng 1 chuyến phù hợp.
         const where = flightId ? 'AND f.flight_session_id = ?' : 'AND f.ended_at > NOW() - INTERVAL 7 DAY';
         const r = await query(
-            `UPDATE media_files m JOIN flight_sessions f
-                ON m.captured_at BETWEEN f.started_at - INTERVAL 30 SECOND AND COALESCE(f.ended_at, NOW()) + INTERVAL 30 SECOND
-               AND (m.device_sn IS NULL OR m.device_sn = '' OR m.device_sn = f.device_sn)
-             SET m.flight_session_id = f.flight_session_id,
-                 m.ticket_id = COALESCE(m.ticket_id, f.ticket_id)
-             WHERE m.flight_session_id IS NULL AND f.ended_at IS NOT NULL ${where}`,
+            `UPDATE media_files m JOIN (
+                SELECT m2.media_id,MIN(f.flight_session_id) AS flight_id,MIN(f.ticket_id) AS ticket_id
+                FROM media_files m2 JOIN flight_sessions f ON m2.device_sn=f.device_sn
+                  AND m2.captured_at BETWEEN f.started_at - INTERVAL 30 SECOND AND COALESCE(f.ended_at,NOW()) + INTERVAL 30 SECOND
+                  AND (m2.ticket_id IS NULL OR m2.ticket_id=f.ticket_id)
+                WHERE m2.flight_session_id IS NULL AND f.ended_at IS NOT NULL
+                  AND m2.device_sn NOT IN ('','UNKNOWN')
+                GROUP BY m2.media_id HAVING COUNT(*)=1
+            ) candidate ON m.media_id=candidate.media_id
+            JOIN flight_sessions f ON f.flight_session_id=candidate.flight_id
+            SET m.flight_session_id=f.flight_session_id,m.ticket_id=COALESCE(m.ticket_id,f.ticket_id),m.assignment_status='FLIGHT'
+            WHERE m.flight_session_id IS NULL ${where}`,
             flightId ? [flightId] : []
         );
         if (r.affectedRows) {

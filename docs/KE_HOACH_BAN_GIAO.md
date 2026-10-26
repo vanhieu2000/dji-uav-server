@@ -205,10 +205,10 @@ Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
 - [x] D3 – Ngưỡng cấu hình qua alert_rules/UI, confidence/max nhiệt/ΔT; webhook v1 không xác thực được thay 410 → v2, bỏ 65 °C cứng. Chưa cấu hình rule bật thì không tự sinh cảnh báo nhiệt.
 
 ### Giai đoạn F – Phiếu kiểm tra & dữ liệu nhiệm vụ (~4 ngày) – hạng mục #20, #21, #24, #25
-- [ ] Phiếu pin: chọn khu / chuỗi cụ thể (bảng `ticket_details`), tổ công tác (người), thời gian kế hoạch / thực tế, hồ sơ chụp, tuyến bay.
-- [ ] Phiếu DCL: chọn ngăn lộ / DCL / mối nối, tổ công tác, phạm vi.
-- [ ] Màn chi tiết phiếu: ảnh theo thời gian thực, trạng thái nhận ảnh, ảnh trùng (sha256) / lỗi / đến muộn (#24).
-- [ ] Nhiều lượt bay cho 1 phiếu (#25): danh sách chuyến bay của phiếu, phạm vi đã phủ / bay bổ sung.
+- [x] F1 – Phiếu pin chọn khu/chuỗi/tấm, tổ snapshot thành viên, kế hoạch có múi giờ, profile/route/UAV; sửa có revision và transaction (migration 009).
+- [x] F2 – Phiếu DCL chọn ngăn lộ/DCL/mối nối và tổ; validate đúng loại phạm vi/tài sản.
+- [x] F3 – Chi tiết ảnh/lượt/Vision, sự kiện created/duplicate/failed, ảnh muộn, inbox UNRESOLVED; đối soát tồn tại/hash/số file gốc, gate hoàn tất.
+- [x] F4 – Hai lượt/phiếu, gán ảnh bằng context+serial+capture time, không lấy task toàn cục mới nhất; link kiểm tra phủ/bay bù đã có từ A4. Chưa bay thử phần cứng.
 - Tiêu chí xong: tạo phiếu → bay 2 lượt → ảnh và lỗi của cả 2 lượt nằm đúng phiếu.
 
 ### Giai đoạn G – Cảnh báo, dashboard, xu hướng nhiệt (~6 ngày) – hạng mục #28–32, #5 (phần ngưỡng)
@@ -356,3 +356,6 @@ Kết quả C3–C6: 53 kiểm thử Node/MySQL đạt, không skip; Chromium sm
 
 ### D1/D3 – 26/10/2026
 Contract 2.0 và worker tắt mặc định; endpoint/model/secret do đội Vision cung cấp qua cấu hình an toàn. Không đổi framework hoặc viết training. Migration 008, API và UI Xử lý Vision; D2 giữ chưa xong vì thiếu calibration/ảnh/địa hình thật. Phần F độc lập sẽ tiếp tục, không đợi dịch vụ Vision.
+
+### F – 26/10/2026
+Xem docs/INSPECTION_WORKFLOW.md. Ảnh thiếu bằng chứng để UNRESOLVED; prefix UUID phải được storage/Pilot giữ nguyên, chưa coi receiver local là STS production. Bỏ endpoint/nút tạo ảnh giả và lệnh Dock/flight không thuộc phạm vi. Parser thiếu SDK trả null, không đoán nhiệt bằng raw/64. Đã thử hai sortie và ảnh tới muộn trên fixture/DB test, không gọi UAV thật.

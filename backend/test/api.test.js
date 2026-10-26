@@ -396,12 +396,14 @@ test('API tài sản & bản đồ', async (t) => {
         const ingest = require('../src/services/mediaIngest');
         const ticket = await api('POST', '/api/tickets', { ticket_name: 'Bay thử nhận ảnh', inspection_type: 'SOLAR_PANEL', target_facility: 'INV-01' });
         const ticketId = ticket.body.data.ticket_id;
-        await ingest.startPilotSession({ user: { user_id: null, username: 'pilot' }, ticketId, rcSn: 'RC123456', aircraftSn: 'AC987654' });
+        const sessionId=await ingest.startPilotSession({ user: { user_id: null, username: 'pilot' }, ticketId, rcSn: 'RC123456', aircraftSn: 'AC987654' });
+        await db.query("UPDATE pilot_sessions SET started_at='2026-10-26 10:00:00' WHERE session_id=?",[sessionId]);
+        const [uploadContext]=await db.query('SELECT upload_namespace FROM pilot_sessions WHERE session_id=?',[sessionId]);
 
         // Tải nhiều phần: 3 phần gửi lệch thứ tự phải ghép đúng
         const img = h.fakeDjiJpeg({ lat: 11.8505, lng: 107.0007, source: 'WideCamera' });
         const cut = [0, 100, 250, img.length];
-        const key = '/dji-media/media/DJI_20261026101530_0001_W.JPG';
+        const key = `/dji-media/media/${uploadContext.upload_namespace}/DJI_20261026101530_0001_W.JPG`;
         const init = await fetch(`${app.base}${key}?uploads`, { method: 'POST' });
         const uploadId = /<UploadId>([a-f0-9]+)<\/UploadId>/.exec(await init.text())[1];
         for (const i of [2, 0, 1]) {
@@ -835,6 +837,65 @@ test('API tài sản & bản đồ', async (t) => {
         await jobs.dispatchOne({endpoint:'http://127.0.0.1',publicBase:'http://127.0.0.1',secret:'fixture',fetchImpl:async()=>{throw new Error('fixture timeout');}});
         const [retry]=await db.query('SELECT status,attempts,last_error FROM vision_jobs WHERE job_id=?',[job.job_id]);
         assert.equal(retry.status,'RETRY_WAIT');assert.equal(retry.attempts,1);
+    });
+
+    await t.test('nhiệm vụ: phạm vi/tổ/kế hoạch, hai lượt bay, ảnh muộn không gán phiếu mới, đối soát hash', async () => {
+        const ingest = require('../src/services/mediaIngest');
+        const [area] = await db.query('SELECT area_id FROM solar_areas ORDER BY area_id LIMIT 1');
+        const [profile] = await db.query('SELECT profile_id FROM capture_profiles LIMIT 1');
+        await db.query("INSERT INTO uav_devices (device_sn,device_name) VALUES ('UAV-F','Fixture F')");
+        const team=await api('POST','/api/teams',{team_name:'Tổ fixture F',member_ids:[1]});assert.equal(team.status,200);
+        const body={ticket_name:'Hai lượt bay',inspection_type:'SOLAR_PANEL',target_facility:'Khu thử',scope:[{type:'AREA',id:area.area_id}],team_id:team.body.data.team_id,
+            capture_profile_id:profile.profile_id,assigned_device_sn:'UAV-F',planned_start_at:'2026-10-26T10:00:00Z',planned_end_at:'2026-10-26T11:00:00Z'};
+        const created=await api('POST','/api/tickets',body);assert.equal(created.status,200,JSON.stringify(created.body));
+        const id=created.body.data.ticket_id;
+        const one=await api('GET',`/api/tickets/${id}`);assert.equal(one.body.data.scope.length,1);assert.equal(one.body.data.crew.length,1);
+        const bad=await api('PUT',`/api/tickets/${id}`,{revision:0,scope:[{type:'AREA',id:99999999}]});assert.equal(bad.status,400);
+        assert.equal((await api('GET',`/api/tickets/${id}`)).body.data.ticket.revision,0,'failed save rolls back');
+        const updated=await api('PUT',`/api/tickets/${id}`,{revision:0,ticket_name:'Hai lượt bay đã sửa'});assert.equal(updated.status,200);
+        assert.equal((await api('PUT',`/api/tickets/${id}`,{revision:0,ticket_name:'Stale'})).status,409);
+        assert.equal((await api('POST','/api/tickets',{...body,scope:[{type:'DISCONNECTOR',id:1}]})).status,400);
+        assert.equal((await api('POST','/api/tickets',{...body,planned_end_at:'2026-10-26T09:00:00Z'})).status,400);
+        await api('PUT',`/api/teams/${team.body.data.team_id}`,{team_name:'Tổ fixture F',member_ids:[]});
+        assert.equal((await api('GET',`/api/tickets/${id}`)).body.data.crew.length,1,'crew snapshot survives team edit');
+        const newer=await api('POST','/api/tickets',{ticket_name:'Phiếu sau',inspection_type:'SOLAR_PANEL',target_facility:'Khu sau'});
+        const newId=newer.body.data.ticket_id;
+        const a=await ingest.startPilotSession({user:{username:'fixture'},ticketId:id,rcSn:'RC-F',aircraftSn:'UAV-F'});
+        await db.query("UPDATE pilot_sessions SET started_at='2026-10-26 09:50:00',ended_at='2026-10-26 10:45:00' WHERE session_id=?",[a]);
+        const b=await ingest.startPilotSession({user:{username:'fixture'},ticketId:newId,rcSn:'RC-F',aircraftSn:'UAV-F'});
+        await db.query("UPDATE pilot_sessions SET started_at='2026-10-26 11:00:00' WHERE session_id=?",[b]);
+        const [ctx]=await db.query('SELECT upload_namespace FROM pilot_sessions WHERE session_id=?',[b]);
+        const ids=[];
+        for(const [start,end] of [['10:00:00','10:10:00'],['10:30:00','10:40:00']]){
+            const f=await db.query("INSERT INTO flight_sessions (device_sn,ticket_id,pilot_session_id,started_at,ended_at,end_reason) VALUES (?,?,?,?,?,'LANDED')",
+                ['UAV-F',id,a,'2026-10-26 '+start,'2026-10-26 '+end]);ids.push(f.insertId);
+        }
+        for(const [index,date] of ['2026:10:26 10:02:00','2026:10:26 10:35:00'].entries()){
+            const img=h.fakeDjiJpeg({lat:11.85,lng:107,date});
+            const key=`/dji-media/media/${ctx.upload_namespace}/TASKF_${index}_W.JPG`;
+            assert.equal((await fetch(app.base+key,{method:'PUT',body:img})).status,200);
+        }
+        const images=await db.query("SELECT * FROM media_files WHERE ticket_id=? ORDER BY media_id",[id]);
+        assert.equal(images.length,2);assert.deepEqual(images.map(m=>m.flight_session_id),ids);
+        assert.ok(images.every(m=>m.assignment_status==='FLIGHT'&&m.pilot_session_id===a));
+        assert.equal((await db.query('SELECT COUNT(*) AS n FROM media_files WHERE ticket_id=?',[newId]))[0].n,0);
+        const unknown=h.fakeDjiJpeg({lat:11.85,lng:107});
+        assert.equal((await fetch(app.base+'/dji-media/media/UNKNOWN_W.JPG',{method:'PUT',body:unknown})).status,200);
+        const [unresolved]=await db.query("SELECT ticket_id,assignment_status FROM media_files WHERE original_name='UNKNOWN_W.JPG'");
+        assert.equal(unresolved.ticket_id,null);assert.equal(unresolved.assignment_status,'UNRESOLVED');
+        // Reupload same bytes creates only an ingest event; no task/flight reassignment.
+        const form=new FormData();form.append('ticket_id',String(id));form.append('files',new Blob([fs.readFileSync(images[0].file_path_local)]),'again_W.JPG');
+        const duplicate=await api('POST','/api/media/import',form);assert.equal(duplicate.body.data.duplicate,1);
+        const progress=await api('GET',`/api/tickets/${id}/progress`);
+        assert.equal(progress.body.data.photos.originals,2);assert.equal(progress.body.data.photos.duplicates,1);assert.equal(progress.body.data.flights.length,2);
+        assert.equal((await api('PATCH',`/api/tickets/${id}/status`,{status:'COMPLETED'})).status,409);
+        assert.equal((await api('POST',`/api/tickets/${id}/reconcile`,{expected_count:3,originals_checked:true,note:'Thẻ fixture'})).status,409);
+        const reconciled=await api('POST',`/api/tickets/${id}/reconcile`,{expected_count:2,originals_checked:true,note:'Thẻ fixture'});
+        assert.equal(reconciled.status,200,JSON.stringify(reconciled.body));assert.equal(reconciled.body.data.can_complete,true);
+        assert.equal((await api('PATCH',`/api/tickets/${id}/status`,{status:'COMPLETED'})).status,200);
+        // Broken bytes cannot be signed off just because a previous callback succeeded.
+        fs.appendFileSync(images[0].file_path_local,'corruption-fixture');
+        assert.equal((await api('POST',`/api/tickets/${id}/reconcile`,{expected_count:2,originals_checked:true,note:'Kiểm tra lại'})).status,409);
     });
 
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {

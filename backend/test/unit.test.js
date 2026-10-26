@@ -393,3 +393,19 @@ test('chiếu pixel: không dùng RelativeAltitude thay AGL, không đoán tọa
     const p=projectPixel(m,d,c);assert.equal(p.latitude,10);assert.equal(p.longitude,106);
     assert.ok(projectPixel(m,{...d,bbox:[8,4,1,2]},c).longitude>106);
 });
+
+test('media assignment: không dùng phiên mới nhất nếu thiếu serial/ngữ cảnh, không chọn giữa hai chuyến', async () => {
+    const {resolveAssignment}=require('../src/services/mediaAssignment');
+    const meta={captured_at:new Date('2026-10-26T10:02:00Z')};
+    let calls=0;
+    const none=await resolveAssignment(async()=>{calls++;return [];},{},meta);
+    assert.equal(calls,0);assert.equal(none.ticketId,null);
+    const ambiguous=await resolveAssignment(async()=>[{flight_session_id:1,ticket_id:1},{flight_session_id:2,ticket_id:2}],{deviceSn:'UAV'},meta);
+    assert.equal(ambiguous.ticketId,null);assert.equal(ambiguous.flightSessionId,null);
+});
+
+test('thermal parser: thiếu SDK không trả nhiệt từ công thức fallback chưa xác minh', () => {
+    const {parseDjiThermalJpeg}=require('../src/services/thermalParser');
+    const file=path.join(__dirname,'fixtures/vision-input.jpg');
+    assert.equal(parseDjiThermalJpeg(file),null);
+});

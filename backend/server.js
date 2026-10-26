@@ -32,7 +32,7 @@ const AdmZip = require('adm-zip');
 // Database và các module định tuyến chuẩn hóa
 const { testConnection, query, isDbConnected, getStatus: getDbStatus, onStatusChange: onDbStatusChange, dbConfig, sendDbError } = require('./src/config/db');
 const { runMigrations } = require('./src/db/migrate');
-const { authRouter, verifyLogin } = require('./src/routes/auth');
+const { authRouter, verifyLogin, issuePilotToken } = require('./src/routes/auth');
 const assetsRouter = require('./src/routes/assets');
 const basemapsRouter = require('./src/routes/basemaps');
 const { listActiveTickets, findTicketById } = require('./src/services/ticketService');
@@ -170,6 +170,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/solar', solarRouter);
 app.use('/api/substation', substationRouter);
 app.use('/api/tickets', ticketsRouter);
+app.use('/api/teams', require('./src/routes/teams'));
 app.use('/api/ai', aiRouter);
 const visionRouter = require('./src/routes/vision');
 visionRouter.setOnResult(broadcastWebSocket);
@@ -749,6 +750,7 @@ function triggerMediaSync() {
 // Nút "Đồng bộ ảnh" trên dashboard vẫn gọi triggerMediaSync() thủ công khi cần thử.
 
 // Ảnh mới nhận (Pilot 2 / thẻ nhớ): cập nhật danh sách trong bộ nhớ và báo dashboard
+mediaUploadRouter.setOnUploadEvent(broadcastWebSocket);
 mediaUploadRouter.setOnIngested((media) => {
   memoryStore.mediaFiles.unshift(media);
   broadcastWebSocket({ type: 'media_synced', data: media });
@@ -804,12 +806,14 @@ app.post('/api/pilot/login', async (req, res) => {
   let sessionId = null;
   let ticketRouteList = [];
   let liveStream = null;
+  let uploadNamespace = null;
   try {
     const sn = v => (typeof v === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(v) ? v : null);
     sessionId = await mediaIngest.startPilotSession({ user: auth.user, ticketId: ticket.ticket_id, rcSn: sn(rcSn), aircraftSn: sn(aircraftSn) });
     const streamDevice = sn(aircraftSn) || sn(rcSn);
     if (streamDevice) liveStream = await monitoring.ensureStream(ticket.ticket_id, streamDevice);
     ticketRouteList = await require('./src/services/ticketRoutes').routesOfTicket(ticket.ticket_id);
+    uploadNamespace = (await query('SELECT upload_namespace FROM pilot_sessions WHERE session_id=?',[sessionId]))[0].upload_namespace;
   } catch (err) {
     return sendDbError(res, err);
   }
@@ -833,10 +837,11 @@ app.post('/api/pilot/login', async (req, res) => {
       workspace_id: systemConfig.workspace_id,
       ticket_id: ticket.ticket_id,
       pilot_session_id: sessionId,
+      upload_prefix: `media/${uploadNamespace}/`,
       assigned_ticket: `${ticket.ticket_code} - ${ticket.ticket_name}`,
       user: auth.user,
       license: systemConfig.dji_license,
-      token: auth.token,
+      token: issuePilotToken(auth.user,sessionId,systemConfig.workspace_id),
       mqtt: {
         host: `tcp://${HOST_IP}:${MQTT_PORT}`,
         username: 'pilot',
@@ -958,70 +963,7 @@ app.post('/api/routes/generate-kmz', async (req, res) => {
 });
 
 // 5.2 Bắn lệnh nạp đường bay KMZ trực tiếp vào Drone / DJI Pilot 2 qua DJI Cloud API
-app.post('/api/routes/push-to-drone', async (req, res) => {
-  const { route_id, file_url, md5, device_sn } = req.body;
-  const targetSn = device_sn || Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
-  const gatewaySn = Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
-
-  const hasGateway = Boolean(memoryStore.gateways[gatewaySn]);
-  const hasDevice = Boolean(memoryStore.devices[targetSn]);
-
-  // Tìm tuyến trong thư viện (MySQL). Không bịa md5 nếu không tìm thấy.
-  let route = null;
-  try {
-    const found = route_id ? await routeLibrary.findRoute(route_id) : null;
-    if (found) {
-      route = { full_url: `http://${HOST_IP}:${PORT}/uploads/waylines/${encodeURIComponent(found.kmz_file_name)}`, md5: found.kmz_md5 };
-    }
-  } catch (err) {
-    return sendDbError(res, err);
-  }
-
-  if (!route) {
-    return res.status(404).json({ code: 404, message: 'Không tìm thấy thông tin tuyến bay KMZ!' });
-  }
-
-  if (!hasGateway && !hasDevice) {
-    return res.status(503).json({
-      code: 503,
-      message: `Thiết bị UAV (${targetSn}) hoặc Tay Cầm (${gatewaySn}) đang OFFLINE. Vui lòng bật nguồn máy bay và kết nối DJI Pilot 2 để nạp đường bay!`
-    });
-  }
-
-  const flightId = crypto.randomUUID();
-  const kmzUrl = route.full_url || `http://${HOST_IP}:${PORT}${route.file_url}`;
-  const payload = {
-    tid: crypto.randomUUID(),
-    bid: crypto.randomUUID(),
-    timestamp: Date.now(),
-    method: 'flighttask_prepare',
-    data: {
-      flight_id: flightId,
-      file: {
-        url: kmzUrl,
-        fingerprint: route.md5 || 'd41d8cd98f00b204e9800998ecf8427e'
-      }
-    }
-  };
-
-  if (mqttClient) {
-    mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(payload));
-    if (targetSn && targetSn !== gatewaySn) {
-      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(payload));
-    }
-    console.log(`[FlightTask] Đã phát lệnh flighttask_prepare (KMZ: ${kmzUrl}) tới Gateway ${gatewaySn} & UAV ${targetSn}`);
-  }
-
-  res.json({
-    code: 0,
-    message: 'Đã gửi lệnh nạp tuyến. Lưu ý: lệnh flighttask chủ yếu dành cho DJI Dock; với Pilot 2 hãy mở Thư viện đường bay (Cloud) trên tay điều khiển và chọn tuyến của phiếu.',
-    data: {
-      flight_id: flightId,
-      kmz_url: kmzUrl,
-      md5: route.md5
-    }
-  });
-});
+app.post('/api/routes/push-to-drone', (req,res) => res.status(410).json({code:410,message:'Thao tác này không thuộc luồng M3T/Pilot 2 đã hỗ trợ. Dùng hồ sơ chụp KMZ và vận hành trên Pilot 2; server chỉ nhận ảnh gốc.'}));
 
 // 6. Điều khiển Bật/Tắt LiveStream Mavic 3T
 app.post('/api/control/live', async (req, res) => {
@@ -1054,238 +996,19 @@ app.post('/api/control/live', async (req, res) => {
 });
 
 // 7. Lệnh chụp ảnh từ Web (Hỗ trợ chụp Kép RGB+Nhiệt, chỉ RGB, chỉ Nhiệt, hoặc Zoom)
-app.post('/api/control/photo', (req, res) => {
-  const { device_sn, mode } = req.body;
-  const targetSn = device_sn || Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
-  const gatewaySn = Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
-
-  const hasGateway = Boolean(memoryStore.gateways[gatewaySn]);
-  const hasDevice = Boolean(memoryStore.devices[targetSn]);
-  if (!hasGateway && !hasDevice) {
-    return res.status(503).json({
-      code: 503,
-      message: `Thiết bị UAV (${targetSn}) hoặc Tay Cầm (${gatewaySn}) đang OFFLINE (Chưa kết nối MQTT 10.20.28.50:1883). Vui lòng bật nguồn máy bay và kết nối DJI Pilot 2 để thực hiện lệnh!`
-    });
-  }
-
-  // Chế độ chụp: dual (lưu cả RGB + Thermal), thermal (nhiệt), wide (RGB), zoom (zoom tele)
-  const photoMode = mode || 'dual';
-
-  if (mqttClient) {
-    // 1. Chuyển chế độ camera sang Chụp Ảnh (Photo Mode = 0)
-    const switchPayload = {
-      tid: crypto.randomUUID(),
-      bid: crypto.randomUUID(),
-      timestamp: Date.now(),
-      method: 'camera_mode_switch',
-      data: {
-        payload_index: '67-0-0',
-        camera_mode: 0
-      }
-    };
-    mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(switchPayload));
-    if (targetSn && targetSn !== gatewaySn) {
-      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(switchPayload));
-    }
-
-    // 2. Phát lệnh Chụp Ảnh Shutter chuẩn DJI Cloud API
-    const photoPayload = {
-      tid: crypto.randomUUID(),
-      bid: crypto.randomUUID(),
-      timestamp: Date.now(),
-      method: 'camera_photo_take',
-      data: {
-        payload_index: '67-0-0'
-      }
-    };
-    mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(photoPayload));
-    if (targetSn && targetSn !== gatewaySn) {
-      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(photoPayload));
-    }
-    console.log(`[Điều Khiển] Đã phát lệnh Chụp Ảnh Shutter (67-0-0) tới Drone (${targetSn}) & Tay Cầm (${gatewaySn})`);
-
-    // 3. Tự động kích hoạt kéo ảnh từ thẻ nhớ Drone về máy tính sau 3.5 giây
-    setTimeout(() => {
-      if (mqttClient) {
-        const syncPayload = {
-          tid: crypto.randomUUID(),
-          bid: crypto.randomUUID(),
-          timestamp: Date.now(),
-          method: 'media_files_sync',
-          data: {}
-        };
-        mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(syncPayload));
-        if (targetSn && targetSn !== gatewaySn) {
-          mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(syncPayload));
-        }
-        console.log(`[Tự Động Đồng Bộ] Đã phát lệnh media_files_sync kéo ảnh vừa chụp về máy tính`);
-      }
-    }, 3500);
-  }
-
-  res.json({ code: 0, message: `Đã gửi lệnh chụp ảnh (${photoMode}) tới máy bay (${targetSn})` });
-});
+app.post('/api/control/photo', (req,res) => res.status(410).json({code:410,message:'Thao tác này không thuộc luồng M3T/Pilot 2 đã hỗ trợ. Dùng hồ sơ chụp KMZ và vận hành trên Pilot 2; server chỉ nhận ảnh gốc.'}));
 
 // 7.0 Tiếp nhận ảnh chụp tức thời (Live Stream Realtime Snapshot) từ giao diện Web
-app.post('/api/media/snapshot', async (req, res) => {
-  try {
-    const { image_base64, mode = 'thermal', lat, lng, alt, max_temperature, ticket_id } = req.body;
-    if (!image_base64) {
-      return res.status(400).json({ code: -1, message: 'Thiếu dữ liệu hình ảnh' });
-    }
-
-    const base64Data = image_base64.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    const suffix = mode === 'thermal' ? '_T' : (mode === 'wide' ? '_W' : '_Z');
-    const fileName = `SNAP_${Date.now()}${suffix}.JPG`; // ảnh chụp màn hình livestream, không phải ảnh gốc DJI
-    const uploadDir = path.join(__dirname, 'uploads', 'media');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    const localFilePath = path.join(uploadDir, fileName);
-
-    fs.writeFileSync(localFilePath, buffer);
-    console.log(`[Snapshot Realtime] ✓ Đã chụp & lưu ảnh tức thời từ luồng Live: ${fileName}`);
-
-    const isThermal = mode === 'thermal' || fileName.includes('_T');
-    const isZoom = mode === 'zoom';
-    const mediaType = isThermal ? 'THERMAL_PHOTO' : (isZoom ? 'ZOOM_PHOTO' : 'RGB_PHOTO');
-
-    // Ảnh chụp màn hình livestream không có XMP: lấy vị trí / nhiệt độ thật từ OSD đang nhận, không có thì để trống
-    const targetSn = Object.keys(memoryStore.devices)[0] || null;
-    const dev = (targetSn && memoryStore.devices[targetSn]) || {};
-    const num = v => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
-    const ing = await mediaIngest.ingestFile({
-      localPath: localFilePath, fileName, originalName: fileName, source: 'MANUAL',
-      ticketId: num(ticket_id), deviceSn: targetSn || undefined
-    });
-    const lens = isThermal ? 'IR' : (isZoom ? 'ZOOM' : 'WIDE');
-    const fields = {
-      latitude: num(lat) ?? (dev.lat ?? null),
-      longitude: num(lng) ?? (dev.lng ?? null),
-      relative_altitude: num(alt) ?? (dev.rel_alt ?? null),
-      max_temperature: num(max_temperature) ?? (isThermal ? (dev.thermal_max ?? null) : null),
-      lens, media_type: mediaType
-    };
-    await query(
-      'UPDATE media_files SET latitude = ?, longitude = ?, relative_altitude = ?, max_temperature = ?, lens = ?, media_type = ? WHERE media_id = ?',
-      [fields.latitude, fields.longitude, fields.relative_altitude, fields.max_temperature, fields.lens, fields.media_type, ing.media.media_id]
-    );
-    const record = { ...ing.media, ...fields };
-
-    memoryStore.mediaFiles.unshift(record);
-
-    broadcastWebSocket({
-      type: 'media_synced',
-      data: record
-    });
-
-    res.json({
-      code: 0,
-      message: 'Đã chụp và lưu ảnh hiện trường thành công vào máy tính và Database!',
-      data: record
-    });
-  } catch (err) {
-    console.error('[Snapshot Error]', err);
-    res.status(500).json({ code: 500, message: 'Lỗi lưu ảnh chụp: ' + err.message });
-  }
-});
+app.post('/api/media/snapshot', (req,res) => res.status(410).json({code:410,message:'Thao tác này không thuộc luồng M3T/Pilot 2 đã hỗ trợ. Dùng hồ sơ chụp KMZ và vận hành trên Pilot 2; server chỉ nhận ảnh gốc.'}));
 
 // 7.1 Lệnh yêu cầu Pilot 2 / UAV kích hoạt đồng bộ toàn bộ ảnh từ thẻ nhớ về Server
-app.post('/api/control/media-sync', (req, res) => {
-  const gatewaySn = Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
-  const targetSn = Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
-
-  const payload = {
-    tid: crypto.randomUUID(),
-    bid: crypto.randomUUID(),
-    timestamp: Date.now(),
-    method: 'media_files_sync',
-    data: {}
-  };
-
-  if (mqttClient) {
-    mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(payload));
-    if (targetSn && targetSn !== gatewaySn) {
-      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(payload));
-    }
-    console.log(`[Media Sync] Đã gửi lệnh media_files_sync tới Gateway (${gatewaySn}) & UAV (${targetSn})`);
-  }
-
-  res.json({ code: 0, message: 'Đã gửi yêu cầu đồng bộ ảnh từ Drone về máy chủ!' });
-});
+app.post('/api/control/media-sync', (req,res) => res.status(410).json({code:410,message:'Thao tác này không thuộc luồng M3T/Pilot 2 đã hỗ trợ. Dùng hồ sơ chụp KMZ và vận hành trên Pilot 2; server chỉ nhận ảnh gốc.'}));
 
 // 8. Lệnh chỉnh góc Gimbal (nhìn 90° tấm pin hoặc nhìn ngang dao cách ly)
-app.post('/api/control/gimbal', (req, res) => {
-  const { pitch, device_sn } = req.body;
-  const targetSn = device_sn || Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
-  const gatewaySn = Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
-
-  const hasGateway = Boolean(memoryStore.gateways[gatewaySn]);
-  const hasDevice = Boolean(memoryStore.devices[targetSn]);
-  if (!hasGateway && !hasDevice) {
-    return res.status(503).json({
-      code: 503,
-      message: `Thiết bị UAV (${targetSn}) hoặc Tay Cầm (${gatewaySn}) đang OFFLINE (Chưa kết nối MQTT 10.20.28.50:1883). Không thể điều khiển Gimbal!`
-    });
-  }
-
-  const payload = {
-    tid: crypto.randomUUID(),
-    bid: crypto.randomUUID(),
-    timestamp: Date.now(),
-    method: 'gimbal_rotate',
-    data: {
-      payload_index: '67-0-0',
-      pitch: parseFloat(pitch) || -90,
-      roll: 0,
-      yaw: 0
-    }
-  };
-
-  if (mqttClient) {
-    mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(payload));
-    if (targetSn && targetSn !== gatewaySn) {
-      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(payload));
-    }
-    console.log(`[Control] Đã gửi lệnh chỉnh Gimbal Pitch = ${pitch}° (payload: 67-0-0) tới ${gatewaySn} & ${targetSn}`);
-  }
-
-  res.json({ code: 0, message: `Đã gửi lệnh chỉnh Gimbal sang ${pitch}°`, data: payload });
-});
+app.post('/api/control/gimbal', (req,res) => res.status(410).json({code:410,message:'Thao tác này không thuộc luồng M3T/Pilot 2 đã hỗ trợ. Dùng hồ sơ chụp KMZ và vận hành trên Pilot 2; server chỉ nhận ảnh gốc.'}));
 
 // 9. Lệnh Gọi Máy Bay Về (RTH)
-app.post('/api/control/rth', (req, res) => {
-  const { device_sn } = req.body;
-  const targetSn = device_sn || Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
-  const gatewaySn = Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
-
-  const hasGateway = Boolean(memoryStore.gateways[gatewaySn]);
-  const hasDevice = Boolean(memoryStore.devices[targetSn]);
-  if (!hasGateway && !hasDevice) {
-    return res.status(503).json({
-      code: 503,
-      message: `Thiết bị UAV (${targetSn}) hoặc Tay Cầm (${gatewaySn}) đang OFFLINE. Không thể gửi lệnh RTH!`
-    });
-  }
-
-  const payload = {
-    tid: crypto.randomUUID(),
-    bid: crypto.randomUUID(),
-    timestamp: Date.now(),
-    method: 'flight_return_home',
-    data: {}
-  };
-
-  if (mqttClient) {
-    mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(payload));
-    if (targetSn && targetSn !== gatewaySn) {
-      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(payload));
-    }
-    console.log(`[Control] Đã phát lệnh RTH tới Gateway (${gatewaySn}) & Mavic 3T (${targetSn})`);
-  }
-
-  res.json({ code: 0, message: 'Đã gửi lệnh Return-To-Home tới máy bay', data: payload });
-});
+app.post('/api/control/rth', (req,res) => res.status(410).json({code:410,message:'Thao tác này không thuộc luồng M3T/Pilot 2 đã hỗ trợ. Dùng hồ sơ chụp KMZ và vận hành trên Pilot 2; server chỉ nhận ảnh gốc.'}));
 
 // 9.1 Bắn gói tin MQTT thử nghiệm vào Broker 1883 và broadcast ra Live Console
 app.post('/api/mqtt/test-publish', (req, res) => {

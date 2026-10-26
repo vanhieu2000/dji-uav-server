@@ -32,6 +32,8 @@ const UPLOAD_ID_RE = /^[a-f0-9]{32}$/;
 
 const router = express.Router();
 let onIngested = () => {};
+let onUploadEvent = () => {};
+router.setOnUploadEvent = fn => { onUploadEvent = fn; };
 /** server.js đăng ký hàm này để phát WebSocket và cập nhật danh sách ảnh trong bộ nhớ. */
 router.setOnIngested = fn => { onIngested = fn; };
 
@@ -45,19 +47,32 @@ function safeTarget(originalName) {
     return { name, full: path.join(MEDIA_DIR, name) };
 }
 
-async function ingestSaved(localPath, fileName, originalName, extra = {}) {
+function namespaceOf(value) {
+    const m=/(?:^|\/)([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(?:\/|$)/i.exec(value||'');
+    return m?m[1]:null;
+}
+async function recordUpload(result,originalName,extra) {
+    let ticket=extra.ticketId||result.media.ticket_id||null;
+    if(!ticket && extra.uploadNamespace){const rows=await query('SELECT ticket_id FROM pilot_sessions WHERE upload_namespace=?',[extra.uploadNamespace]);ticket=rows[0]?.ticket_id||null;}
+    const [existing]=ticket?await query('SELECT ticket_id FROM inspection_tickets WHERE ticket_id=?',[ticket]):[];
+    if(ticket&&!existing)ticket=null;
+    const note=result.status==='failed'?'Không xử lý được file; cần kiểm tra ảnh gốc':result.status==='duplicate'&&extra.ticketId&&result.media.ticket_id!==extra.ticketId?'Ảnh đã thuộc phiếu khác, không tự chuyển phiếu':null;
+    const r=await query('INSERT INTO media_ingest_events (media_id,ticket_id,original_name,status,note) VALUES (?,?,?,?,?)',
+        [result.media.media_id||null,ticket,String(originalName).slice(0,255),result.status,note]);
+    onUploadEvent({type:'media_ingest',data:{ingest_id:r.insertId,ticket_id:ticket,status:result.status,media_id:result.media.media_id||null,note}});
+}
+async function ingestSaved(localPath,fileName,originalName,extra={}) {
+    let r;
     try {
-        const r = await ingest.ingestFile({ localPath, fileName, originalName, ...extra });
-        if (r.status === 'duplicate') {
-            fs.rm(localPath, { force: true }, () => {}); // bản trùng: giữ bản đã có
-        } else {
-            onIngested(r.media);
-        }
-        return r;
-    } catch (err) {
-        console.error('[Nhận ảnh] Lỗi xử lý', originalName, err.message);
-        return { status: 'failed', error: err.message, media: { file_name: fileName } };
+        r=await ingest.ingestFile({localPath,fileName,originalName,...extra});
+        if(r.status==='duplicate')fs.rm(localPath,{force:true},()=>{});
+        else onIngested(r.media);
+    } catch(err){
+        console.error('[Nhận ảnh] Không xử lý được file:',err.code||err.name);
+        r={status:'failed',error:'Không xử lý được ảnh gốc',media:{file_name:fileName}};
     }
+    await recordUpload(r,originalName,extra);
+    return r;
 }
 
 /* ---------------- S3 giả lập ---------------- */
@@ -104,7 +119,8 @@ async function completeMultipart(req, res) {
     }
     await new Promise((resolve, reject) => { out.on('error', reject); out.end(resolve); });
     fs.rmSync(dir, { recursive: true, force: true });
-    await ingestSaved(target.full, target.name, path.basename(req.path), { source: 'CLOUD' });
+    const result=await ingestSaved(target.full,target.name,path.basename(req.path),{source:'CLOUD',uploadNamespace:namespaceOf(req.path)});
+    if(result.status==='failed')throw new Error('Không xử lý được ảnh gốc sau khi ghép');
     res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
 <CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
   <Bucket>dji-media</Bucket><Key>${xmlEsc(req.path)}</Key><ETag>"${crypto.randomBytes(16).toString('hex')}"</ETag>
@@ -138,9 +154,14 @@ router.put(S3_PATHS, (req, res) => {
     req.pipe(ws);
     ws.on('error', err => { if (!res.headersSent) res.status(500).send(err.message); });
     ws.on('finish', async () => {
-        const etag = `"${crypto.randomBytes(16).toString('hex')}"`;
-        if (!isPart) await ingestSaved(target.full, target.name, path.basename(req.path), { source: 'CLOUD' });
-        res.set({ ETag: etag, 'Access-Control-Expose-Headers': 'ETag' }).status(200).send('');
+        try {
+            const etag = `"${crypto.randomBytes(16).toString('hex')}"`;
+            if(!isPart){
+                const r=await ingestSaved(target.full,target.name,path.basename(req.path),{source:'CLOUD',uploadNamespace:namespaceOf(req.path)});
+                if(r.status==='failed')return res.status(500).send('Không xử lý được ảnh gốc');
+            }
+            res.set({ ETag:etag,'Access-Control-Expose-Headers':'ETag' }).status(200).send('');
+        } catch(err) { if(!res.headersSent)res.status(503).send('Chưa ghi nhận được ảnh vào CSDL'); }
     });
 });
 
@@ -162,7 +183,9 @@ router.post([
 ], uploadForm.single('file'), asyncHandler(async (req, res) => {
     if (!req.file) return res.status(400).json({ code: 400, message: 'Không có file' });
     const t = moveIn(req.file);
-    const r = await ingestSaved(t.full, t.name, req.file.originalname, { source: 'CLOUD' });
+    const token=require('./auth').decodeToken(req.get('x-auth-token')||(req.get('authorization')||'').replace(/^Bearer\s+/i,''));
+    const session=token?.pilot_session_id?(await query('SELECT upload_namespace FROM pilot_sessions WHERE session_id=? AND user_id=?',[token.pilot_session_id,token.user_id]))[0]:null;
+    const r = await ingestSaved(t.full,t.name,req.file.originalname,{source:'CLOUD',uploadNamespace:session?.upload_namespace||namespaceOf(req.path)});
     if (r.status === 'failed') return res.status(500).json({ code: 500, message: 'Không xử lý được ảnh' });
     ok(res, { file_id: String(r.media.media_id), file_url: r.media.file_url, duplicate: r.status === 'duplicate' });
 }));

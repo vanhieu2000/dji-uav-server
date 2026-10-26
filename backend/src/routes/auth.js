@@ -158,7 +158,12 @@ function decodeToken(token) {
     try { return jwt.verify(String(token), JWT_SECRET); } catch (e) { return null; }
 }
 
+function issuePilotToken(user, sessionId, workspaceId) {
+    return jwt.sign({...user,pilot_session_id:sessionId,workspace_id:workspaceId},JWT_SECRET,{expiresIn:'12h'});
+}
+
 module.exports = {
+    issuePilotToken,
     authRouter: router,
     authenticateToken,
     verifyLogin,

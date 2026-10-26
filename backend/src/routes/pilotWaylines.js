@@ -27,6 +27,10 @@ const paths = suffix => BASES.map(b => b + suffix);
 async function sessionOf(req) {
     const user = decodeToken(req.get('x-auth-token') || (req.get('authorization') || '').replace(/^Bearer\s+/i, ''));
     const base = 'SELECT * FROM pilot_sessions WHERE ended_at IS NULL AND started_at > NOW() - INTERVAL 12 HOUR';
+    if(user && user.pilot_session_id){
+        const rows=await query('SELECT * FROM pilot_sessions WHERE session_id=? AND user_id=? AND ended_at IS NULL',[user.pilot_session_id,user.user_id]);
+        return rows[0]||null;
+    }
     if (user && user.user_id) {
         const rows = await query(`${base} AND user_id = ? ORDER BY session_id DESC LIMIT 1`, [user.user_id]);
         if (rows.length) return rows[0];

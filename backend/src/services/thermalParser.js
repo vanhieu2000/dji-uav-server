@@ -134,7 +134,7 @@ function parseWithDjiThermalSdk(filePath) {
   const params = extractApp4Params(filePath);
 
   return {
-    engine: 'DJI_OFFICIAL_TSDK_V1.8',
+    engine: 'DJI_TSDK_CLI',
     has_thermal_raw: true,
     width,
     height,
@@ -153,77 +153,6 @@ function parseWithDjiThermalSdk(filePath) {
 /**
  * Thuật toán thuần JS dự phòng nếu không thể chạy được công cụ SDK
  */
-function parsePureJsFallback(filePath) {
-  try {
-    const buf = fs.readFileSync(filePath);
-    let offset = 0;
-    const app3Segments = [];
-
-    while (offset < buf.length - 4) {
-      if (buf[offset] === 0xFF) {
-        const marker = buf[offset + 1];
-        if (marker === 0xE3) {
-          const len = buf.readUInt16BE(offset + 2);
-          app3Segments.push(buf.slice(offset + 4, offset + 2 + len));
-          offset += 2 + len;
-          continue;
-        }
-        if (marker >= 0xE0 && marker <= 0xEF) {
-          const len = buf.readUInt16BE(offset + 2);
-          offset += 2 + len;
-          continue;
-        }
-      }
-      offset++;
-      if (buf[offset] === 0xFF && buf[offset + 1] === 0xDA && app3Segments.length > 0) break;
-    }
-
-    if (app3Segments.length === 0) return null;
-    const rawData = Buffer.concat(app3Segments);
-    if (rawData.length < 655360) return null;
-
-    const width = 640;
-    const height = 512;
-    const totalPixels = width * height;
-    const u16 = new Uint16Array(rawData.buffer, rawData.byteOffset, totalPixels);
-    const tempMatrixInt16 = new Int16Array(totalPixels);
-
-    let min = 9999;
-    let max = -9999;
-    let sum = 0;
-
-    for (let i = 0; i < totalPixels; i++) {
-      const rawVal = u16[i];
-      let c = (rawVal / 64.0) - 273.15;
-      if (c < min) min = c;
-      if (c > max) max = c;
-      sum += c;
-      tempMatrixInt16[i] = Math.round(c * 10);
-    }
-
-    const centerIdx = Math.floor(height / 2) * width + Math.floor(width / 2);
-    const params = extractApp4Params(filePath);
-
-    return {
-      engine: 'PURE_JS_FALLBACK',
-      has_thermal_raw: true,
-      width,
-      height,
-      minTemp: Math.round(min * 10) / 10,
-      maxTemp: Math.round(max * 10) / 10,
-      avgTemp: Math.round((sum / totalPixels) * 10) / 10,
-      centerTemp: Math.round((tempMatrixInt16[centerIdx] / 10.0) * 10) / 10,
-      emissivity: params.emissivity,
-      distance: params.distance,
-      ambientTemp: params.ambientTemp,
-      reflectedTemp: params.reflectedTemp,
-      tempMatrixBuffer: Buffer.from(tempMatrixInt16.buffer)
-    };
-  } catch (err) {
-    return null;
-  }
-}
-
 /**
  * Trích xuất và giải mã ma trận nhiệt độ từ file R-JPEG của DJI Mavic 3T
  * @param {string} filePath Đường dẫn tuyệt đối tới file ảnh JPG
@@ -242,9 +171,8 @@ function parseDjiThermalJpeg(filePath) {
   let result = parseWithDjiThermalSdk(filePath);
 
   // 2. Dự phòng: Chạy thuật toán nội suy thuần JS nếu SDK chưa khởi tạo xong
-  if (!result) {
-    result = parsePureJsFallback(filePath);
-  }
+  // Không suy nhiệt radiometric bằng công thức dự phòng chưa được kiểm chứng.
+  if (!result) return null;
 
   if (result) {
     memoryThermalCache.set(cacheKey, result);
