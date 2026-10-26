@@ -276,6 +276,7 @@ app.use('/api/ai', aiRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/assets', assetsRouter);
 app.use('/api/basemaps', basemapsRouter);
+app.use('/api/capture-profiles', require('./src/routes/captureProfiles'));
 
 // Tình trạng hệ thống: dashboard dùng để hiện cảnh báo mất CSDL
 app.get('/api/health', (req, res) => {

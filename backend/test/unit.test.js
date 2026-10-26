@@ -52,6 +52,27 @@ test('validate: số, toạ độ, đa giác, bbox', () => {
     assert.equal(v.oneOf(undefined, ['A'], 'pha', null), null);
 });
 
+test('captureMath: GSD ↔ độ cao, vệt chụp, khoảng cách đường bay & chụp', () => {
+    const cm = require('../src/services/captureMath');
+    const ir = cm.getCamera('ir');
+    assert.ok(Math.abs(ir.hfovDeg - 49.4) < 0.3, `HFOV nhiệt ${ir.hfovDeg}`);
+    // 5 cm/điểm ảnh nhiệt ≈ 35 m (khớp bảng Raptor Maps: 5,5 cm ở ~41 m)
+    const h = cm.altitudeForGsd('ir', 5);
+    assert.ok(h > 33 && h < 37, `độ cao ${h}`);
+    assert.ok(Math.abs(cm.footprint('ir', h).gsdCm - 5) < 1e-9);
+    const g = cm.deriveGeometry({
+        route_kind: 'GRID', lenses: 'ir,wide', gsd_lens: 'ir', target_gsd_cm: 5,
+        front_overlap_pct: 70, side_overlap_pct: 30, speed_mps: 15, trigger_mode: 'DISTANCE'
+    });
+    assert.ok(g.gsd_cm.wide < 1, 'ảnh rộng phải mịn hơn nhiều');
+    assert.equal(g.line_spacing_m, Math.round(g.footprint_m.across * 0.7 * 10) / 10);
+    assert.ok(Math.abs(g.trigger_distance_m - g.footprint_m.along * 0.3) < 0.02);
+    assert.ok(g.max_speed_mps <= g.trigger_distance_m / cm.MIN_CAPTURE_INTERVAL_S + 1e-9, 'giảm tốc để kịp chụp');
+    assert.ok(g.warnings.some(w => /Giảm tốc độ/.test(w)));
+    const coarse = cm.deriveGeometry({ route_kind: 'GRID', lenses: 'ir', gsd_lens: 'ir', altitude_m: 80, front_overlap_pct: 70, side_overlap_pct: 30, speed_mps: 5, trigger_mode: 'DISTANCE' });
+    assert.ok(coarse.warnings.some(w => /thô hơn mức 5 cm/.test(w)));
+});
+
 test('parseTilePath chỉ nhận đường dẫn ô ảnh hợp lệ', () => {
     assert.deepEqual(parseTilePath('tiles/18/215000/123000.PNG'), { z: 18, x: 215000, y: 123000, ext: 'png' });
     assert.deepEqual(parseTilePath('3/1/2.jpeg'), { z: 3, x: 1, y: 2, ext: 'jpg' });

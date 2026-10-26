@@ -118,7 +118,7 @@ action `takePhoto`, `gimbalRotate`, `zoom`, `hover`, `rotateYaw`.
 Tài liệu: https://developer.dji.com/doc/cloud-api-tutorial/en/api-reference/dji-wpml/common-element.html
 **Bắt buộc bay thử để chốt:** tham số chọn camera (ir/wide/zoom), đơn vị trigger (forum báo có bản bị đảo m/s).
 
-- [ ] **A1. Hồ sơ chụp (capture profile)** – migration `002_capture.sql` bảng `capture_profiles`:
+- [x] **A1. Hồ sơ chụp (capture profile)** – XONG (migration 002, `routes/captureProfiles.js`, `services/captureMath.js`, tab "Hồ sơ chụp") – migration `002_capture.sql` bảng `capture_profiles`:
   mục đích (`MAP_2D`, `SOLAR_THERMAL`, `CLOSE_UP`, `DCL_POINT`, `TRAINING`, `CUSTOM`), kiểu tuyến (`GRID`/`POINTS`),
   camera (`ir,wide,zoom`), GSD mục tiêu (cm/px) + camera tính GSD, độ cao (ghi đè), chồng ảnh dọc/ngang %, tốc độ,
   gimbal, hướng bay (`ALONG_ROWS`/`FIXED`/`AUTO`), trigger (`DISTANCE`/`TIME`/`POINT`), zoom, thời gian dừng,

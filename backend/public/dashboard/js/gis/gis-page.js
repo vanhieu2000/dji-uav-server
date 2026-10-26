@@ -8,6 +8,7 @@
 
   const TABS = [
     ['tree', 'Cây tài sản & bản đồ'],
+    ['profiles', 'Hồ sơ chụp'],
     ['import', 'Nhập Excel'],
     ['basemaps', 'Bản đồ nền']
   ];
@@ -19,6 +20,7 @@
     root.querySelectorAll('.gis-tab-pane').forEach(p => { p.hidden = p.dataset.pane !== tab; });
     const pane = root.querySelector(`.gis-tab-pane[data-pane="${tab}"]`);
     if (tab === 'tree') GIS.Assets.open(pane);
+    if (tab === 'profiles') GIS.Profiles.render(pane);
     if (tab === 'import') GIS.Import.render(pane);
     if (tab === 'basemaps') GIS.BaseMaps.render(pane);
   }

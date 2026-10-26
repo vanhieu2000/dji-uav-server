@@ -72,6 +72,7 @@ async function startTestApp() {
     app.use('/api/assets', require('../src/routes/assets'));
     app.use('/api/basemaps', require('../src/routes/basemaps'));
     app.use('/api/tickets', require('../src/routes/tickets'));
+    app.use('/api/capture-profiles', require('../src/routes/captureProfiles'));
     const server = await new Promise(resolve => {
         const s = app.listen(0, '127.0.0.1', () => resolve(s));
     });

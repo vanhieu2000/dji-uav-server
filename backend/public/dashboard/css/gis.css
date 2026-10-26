@@ -94,3 +94,25 @@
   .gis-tree-panel{max-height:320px}
   .gis-grid3{grid-template-columns:1fr 1fr}
 }
+
+/* Hồ sơ chụp */
+.gis-profiles{display:grid;grid-template-columns:300px minmax(0,1fr);gap:12px;align-items:start}
+.gis-pf-side{padding:12px}
+.gis-pf-head{justify-content:space-between;align-items:center}
+.gis-pf-hint{font-size:12px;margin:8px 0}
+.gis-pf-list{display:flex;flex-direction:column;gap:6px}
+.gis-pf-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;cursor:pointer;color:var(--ink)}
+.gis-pf-item:hover{background:var(--surface2)}
+.gis-pf-item.on{border-color:var(--brand);box-shadow:inset 3px 0 0 var(--brand)}
+.gis-pf-item .faint{font-size:11.5px}
+.gis-pf-detail{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px}
+.gis-pf-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.gis-span2{grid-column:1 / -1}
+.gis-field-label{font-size:11.5px;font-weight:600;color:var(--ink2)}
+.gis-pf-preview{background:var(--surface2);border-radius:10px;padding:12px;align-self:start;position:sticky;top:0}
+.gis-pf-preview h3{margin-bottom:8px}
+.gis-geo{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:0;font-size:12.5px}
+.gis-geo dt{color:var(--ink2)}
+.gis-geo dd{margin:0}
+.gis-warn{margin-top:8px;font-size:12px;color:#a96d00;background:var(--sun-soft);border-radius:6px;padding:6px 8px}
+@media (max-width:1100px){.gis-profiles,.gis-pf-detail{grid-template-columns:1fr}}

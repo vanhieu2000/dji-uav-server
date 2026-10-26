@@ -277,8 +277,10 @@ test('API tài sản & bản đồ', async (t) => {
         const c = await mysql.createConnection({ ...h.rootConfig(), database: h.TEST_DB });
         await c.query('DELETE FROM schema_migrations');
         await c.end();
-        const { runMigrations } = require('../src/db/migrate');
-        assert.deepEqual(await runMigrations({ ...h.rootConfig(), database: h.TEST_DB }, { log: () => {} }), ['001_gis_assets.sql']);
+        const { runMigrations, listMigrationFiles } = require('../src/db/migrate');
+        // Mọi file chạy lại được trên DB đã có sẵn bảng/cột (không lỗi, không nhân đôi dữ liệu mẫu)
+        assert.deepEqual(await runMigrations({ ...h.rootConfig(), database: h.TEST_DB }, { log: () => {} }), listMigrationFiles());
+        assert.equal((await api('GET', '/api/capture-profiles')).body.data.length, 5);
     });
 
     await t.test('phiếu đang chờ cho Pilot 2 lấy từ CSDL', async () => {
@@ -289,6 +291,50 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal(list[0].livestream_channel, 'm3t_live');
         assert.equal((await findTicketById(list[0].ticket_id)).ticket_name, 'Kiểm tra khu INV-01');
         assert.equal(await findTicketById('abc'), null);
+    });
+
+    await t.test('hồ sơ chụp: 5 mẫu mặc định, tính hình học, tạo/sửa/xóa, ràng buộc', async () => {
+        const list = await api('GET', '/api/capture-profiles');
+        assert.equal(list.status, 200, JSON.stringify(list.body));
+        const codes = list.body.data.map(p => p.profile_code).sort();
+        assert.deepEqual(codes, ['CLOSE_UP', 'DCL_POINT', 'MAP_2D', 'SOLAR_THERMAL', 'TRAINING_RGB']);
+        const thermal = list.body.data.find(p => p.profile_code === 'SOLAR_THERMAL');
+        assert.ok(thermal.geometry.altitude_m > 30 && thermal.geometry.altitude_m < 40);
+        assert.equal(thermal.time_window_start, '10:00:00');
+        // Mẫu mặc định: sửa được, không xóa được, không đổi mã
+        assert.equal((await api('PUT', `/api/capture-profiles/${thermal.profile_id}`, { target_gsd_cm: 4 })).status, 200);
+        assert.equal((await api('DELETE', `/api/capture-profiles/${thermal.profile_id}`)).status, 400);
+        assert.equal((await api('PUT', `/api/capture-profiles/${thermal.profile_id}`, { profile_code: 'X' })).status, 400);
+
+        const body = {
+            profile_code: 'pin-gan', profile_name: 'Quét nhiệt thấp', route_kind: 'GRID', lenses: 'IR, wide, ir',
+            gsd_lens: 'ir', target_gsd_cm: '3,0', front_overlap_pct: 75, side_overlap_pct: 35, speed_mps: 4, gimbal_pitch: -90,
+            time_window_start: '09:30'
+        };
+        const created = await api('POST', '/api/capture-profiles', body);
+        assert.equal(created.status, 200, JSON.stringify(created.body));
+        assert.equal(created.body.data.profile_code, 'PIN-GAN');
+        assert.equal(created.body.data.lenses, 'ir,wide');
+        assert.equal(created.body.data.time_window_start, '09:30:00');
+        assert.ok(created.body.data.geometry.altitude_m < 25);
+        assert.equal((await api('POST', '/api/capture-profiles', body)).status, 409);
+
+        const bad = [
+            { ...body, profile_code: 'B1', lenses: 'ir,thermal' },
+            { ...body, profile_code: 'B2', gsd_lens: 'zoom' },
+            { ...body, profile_code: 'B3', trigger_mode: 'POINT' },
+            { ...body, profile_code: 'B4', target_gsd_cm: null },
+            { ...body, profile_code: 'B5', route_kind: 'POINTS' },
+            { ...body, profile_code: 'B6', heading_mode: 'FIXED' },
+            { ...body, profile_code: 'B7', time_window_start: '25:00' }
+        ];
+        for (const b of bad) assert.equal((await api('POST', '/api/capture-profiles', b)).status, 400, b.profile_code);
+
+        const pv = await api('POST', '/api/capture-profiles/preview', { route_kind: 'GRID', lenses: 'wide', gsd_lens: 'wide', altitude_m: 60, front_overlap_pct: 80, side_overlap_pct: 70 });
+        assert.equal(pv.status, 200, JSON.stringify(pv.body));
+        assert.ok(pv.body.data.line_spacing_m > 0 && pv.body.data.trigger_distance_m > 0);
+
+        assert.equal((await api('DELETE', `/api/capture-profiles/${created.body.data.profile_id}`)).status, 200);
     });
 
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
