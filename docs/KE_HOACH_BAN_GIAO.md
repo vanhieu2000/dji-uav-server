@@ -149,7 +149,7 @@ Tài liệu: https://developer.dji.com/doc/cloud-api-tutorial/en/api-reference/d
   - API `POST /api/flight-plans/preview`, `POST /api/flight-plans` (lưu `flight_routes` + file KMZ).
   - Xong khi: unit test toán (GSD, số đường, số ảnh) + KMZ mở được trong DJI Pilot 2 (bay thử).
 
-- [ ] **A3. Nhận ảnh đúng** – `src/services/mediaIngest.js`, `src/services/djiImageMeta.js`:
+- [x] **A3. Nhận ảnh đúng** – XONG (`services/djiImageMeta.js`, `services/mediaIngest.js`, `routes/mediaUpload.js`, migration 004, tab "Nhập ảnh thẻ nhớ"; sửa lỗi tải nhiều phần bị ghi đè). CÒN: kiểm chứng với ảnh M3T thật (tên trường XMP, vị trí hậu tố fileSuffix trong tên file, số serial qua djiBridge) – `src/services/mediaIngest.js`, `src/services/djiImageMeta.js`:
   - Đọc XMP của ảnh DJI: `GpsLatitude/Longitude`, `AbsoluteAltitude`, `RelativeAltitude`, `GimbalPitch/Yaw/RollDegree`,
     `FlightYawDegree`, `RtkFlag` (50 = FIX), `RtkStdLon/Lat/Hgt`, giờ chụp; loại ảnh (_T nhiệt, _W rộng, _Z zoom).
   - Gắn ảnh với chuyến bay (`flight_id` trong upload callback), phiếu (phiên đăng nhập Pilot), điểm chụp (gần nhất ≤ 2 m).
