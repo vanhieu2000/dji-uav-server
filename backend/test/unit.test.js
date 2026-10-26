@@ -435,3 +435,16 @@ test('NMS v4: trạng thái reconnect và publisher đã được chấp nhận 
     await m.publisherEvent('stop',{id:'resumed',streamPath:'/live/'+channel});
     assert.equal((await m.streams(1))[0].status,'STOPPED');
 });
+
+ test('backup AES-GCM: roundtrip và chống archive bị sửa; không ghi đè',async()=>{
+ const fs=require('fs'),os=require('os'),path=require('path'),{archive}=require('../../ops/archive');const root=fs.mkdtempSync(path.join(os.tmpdir(),'uav-backup-test-'));
+ try{const input=path.join(root,'data'),key=path.join(root,'key'),encrypted=path.join(root,'enc'),output=path.join(root,'out');fs.writeFileSync(input,Buffer.alloc(1024*1024,73));fs.writeFileSync(key,require('crypto').randomBytes(32));await archive('encrypt',input,encrypted,key);await archive('decrypt',encrypted,output,key);assert.deepEqual(fs.readFileSync(output),fs.readFileSync(input));await assert.rejects(archive('decrypt',encrypted,output,key));const data=fs.readFileSync(encrypted);data[50]^=1;fs.writeFileSync(encrypted,data);await assert.rejects(archive('decrypt',encrypted,path.join(root,'bad'),key));assert.equal(fs.existsSync(path.join(root,'bad')),false);}finally{fs.rmSync(root,{recursive:true,force:true});}
+ });
+ test('stream grant: audience play không được publish, đúng path/session và thu hồi',()=>{
+ const streams=require('../src/services/streamAccess'),user={user_id:123,session_id:'fixture-session',auth_version:0};const path='/live/ticket_1_0123456789abcdef';
+ const q=streams.mint(path,'play',user),session={id:'fixture-stream',streamPath:path,streamQuery:Object.fromEntries(new URLSearchParams(q))};assert.equal(streams.allow(session,'publish'),false);
+ const next={id:'fixture-stream-2',streamPath:path,streamQuery:Object.fromEntries(new URLSearchParams(q))};assert.equal(streams.allow(next,'play'),true);streams.revoke({user_id:123});assert.equal(streams.allow({...next,streamQuery:Object.fromEntries(new URLSearchParams(q))},'play'),false);
+ });
+ test('log MQTT không lộ STS/token/mật khẩu',()=>{
+ const {redact}=require('../src/middleware/transportSecurity');assert.deepEqual(redact({data:{credentials:{access_key_secret:'SECRET'},token:'SECRET',temperature:34}}),{data:{credentials:'[redacted]',token:'[redacted]',temperature:34}});
+ });

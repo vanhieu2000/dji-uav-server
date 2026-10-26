@@ -12,7 +12,7 @@ async function scopes(conn,uid,ids){
     const unique=[...new Set(ids.map(x=>v.parseId(x,'nhà máy')))];await conn.execute('DELETE FROM user_plant_scopes WHERE user_id=?',[uid]);
     for(const id of unique){const [p]=await conn.execute('SELECT plant_id FROM plants WHERE plant_id=?',[id]);if(!p.length)throw new v.ValidationError('Nhà máy không tồn tại');await conn.execute('INSERT INTO user_plant_scopes (user_id,plant_id) VALUES (?,?)',[uid,id]);}
 }
-function email(value){const s=v.optionalString(value,'email',255);if(s&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))throw new v.ValidationError('Email không hợp lệ');return s;}
+function email(value){const s=v.optionalString(value,'email',100);if(s&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))throw new v.ValidationError('Email không hợp lệ');return s;}
 router.get('/users',asyncHandler(async(req,res)=>{
     const rows=await query(`SELECT ${PUBLIC_COLUMNS} FROM users ORDER BY username`),plants=await query('SELECT * FROM user_plant_scopes');
     ok(res,rows.map(u=>({...u,plant_ids:plants.filter(p=>p.user_id===u.user_id).map(p=>p.plant_id)})));
@@ -21,7 +21,7 @@ router.post('/users',asyncHandler(async(req,res)=>{
     const b=req.body,name=v.requiredString(b.username,'tài khoản',50);if(!/^[A-Za-z0-9_.-]{3,50}$/.test(name))throw new v.ValidationError('Tài khoản chỉ gồm chữ, số, dấu chấm/gạch');
     const hash=await bcrypt.hash(passwordInput(b.password),12),role=v.oneOf(b.role,ROLES,'vai trò'),unit=v.isBlank(b.unit_id)?null:v.parseId(b.unit_id,'đơn vị');
     const id=await withTransaction(async conn=>{
-        const [r]=await conn.execute("INSERT INTO users (username,password_hash,full_name,email,phone,role,unit_id,must_change_password) VALUES (?,?,?,?,?,?,?,1)",[name,hash,v.requiredString(b.full_name,'họ tên',100),email(b.email),v.optionalString(b.phone,'điện thoại',45),role,unit]);
+        const [r]=await conn.execute("INSERT INTO users (username,password_hash,full_name,email,phone,role,unit_id,must_change_password) VALUES (?,?,?,?,?,?,?,1)",[name,hash,v.requiredString(b.full_name,'họ tên',100),email(b.email),v.optionalString(b.phone,'điện thoại',20),role,unit]);
         await scopes(conn,r.insertId,b.plant_ids||[]);return r.insertId;
     });ok(res,{user_id:id});
 }));
@@ -34,7 +34,7 @@ router.put('/users/:id',asyncHandler(async(req,res)=>{
         if(u.role==='ADMIN'&&u.status==='ACTIVE'&&(role!=='ADMIN'||status!=='ACTIVE')&&admins.length<=1)throw new v.ValidationError('Phải giữ ít nhất một quản trị viên đang hoạt động');
         const unit=b.unit_id===undefined?u.unit_id:v.isBlank(b.unit_id)?null:v.parseId(b.unit_id,'đơn vị');
         await conn.execute('UPDATE users SET full_name=?,email=?,phone=?,role=?,status=?,unit_id=?,auth_version=auth_version+1 WHERE user_id=?',
-            [b.full_name===undefined?u.full_name:v.requiredString(b.full_name,'họ tên',100),b.email===undefined?u.email:email(b.email),b.phone===undefined?u.phone:v.optionalString(b.phone,'điện thoại',45),role,status,unit,id]);
+            [b.full_name===undefined?u.full_name:v.requiredString(b.full_name,'họ tên',100),b.email===undefined?u.email:email(b.email),b.phone===undefined?u.phone:v.optionalString(b.phone,'điện thoại',20),role,status,unit,id]);
         if(b.plant_ids!==undefined)await scopes(conn,id,b.plant_ids);
         await conn.execute('DELETE FROM user_sessions WHERE user_id=?',[id]);
     });onChanged(id);ok(res,{user_id:id});

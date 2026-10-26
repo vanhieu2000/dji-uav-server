@@ -1,10 +1,10 @@
-const {chromium}=require('playwright-core'),express=require('express'),path=require('path'),assert=require('assert/strict');
+const engines=require('playwright-core'),engineName=process.env.BROWSER_ENGINE||'chromium',engine=engines[engineName],express=require('express'),path=require('path'),assert=require('assert/strict');
 (async()=>{
  const app=express();app.use('/m',express.static(path.resolve(__dirname,'../public/mobile')));app.use('/dashboard',express.static(path.resolve(__dirname,'../public/dashboard')));
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.on('listening',r));const base='http://127.0.0.1:'+server.address().port;
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await engine.launch({...(engineName==='chromium'?{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']}:{}),headless:true});
  try{
- const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,geolocation:{latitude:10,longitude:106},permissions:['geolocation']});const page=await ctx.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:engineName!=='firefox',hasTouch:true,geolocation:{latitude:10,longitude:106},permissions:['geolocation']});const page=await ctx.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  const user={user_id:2,username:'operator-fixture',role:'OPERATOR',unit_id:1,permissions:['tasks:read','tasks:write','assets:read','media:write','reports:read']};let fail=false,uploads=0;
  await page.route('**/api/**',async route=>{
   const p=new URL(route.request().url()).pathname;let data=[];
@@ -29,6 +29,6 @@ const {chromium}=require('playwright-core'),express=require('express'),path=requ
  fail=false;await page.click('[data-tab=queue]');await page.click('#sync');await page.waitForFunction(async()=>{const items=await PhotoQueue.list();return items.length===1&&items[0].owner===999;});
  const finalItems=await page.evaluate(async()=>{await new Promise(r=>setTimeout(r,100));return (await PhotoQueue.list()).map(x=>({owner:x.owner,error:x.last_error,attempts:x.attempts}));});assert.deepEqual(finalItems.map(x=>x.owner),[999],JSON.stringify(finalItems));
  assert.ok(uploads>=3);assert.deepEqual(errors,[]);
- console.log('PASS Chromium mobile 390px: map + GPS/distance, task photos, persisted failed upload retry, owner-isolated queue; no overflow/page errors');
+ console.log('PASS '+engineName+' mobile 390px: map + GPS/distance, task photos, persisted failed upload retry, owner-isolated queue; no overflow/page errors');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});

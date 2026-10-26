@@ -20,7 +20,7 @@ async function validateReferences(user,body,plantId){
     if(body.route_ids)for(const rid of body.route_ids){const [r]=await query('SELECT COALESCE(r.target_plant_id,a.plant_id) AS plant_id FROM flight_routes r LEFT JOIN solar_areas a ON r.area_id=a.area_id WHERE r.route_id=?',[v.parseId(rid,'tuyến')]);if(!r||r.plant_id!==plantId)throw a.denied();}
     if(body.assigned_device_sn){const [d]=await query('SELECT plant_id,unit_id FROM uav_devices WHERE device_sn=?',[body.assigned_device_sn]);if(!d||d.plant_id!==plantId||(user.role!=='ADMIN'&&d.unit_id!==user.unit_id))throw a.denied();}
     if(body.inspector_id){const [u]=await query('SELECT unit_id FROM users WHERE user_id=?',[v.parseId(body.inspector_id,'người phụ trách')]);if(!u||(user.role!=='ADMIN'&&u.unit_id!==user.unit_id))throw a.denied();}
-    if(body.member_ids)for(const uid of body.member_ids){const [u]=await query('SELECT unit_id FROM users WHERE user_id=?',[uid]);if(!u||u.unit_id!==user.unit_id)throw a.denied();}
+    if(body.member_ids)for(const uid of body.member_ids){const [u]=await query('SELECT unit_id FROM users WHERE user_id=?',[uid]);if(!u||(user.role!=='ADMIN'&&u.unit_id!==user.unit_id))throw a.denied();}
     if(body.team_id && user.role!=='ADMIN')throw a.denied(); // tổ dùng chung: quản trị giao; tránh kéo người đơn vị khác vào phiếu
 }
 router.get('/basemaps',asyncHandler(async(req,res)=>{
@@ -78,13 +78,16 @@ router.get('/media/:id',asyncHandler(async(req,res)=>{
     if(!m.file_path_local)throw a.denied();res.set('Cache-Control','no-store').sendFile(require('path').resolve(m.file_path_local));
 }));
 router.get('/flights/:id',asyncHandler(async(req,res,next)=>{
+    a.permission(req.user,'tasks:read');
     const [f]=await query('SELECT ticket_id FROM flight_sessions WHERE flight_session_id=?',[v.parseId(req.params.id,'chuyến')]);if(!f)throw a.denied();await a.ticket(req.user,f.ticket_id);
     req.url='/'+req.params.id;require('./flights')(req,res,next);
 }));
 router.get('/live/:ticketId',asyncHandler(async(req,res)=>{
+    a.permission(req.user,'tasks:read');
     const id=v.parseId(req.params.ticketId,'phiếu');await a.ticket(req.user,id);
     const rows=await query('SELECT stream_id,device_sn,channel FROM ticket_live_streams WHERE ticket_id=?',[id]);
-    ok(res,rows.map(r=>({...r,ticket_id:id}))); // playback có chữ ký được cấp ở lớp streaming; không lộ endpoint giả
+    const base=process.env.MEDIA_HTTP_BASE_URL;
+    ok(res,rows.map(r=>require('../services/streamAccess').playback({...r,ticket_id:id,streamPath:'/live/'+r.channel,flv_url:base?base.replace(/\/$/,'')+'/live/'+r.channel+'.flv':null},req.user))); // playback có chữ ký được cấp ở lớp streaming; không lộ endpoint giả
 }));
 module.exports=router;
 module.exports.validateReferences=validateReferences;

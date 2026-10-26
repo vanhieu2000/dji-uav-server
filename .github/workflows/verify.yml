@@ -1,0 +1,63 @@
+name: Verify UAV backend
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0.41
+        env:
+          # Ephemeral CI database only, never used in deployment.
+          MYSQL_ROOT_PASSWORD: ci-fixture-password-only
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s --health-timeout=5s --health-retries=20
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ci-fixture-password-only
+      TEST_MYSQL_DATABASE: dji_uav_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core ffmpeg
+      - run: npm ci
+        working-directory: backend
+      - run: npm test
+        working-directory: backend
+      - run: npm audit --omit=dev
+        working-directory: backend
+      - run: docker compose config --quiet
+        env:
+          UAV_DOMAIN: uav.example.test
+          S3_DOMAIN: s3.example.test
+          HOST_IP: 127.0.0.1
+  browsers:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+        working-directory: backend
+      - run: npx playwright-core install --with-deps ${{ matrix.engine }}
+        working-directory: backend
+      - run: |
+          export CHROMIUM_PATH="$(node -e "console.log(require('playwright-core').chromium.executablePath())")"
+          npm run test:browser
+          npm run test:mobile
+        working-directory: backend
+        env:
+          BROWSER_ENGINE: ${{ matrix.engine }}

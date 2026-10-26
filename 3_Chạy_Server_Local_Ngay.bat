@@ -15,9 +15,10 @@ cd /d "%~dp0\backend"
 
 if not exist "node_modules" (
     echo [1/2] Đang cài đặt thư viện cần thiết...
-    call npm install
+    call npm ci
 )
 
+echo Can cau hinh MYSQL_* trong .env va tao admin theo README.md.
 echo [2/2] Đang khởi động Server...
 start http://localhost:8080/dashboard
 node server.js

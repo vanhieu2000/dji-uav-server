@@ -3,7 +3,7 @@ const {query}=require('../config/db'),{asyncHandler,ok}=require('../utils/http')
 const router=express.Router(),upload=require('./mediaUpload');
 router.post('/tasks/:id/photos',asyncHandler(async(req,res,next)=>{
  a.permission(req.user,'media:write');await a.ticket(req.user,v.parseId(req.params.id,'phiếu'));next();
-}),upload.receiveFiles,asyncHandler(async(req,res)=>{
+}),require('../services/storageQuota').middleware,upload.receiveFiles,asyncHandler(async(req,res)=>{
  const files=req.files||[],id=v.parseId(req.params.id,'phiếu'),items=[];
  try{
   if(!files.length)throw new v.ValidationError('Chưa chọn ảnh');

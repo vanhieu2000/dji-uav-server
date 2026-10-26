@@ -1,0 +1,9 @@
+node_modules
+uploads
+tiles
+data
+config.json
+Connection.txt
+test
+*.log
+.env

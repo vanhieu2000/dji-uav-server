@@ -1,6 +1,7 @@
 /** Bootstrap explicite: aucune modification d'un compte existant. Secret écrit hors git. */
 const fs=require('fs'),path=require('path'),crypto=require('crypto'),bcrypt=require('bcryptjs');
 try{process.loadEnvFile(path.resolve(__dirname,'../../.env'));}catch(e){}
+require('../src/services/runtimeEnv').load();
 const db=require('../src/config/db');
 (async()=>{
  const username=process.env.BOOTSTRAP_ADMIN_USER||'admin';

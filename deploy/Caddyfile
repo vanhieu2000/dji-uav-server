@@ -1,0 +1,18 @@
+{$UAV_DOMAIN} {
+    encode zstd gzip
+    header Referrer-Policy same-origin
+    header X-Content-Type-Options nosniff
+    header Strict-Transport-Security "max-age=31536000"
+    handle_path /stream/* {
+        reverse_proxy backend:8000
+    }
+    handle {
+        reverse_proxy backend:8080
+    }
+}
+{$S3_DOMAIN} {
+    request_body {
+        max_size 200MB
+    }
+    reverse_proxy minio:9000
+}

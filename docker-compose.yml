@@ -1,114 +1,148 @@
-version: '3.8'
-
+# Single authoritative stack: embedded authenticated MQTT + NMS; no competing brokers/RTMP servers.
 services:
-  # 1. EMQX - High Performance MQTT Broker cho DJI Mavic 3T & Pilot 2
-  emqx:
-    image: emqx/emqx:5.8.5
-    container_name: dji_emqx
-    restart: always
-    ports:
-      - "1883:1883"     # MQTT TCP cho Pilot 2 & Drone
-      - "8083:8083"     # MQTT WebSocket
-      - "18083:18083"   # EMQX Dashboard Web UI (tài khoản trong .env)
-    environment:
-      - EMQX_ALLOW_ANONYMOUS=true
-      - EMQX_DASHBOARD__DEFAULT_USERNAME=${EMQX_DASHBOARD_USER}
-      - EMQX_DASHBOARD__DEFAULT_PASSWORD=${EMQX_DASHBOARD_PASSWORD}
-    volumes:
-      - emqx_data:/opt/emqx/data
-    networks:
-      - dji_net
-
-  # 2. MediaMTX - Streaming Server cho Camera Quang Học & Camera Nhiệt M3T
-  mediamtx:
-    image: bluenviron/mediamtx:latest
-    container_name: dji_mediamtx
-    restart: always
-    ports:
-      - "1935:1935"     # RTMP Ingest (DJI Pilot 2 đẩy luồng trực tiếp)
-      - "8554:8554"     # RTSP Server
-      - "8888:8888"     # HLS Stream
-      - "8889:8889"     # WebRTC Stream (xem độ trễ cực thấp <0.5s trên Web/Mobile)
-    volumes:
-      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
-    networks:
-      - dji_net
-
-  # 3. MySQL 8.0 - Quản lý CSDL 18 bảng thật
   mysql:
-    image: mysql:8.0
-    container_name: dji_mysql
-    restart: always
-    ports:
-      - "3306:3306"
+    image: mysql:8.0.41
+    restart: unless-stopped
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=dji_uav_management
+      MYSQL_DATABASE: dji_uav_management
+      MYSQL_USER: uav
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_app_password
+    secrets: [mysql_root_password, mysql_app_password]
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./mysql_init:/docker-entrypoint-initdb.d:ro
-    networks:
-      - dji_net
-
-  # 4. MinIO - S3 Object Storage lưu trữ ảnh quang học và ảnh nhiệt R-JPEG
+      # Empty-volume initialization only; no demo seed or shared passwords.
+      - ./mysql_init/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD="$$(cat /run/secrets/mysql_app_password)" mysql -u uav -D dji_uav_management -e "SELECT 1" >/dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [internal]
   minio:
-    image: minio/minio:latest
-    container_name: dji_minio
-    restart: always
-    ports:
-      - "9000:9000"     # S3 API
-      - "9001:9001"     # MinIO Web Console
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address :9001
+    restart: unless-stopped
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
-    networks:
-      - dji_net
-
-  # 5. DJI Cloud Backend - REST API, MQTT Ingest, WebSocket Realtime, MySQL Service
+      MINIO_ROOT_USER_FILE: /run/secrets/s3_access_key
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/s3_secret_key
+    secrets: [s3_access_key, s3_secret_key]
+    volumes: [minio_data:/data]
+    networks: [internal]
+  storage-init:
+    build: ./backend
+    command: [node, scripts/init-storage.js]
+    environment:
+      S3_STS_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: https://${S3_DOMAIN:?Set S3_DOMAIN}
+      S3_SERVICE_ACCESS_KEY_FILE: /run/secrets/s3_access_key
+      S3_SERVICE_SECRET_KEY_FILE: /run/secrets/s3_secret_key
+      S3_BUCKET: dji-media
+    secrets: [s3_access_key, s3_secret_key]
+    depends_on: [minio]
+    restart: on-failure:5
+    networks: [internal]
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: dji_backend
-    restart: always
-    ports:
-      - "8080:8080"
+    build: ./backend
+    restart: unless-stopped
+    init: true
     environment:
-      - PORT=8080
-      - HOST_IP=${HOST_IP}
-      - MQTT_PORT=1883
-      - MQTT_BROKER_URL=mqtt://emqx:1883
-      - MYSQL_HOST=mysql
-      - MYSQL_PORT=3306
-      - MYSQL_USER=root
-      - MYSQL_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=dji_uav_management
-      - JWT_SECRET=${JWT_SECRET}
-      - MINIO_ENDPOINT=minio
-      - MINIO_PORT=9000
-      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
-      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
-      - DJI_APP_ID=${DJI_APP_ID}
-      - DJI_APP_KEY=${DJI_APP_KEY}
-      - DJI_APP_LICENSE=${DJI_APP_LICENSE}
-    depends_on:
-      - emqx
-      - mysql
-      - mediamtx
+      NODE_ENV: production
+      PORT: 8080
+      HOST_IP: ${HOST_IP:?Set HOST_IP}
+      MQTT_PORT: 1883
+      MQTT_PUBLIC_URL: ${MQTT_PUBLIC_URL:-}
+      LIVE_STREAM_ENABLED: ${LIVE_STREAM_ENABLED:-false}
+      RTMP_PUBLIC_BASE_URL: ${RTMP_PUBLIC_BASE_URL:-}
+      MEDIA_HTTP_BASE_URL: https://${UAV_DOMAIN:?Set UAV_DOMAIN}/stream
+      MYSQL_HOST: mysql
+      MYSQL_USER: uav
+      MYSQL_DATABASE: dji_uav_management
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_app_password
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      TRUST_PROXY: 1
+      CORS_ALLOWED_ORIGINS: https://${UAV_DOMAIN}
+      S3_STS_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: https://${S3_DOMAIN}
+      S3_SERVICE_ACCESS_KEY_FILE: /run/secrets/s3_access_key
+      S3_SERVICE_SECRET_KEY_FILE: /run/secrets/s3_secret_key
+      S3_BUCKET: dji-media
+      DJI_APP_ID: ${DJI_APP_ID:-}
+      DJI_APP_KEY: ${DJI_APP_KEY:-}
+      DJI_APP_LICENSE: ${DJI_APP_LICENSE:-}
+      VISION_ENABLED: ${VISION_ENABLED:-false}
+      VISION_ENDPOINT: ${VISION_ENDPOINT:-}
+      VISION_PUBLIC_BASE_URL: https://${UAV_DOMAIN}
+      VISION_WEBHOOK_SECRET_FILE: /run/secrets/vision_secret
+      PASSWORD_RESET_BASE_URL: https://${UAV_DOMAIN}/dashboard/
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+    secrets: [mysql_app_password, jwt_secret, s3_access_key, s3_secret_key, vision_secret, smtp_password]
     volumes:
-      - ./backend/uploads:/app/uploads
-      - ./backend/tiles:/app/tiles
-    networks:
-      - dji_net
-
+      - uploads:/app/uploads
+      - tiles:/app/tiles
+      - backend_data:/app/data
+    # HTTP/FLV remain internal. MQTT/RTMP bind factory LAN interface only; use firewall/VPN.
+    ports:
+      - '${MQTT_BIND_IP:-127.0.0.1}:1883:1883'
+      - '${RTMP_BIND_IP:-127.0.0.1}:1935:1935'
+    depends_on:
+      mysql: {condition: service_healthy}
+      storage-init: {condition: service_completed_successfully}
+    networks: [internal]
+  proxy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      UAV_DOMAIN: ${UAV_DOMAIN}
+      S3_DOMAIN: ${S3_DOMAIN}
+    ports: ['80:80', '443:443', '443:443/udp']
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [backend, minio]
+    networks: [internal]
+  transport-tls:
+    image: nginx:1.28.0-alpine
+    profiles: [transport-tls]
+    restart: unless-stopped
+    ports:
+      - '${HOST_IP}:8883:8883'
+      - '${HOST_IP}:1936:1936'
+    volumes:
+      - ./deploy/transport-tls.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/certs:/etc/uav-tls:ro
+    depends_on: [backend]
+    networks: [internal]
+  # Contract container only; image/model supplied by the Vision team, never invented here.
+  vision:
+    image: ${VISION_IMAGE:-uav-vision-not-configured:disabled}
+    profiles: [vision]
+    restart: unless-stopped
+    environment:
+      UAV_CALLBACK_URL: https://${UAV_DOMAIN}/api/vision/results
+      UAV_WEBHOOK_SECRET_FILE: /run/secrets/vision_secret
+    secrets: [vision_secret]
+    networks: [internal]
+secrets:
+  mysql_root_password: {file: ./deploy/secrets/mysql_root_password}
+  mysql_app_password: {file: ./deploy/secrets/mysql_app_password}
+  jwt_secret: {file: ./deploy/secrets/jwt_secret}
+  s3_access_key: {file: ./deploy/secrets/s3_access_key}
+  s3_secret_key: {file: ./deploy/secrets/s3_secret_key}
+  vision_secret: {file: ./deploy/secrets/vision_secret}
+  smtp_password: {file: ./deploy/secrets/smtp_password}
 volumes:
-  emqx_data:
   mysql_data:
   minio_data:
-
+  uploads:
+  tiles:
+  backend_data:
+  caddy_data:
+  caddy_config:
 networks:
-  dji_net:
-    driver: bridge
+  internal:

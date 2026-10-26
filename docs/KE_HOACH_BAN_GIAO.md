@@ -1,7 +1,7 @@
 # KẾ HOẠCH TRIỂN KHAI & BÀN GIAO – DJI UAV SERVER
 
 > Tài liệu để **bất kỳ ai** cũng tiếp tục được công việc: đã làm gì, còn lại gì, làm thế nào, kiểm tra ra sao.
-> Cập nhật: 26/10/2026. Repo: `vanhieu2000/dji-uav-server` (nhánh `main`).
+> Cập nhật: 26/10/2026. Repo: `vanhieu2000/dji-uav-server` (nhánh triển khai `codex/uav-completion`, xuất phát `main` tại `384ff56`).
 > Yêu cầu gốc: file Excel `Ke_hoach_phan_mem_UAV.xlsx` (42 hạng mục, 7 nhóm I–VII).
 
 ---
@@ -27,7 +27,7 @@
 | Chạy local | `3_Chạy_Server_Local_Ngay.bat` hoặc `cd backend && node server.js` → http://localhost:8080/dashboard |
 | Chạy Docker | `docker compose up -d --build` (đọc `.env`) |
 | Nâng cấp CSDL | Tự chạy khi server kết nối MySQL. Chạy tay: `cd backend && npm run migrate`. File trong `backend/src/db/migrations/NNN_*.sql`, mỗi file chạy 1 lần, chạy lại an toàn. |
-| Test | `cd backend && npm test` → tạo CSDL riêng `dji_uav_test` rồi xóa; **không đụng dữ liệu thật**. Hiện 23 test. |
+| Test | `cd backend && npm test` → tạo CSDL riêng `dji_uav_test` rồi xóa; **không đụng dữ liệu thật**. Hiện 76 test đạt, 0 skip (26/10/2026); Chromium desktop/mobile, NMS thật và backup restore test xem docs/OPERATIONS.md. |
 | Giả lập drone (khi chưa có máy bay) | `YuYongJu/dji-cloud-simulator` (MQTT, cổng 1883) – chạy riêng. |
 
 Các cổng: 8080 (web/API/WebSocket), 1883 (MQTT), 1935 (RTMP), 8000 (HTTP-FLV).
@@ -48,7 +48,7 @@ backend/
     assets.js               # tìm kiếm chung, cây tài sản, lớp bản đồ, điểm chụp ảnh, nhập Excel
     basemaps.js             # bản đồ nền (ZIP ô ảnh XYZ/TMS)
     tickets.js              # phiếu kiểm tra (MySQL)
-    auth.js                 # đăng nhập (verifyLogin dùng chung Web + Pilot 2) – CÒN mật khẩu chung admin123 (chủ dự án yêu cầu giữ, xử lý sau)
+    auth.js                 # đăng nhập Web/Pilot, bcrypt, cookie HttpOnly/JWT/session SQL, thu hồi; đã bỏ mật khẩu chung
     ai_bridge.js, reports.js
   src/services/             # assetImport, tileArchive (giải nén ZIP an toàn), photoPoints, ticketService
   src/utils/                # validate, geo (nội suy, ô ảnh), http (mã lỗi), sql (UPDATE động an toàn)
@@ -238,61 +238,63 @@ Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
 ### Giai đoạn I – Triển khai, bảo mật, vận hành (~5 ngày + thời gian hiện trường) – hạng mục #38–42
 - [ ] Gói triển khai tại nhà máy: Docker compose đủ dịch vụ + container AI Vision; sao lưu MySQL & ảnh (#38).
 - [ ] HTTPS, mã hóa mật khẩu/bí mật, nhật ký truy cập, CORS giới hạn, giới hạn tần suất (#39).
-- [ ] Chế độ offline: bản đồ nền offline (đã có), hàng đợi ảnh khi mất mạng, đồng bộ lại khi có kết nối (#40).
+- [x] Chế độ offline: bản đồ nền offline (đã có), hàng đợi ảnh khi mất mạng, đồng bộ lại khi có kết nối (#40).
 - [ ] Kiểm thử Chrome / Edge / Firefox / Safari + điện thoại Android / iOS (#41).
-- [ ] Kiểm thử tải nhiều UAV bằng bộ giả lập MQTT (vd. 5–10 máy cùng lúc) (#42).
+- [x] Kiểm thử tải nhiều UAV bằng bộ giả lập MQTT (vd. 5–10 máy cùng lúc) (#42).
+
+Code cho compose/TLS/auth/backup đã có; chưa đánh dấu hoàn tất #38/#39/#41 vì cần domain/cert, image/model Vision, MinIO và trình duyệt/thiết bị thật. Xem docs/OPERATIONS.md.
 
 ---
 
 ## 5b. BẢNG THEO DÕI 42 HẠNG MỤC (file Excel)
 
-Trạng thái sau commit `cad1cbc`: ✅ xong · 🟡 một phần · ⬜ chưa.
+Trạng thái cập nhật 26/10/2026 trên nhánh triển khai: ✅ phần mềm đã có kiểm thử · 🟡 còn tích hợp/nghiệm thu ngoài môi trường. ✅ không đồng nghĩa đã bay thử thiết bị thật.
 Thứ tự làm: **A → B → C → D → F → G → E → H → I** (ưu tiên nghiệp vụ drone theo yêu cầu chủ dự án).
 
 | # | Hạng mục | TT | Giai đoạn | Còn thiếu |
 |---|---|---|---|---|
-| 1 | Đăng nhập, đăng xuất, thông tin tài khoản | 🟡 | E | Màn đăng nhập dashboard, đăng xuất, bỏ mật khẩu chung |
-| 2 | Đổi / khôi phục mật khẩu | 🟡 | E | Giao diện, quên mật khẩu qua email |
-| 3 | Quản lý đơn vị và người dùng | ⬜ | E | Toàn bộ |
-| 4 | Phân quyền chức năng & phạm vi dữ liệu | ⬜ | E | Toàn bộ |
-| 5 | Danh mục chung & cấu hình hệ thống | 🟡 | E, G | Bản đồ nền ✅; ngưỡng cảnh báo, danh mục, cấu hình lưu ảnh |
+| 1 | Đăng nhập, đăng xuất, thông tin tài khoản | ✅ | E | Đăng nhập/profile/logout, phiên SQL và UI |
+| 2 | Đổi / khôi phục mật khẩu | 🟡 | E | Đổi/reset một lần đã có; SMTP thực cần cấu hình/thử |
+| 3 | Quản lý đơn vị và người dùng | ✅ | E | Đơn vị/user/khóa/khôi phục, giữ admin cuối |
+| 4 | Phân quyền chức năng & phạm vi dữ liệu | ✅ | E | Gate fail-closed; workspace theo nhà máy+đơn vị |
+| 5 | Danh mục chung & cấu hình hệ thống | ✅ | E, G | Danh mục/rule/cấu hình quota; retention preview, không xóa ngầm |
 | 6 | Nhập & hiển thị bản đồ phân giải cao | ✅ | B | Quy trình quét 2D → DJI Terra; MBTiles (tùy chọn) |
 | 7 | Quản lý khu vực, chuỗi, tấm pin | ✅ | – | (Sau) tự nhận vị trí tấm từ bản đồ trực ảnh |
 | 8 | Tìm kiếm khu, chuỗi, tấm pin | ✅ | – | – |
 | 9 | Bản đồ trạm, ngăn lộ, DCL, mối nối | ✅ | – | – |
-| 10 | Hiển thị & tra cứu bất thường trên bản đồ | 🟡 | D | Lớp đã có, chờ dữ liệu AI gắn tài sản |
-| 11 | Bản đồ & chỉ đường trên điện thoại | ⬜ | H | Toàn bộ |
-| 12 | Quản lý danh sách UAV | 🟡 | C | Đa máy bay, OFFLINE, bỏ SN gán cứng |
-| 13 | Kết nối UAV / tay điều khiển | 🟡 | C | Bay thử với RTK, phiên đăng nhập máy bay ↔ phiếu |
-| 14 | Thiết lập đường bay pin & DCL | 🟡 | A | Sinh tuyến theo hồ sơ chụp (lưới / điểm) |
-| 15 | Quản lý đường bay & danh sách DCL trên tuyến | ⬜ | B | Thư viện tuyến trong MySQL, gắn tài sản |
-| 16 | Đồng bộ đường bay UAV ↔ server | 🟡 | B | Pilot 2 chỉ thấy tuyến của phiếu |
-| 17 | Giám sát trạng thái UAV & nhật ký bay | 🟡 | C | Chuyến bay, lịch sử, xem lại vết |
-| 18 | Vị trí UAV trên bản đồ theo phiếu | 🟡 | C | Gắn vị trí với phiếu đang bay |
-| 19 | Livestream trong phiếu | 🟡 | C | Kênh theo phiếu, xem trong màn phiếu |
-| 20 | Phiếu kiểm tra pin | 🟡 | F | Chọn khu/chuỗi, tổ công tác, thời gian |
-| 21 | Phiếu kiểm tra DCL | 🟡 | F | Chọn ngăn lộ/DCL, tổ công tác |
-| 22 | Chọn phiếu nhận ảnh trên phần mềm điều khiển | 🟡 | A | Pilot chọn phiếu ✅; ảnh chưa gắn phiếu |
-| 23 | Tự đồng bộ ảnh RGB & nhiệt về server | 🟡 | A | Đọc metadata thật, nhập thẻ nhớ |
-| 24 | Hiển thị ảnh, trạng thái nhận, đối soát | 🟡 | A, F | Kiểm tra đủ ảnh, ảnh trùng / lỗi / muộn |
-| 25 | Liên kết nhiều lượt bay với 1 nhiệm vụ | ⬜ | F | Toàn bộ |
-| 26 | Tự chuyển ảnh sang AI & nhận kết quả | 🟡 | D | Gửi job tự động, webhook v2 |
-| 27 | Phân loại lỗi pin & vị trí tài sản lỗi | 🟡 | D | Pixel → tọa độ → tấm pin |
-| 28 | Thiết bị đã kiểm tra & nhiệt độ cao nhất | 🟡 | G | Danh sách DCL theo phiếu |
-| 29 | Cấu hình, phát, lưu cảnh báo | 🟡 | G | Ngưỡng cấu hình được, xử lý cảnh báo |
-| 30 | Dashboard giám sát & lịch sử bất thường | 🟡 | G | Thay số viết tay bằng số thật |
-| 31 | Lịch sử nhiệt theo mối nối & chu kỳ | ⬜ | G | Toàn bộ |
-| 32 | Xu hướng tăng nhiệt & cảnh báo sớm | ⬜ | G | Toàn bộ |
-| 33 | Phiếu pin trên điện thoại | ⬜ | H | Toàn bộ |
-| 34 | Phiếu DCL trên điện thoại | ⬜ | H | Toàn bộ |
-| 35 | Báo cáo Word & PDF | 🟡 | H | Chỉ có in trình duyệt / CSV |
-| 36 | Thống kê lỗi khu pin & DCL | 🟡 | H | API có, giao diện số thật |
-| 37 | API mở & đồng bộ hai chiều | 🟡 | H | Khóa API, OpenAPI, chốt bên thứ ba |
-| 38 | Triển khai phần mềm + AI tại nhà máy | 🟡 | I | Container AI, sao lưu |
-| 39 | Mã hóa dữ liệu & kiểm soát truy cập | ⬜ | E, I | Quyền, HTTPS, nhật ký |
-| 40 | Offline & đồng bộ khi có mạng | 🟡 | I | Hàng đợi ảnh, đồng bộ lại |
-| 41 | Kiểm thử nhiều trình duyệt & thiết bị | ⬜ | I | Toàn bộ (đã có 23 test API) |
-| 42 | Kiểm thử mở rộng số UAV | ⬜ | I | Toàn bộ |
+| 10 | Hiển thị & tra cứu bất thường trên bản đồ | 🟡 | D | Lớp có; gán chắc chắn cần calibration/Vision thật (D2) |
+| 11 | Bản đồ & chỉ đường trên điện thoại | ✅ | H | /m, GPS/hướng/khoảng cách, lớp tài sản; mới thử Chromium fixture |
+| 12 | Quản lý danh sách UAV | ✅ | C | Đa UAV/OFFLINE theo serial, baseline10 máy fixture |
+| 13 | Kết nối UAV / tay điều khiển | 🟡 | C | Phiên/auth/ACL có; cần RC/M3T/RTK/license thật |
+| 14 | Thiết lập đường bay pin & DCL | 🟡 | A | KMZ/profile đã sinh/test; chưa bay nghiệm thu camera/lệnh chụp |
+| 15 | Quản lý đường bay & danh sách DCL trên tuyến | ✅ | B | Thư viện SQL và gán route theo phiếu |
+| 16 | Đồng bộ đường bay UAV ↔ server | 🟡 | B | API phiên/workspace/KMZ ký có; cần Pilot firmware thật |
+| 17 | Giám sát trạng thái UAV & nhật ký bay | ✅ | C | Chuyến bay, lịch sử/vết, unit/MySQL test |
+| 18 | Vị trí UAV trên bản đồ theo phiếu | ✅ | C | OSD/serial/phiếu, đa marker và cursor reconnect |
+| 19 | Livestream trong phiếu | 🟡 | C | Kênh/grant/NMS+ffmpeg đạt; chưa live M3T qua mạng nhà máy |
+| 20 | Phiếu kiểm tra pin | ✅ | F | Phạm vi/tổ/kế hoạch/revision, quyền và UI |
+| 21 | Phiếu kiểm tra DCL | ✅ | F | Ngăn lộ/DCL/contact, tổ và quyền |
+| 22 | Chọn phiếu nhận ảnh trên phần mềm điều khiển | 🟡 | A | Chọn phiếu/namespace/phiên có; chưa thử RC thực |
+| 23 | Tự đồng bộ ảnh RGB & nhiệt về server | 🟡 | A | Metadata/import/STS SDK có; MinIO thật bị chặn tải, cần RC/S3 nghiệm thu |
+| 24 | Hiển thị ảnh, trạng thái nhận, đối soát | ✅ | A, F | Ảnh/trạng thái/dedup/đối soát/hash, ảnh lỗi/muộn |
+| 25 | Liên kết nhiều lượt bay với 1 nhiệm vụ | ✅ | F | Nhiều lượt/phiếu, fixture hai chuyến đạt |
+| 26 | Tự chuyển ảnh sang AI & nhận kết quả | 🟡 | D | Queue/webhook2.0 có; cần endpoint/model Vision thật |
+| 27 | Phân loại lỗi pin & vị trí tài sản lỗi | 🟡 | D | Xác nhận tài sản có; pixel tự gán cần calibration/PoC D2 |
+| 28 | Thiết bị đã kiểm tra & nhiệt độ cao nhất | ✅ | G | SQL theo phiếu, số đo đã xác nhận |
+| 29 | Cấu hình, phát, lưu cảnh báo | ✅ | G | Rule loại/tài sản, trạng thái/audit/WebSocket |
+| 30 | Dashboard giám sát & lịch sử bất thường | ✅ | G | KPI/chart SQL, rỗng khi chưa có dữ liệu |
+| 31 | Lịch sử nhiệt theo mối nối & chu kỳ | ✅ | G | History theo asset/task/flight/model/result, supersede |
+| 32 | Xu hướng tăng nhiệt & cảnh báo sớm | 🟡 | G | Hồi quy/horizon/early alert có; ước lượng chưa kiểm định hiện trường |
+| 33 | Phiếu pin trên điện thoại | ✅ | H | /m phiếu pin/ảnh/Vision, quyền và queue |
+| 34 | Phiếu DCL trên điện thoại | ✅ | H | /m phiếu DCL/ảnh/Vision/nhiệt |
+| 35 | Báo cáo Word & PDF | ✅ | H | Tệp DOCX/PDF có ảnh/vị trí/kết quả/ô ký chưa ký |
+| 36 | Thống kê lỗi khu pin & DCL | ✅ | H | Thống kê theo kỳ+phạm vi đơn vị/nhà máy |
+| 37 | API mở & đồng bộ hai chiều | 🟡 | H | API key/OpenAPI/sync external-id/revision có; PMIS cần đặc tả |
+| 38 | Triển khai phần mềm + AI tại nhà máy | 🟡 | I | Compose/backup/restore mã hóa có; cần image Vision, MinIO/full-stack thực |
+| 39 | Mã hóa dữ liệu & kiểm soát truy cập | 🟡 | E, I | Auth/ACL/audit/TLS config có; domain/cert/RC TLS chưa nghiệm thu |
+| 40 | Offline & đồng bộ khi có mạng | ✅ | I | Queue IndexedDB/retry/owner isolation; không đăng nhập offline |
+| 41 | Kiểm thử nhiều trình duyệt & thiết bị | 🟡 | I | Chromium desktop/mobile đạt; tải Firefox bị403, engine/device khác chưa xác nhận |
+| 42 | Kiểm thử mở rộng số UAV | ✅ | I | Server thật, 10 MQTT fixture, 400 OSD đúng phiếu; không benchmark trần tải |
 
 Tổng ước lượng còn lại: ~45–55 ngày công lập trình (chưa tính bay thử hiện trường và chờ đội Vision).
 
@@ -368,3 +370,6 @@ Tài khoản thật, session SQL/thu hồi/WS filter, đơn vị và phạm vi p
 
 ### H – 26/10/2026
 /m, báo cáo DOCX/PDF và API key scoped/sync external-id/revision đã có; adapter PMIS giữ chưa nghiệm thu. 71 test Node/MySQL đạt; mobile Chromium kiểm tra queue ảnh lỗi/reload/retry/đúng owner. Xem docs/MOBILE_REPORTS_API.md.
+
+### I – 26/10/2026
+76 kiểm thử Node/MySQL đạt, 0 skip; Chromium dashboard/mobile đạt; 10 UAV fixture/400 OSD vào server thật. NMS+ffmpeg có grant đúng mục đích/phiếu và thu hồi. Backup AES-GCM + SQL restore DB test riêng và SHA256 ảnh đạt. Compose profiles validate; audit npm 0. Không mở Docker stack production vì registry/binary MinIO bị từ chối; tải Firefox cũng bị403, không tính CI matrix là đã đạt. Các việc cần Vision/RC/RTK/calibration/SMTP/PMIS/domain/CA giữ 🟡; không có lệnh bay gửi trong test.

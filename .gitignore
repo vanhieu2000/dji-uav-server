@@ -21,3 +21,9 @@ GOI_BAN_GIAO_CHO_VISION.rar
 .vscode/
 .kombai/
 .vs/
+
+# Deployment secrets and backups
+deploy/secrets/
+backups/
+*.uavbackup
+deploy/certs/

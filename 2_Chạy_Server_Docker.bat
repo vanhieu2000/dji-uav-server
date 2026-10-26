@@ -1,33 +1,26 @@
 @echo off
 chcp 65001 >nul
-echo =====================================================================
-echo  KHỞI ĐỘNG HỆ THỐNG MÁY CHỦ UAV BẰNG DOCKER COMPOSE
-echo =====================================================================
-echo.
-
 cd /d "%~dp0"
-
-echo [1/2] Đang khởi chạy các container (EMQX, MediaMTX, MySQL, MinIO, Backend)...
-docker compose up -d
-
-if %errorLevel% neq 0 (
-    echo.
-    echo [X] LỖI: Docker chưa được khởi động hoặc chưa cài đặt xong!
-    echo Vui lòng đảm bảo Docker Desktop đang mở (Running) trước khi chạy file này.
-    echo.
+echo DJI UAV Server - Docker production
+if not exist "deploy\secrets\jwt_secret" (
+    echo Chua tao bi mat. Doc docs\OPERATIONS.md va chay python ops\init-secrets.py truoc.
     pause
     exit /b 1
 )
-
-echo.
-echo [2/2] Toàn bộ hệ thống máy chủ đã sẵn sàng!
-echo =====================================================================
-echo  - Dashboard Giám Sát : http://localhost:8080/dashboard
-echo  - DJI Pilot 2 Login   : http://localhost:8080/pilot-login
-echo  - EMQX MQTT Dashboard : http://localhost:18083 (tài khoản trong file .env)
-echo  - MinIO S3 Console    : http://localhost:9001 (tài khoản trong file .env)
-echo =====================================================================
-echo.
-echo Đang mở Dashboard trên trình duyệt...
-start http://localhost:8080/dashboard
+docker compose config --quiet
+if errorlevel 1 (
+    echo Kiem tra .env: UAV_DOMAIN, S3_DOMAIN, HOST_IP va Docker Desktop.
+    pause
+    exit /b 1
+)
+docker compose up -d --build
+if errorlevel 1 (
+    echo Khoi dong chua thanh cong. Xem docker compose logs va docs\OPERATIONS.md.
+    pause
+    exit /b 1
+)
+echo Da gui yeu cau khoi dong. Can kiem tra health va tao admin; chua dong nghia Pilot/UAV da ket noi.
+echo Dashboard HTTPS: domain UAV_DOMAIN trong .env, duong dan /dashboard/.
+echo Trang hien truong: /m/; Pilot: /pilot-login/.
+docker compose ps
 pause

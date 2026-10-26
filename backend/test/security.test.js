@@ -56,10 +56,11 @@ test('production gate: tài khoản, phiên, phân quyền và phạm vi',async 
  });
  await t.test('điện thoại: tải JPEG đúng phiếu, lặp không tạo thêm; báo cáo Word/PDF thật',async()=>{
   const fs=require('fs'),path=require('path'),bytes=fs.readFileSync(path.join(__dirname,'fixtures/vision-input.jpg'));
-  async function upload(id){const f=new FormData();f.append('files',new Blob([bytes],{type:'image/jpeg'}),'manual.jpg');const r=await fetch(base+'/api/workspace/tasks/'+id+'/photos',{method:'POST',headers:{Authorization:'Bearer '+operatorToken},body:f});return {status:r.status,json:await r.json()};}
+  async function upload(id,input=bytes){const f=new FormData();f.append('files',new Blob([input],{type:'image/jpeg'}),'manual.jpg');const r=await fetch(base+'/api/workspace/tasks/'+id+'/photos',{method:'POST',headers:{Authorization:'Bearer '+operatorToken},body:f});return {status:r.status,json:await r.json()};}
   assert.equal((await upload(otherTask)).status,403);
   const r=await upload(ownTask);assert.equal(r.status,200);assert.equal(r.json.data.items[0].status,'created');
   assert.equal((await upload(ownTask)).json.data.items[0].status,'duplicate');
+  const concurrent=await Promise.all([upload(ownTask,Buffer.concat([bytes,Buffer.from('concurrency-fixture')])),upload(ownTask,Buffer.concat([bytes,Buffer.from('concurrency-fixture')]))]);assert.deepEqual(concurrent.map(r=>r.json.data.items[0].status).sort(),['created','duplicate']);
   const photo=r.json.data.items[0].media_id;
   assert.equal((await fetch(base+'/api/workspace/media/'+photo,{headers:{Authorization:'Bearer '+operatorToken}})).status,200);
   for(const format of ['pdf','docx']){
@@ -70,6 +71,20 @@ test('production gate: tài khoản, phiên, phân quyền và phạm vi',async 
   }
   assert.equal((await call('/api/workspace/statistics?days=30',operatorToken)).status,200);
   assert.equal((await call('/api/workspace/plants/'+plant+'/assets',operatorToken)).status,200);
+ });
+ await t.test('contrat STS/S3 local: policy prefix, pas de credentials fictifs en production',async()=>{
+  const http=require('http'),fs=require('fs'),path=require('path'),crypto=require('crypto');const namespace=crypto.randomUUID();let capturedPolicy,reads=0;
+  const bytes=fs.readFileSync(path.join(__dirname,'fixtures/vision-input.jpg'));
+  const stub=http.createServer(async(req,res)=>{if(req.method==='POST'){let body='';for await(const c of req)body+=c;capturedPolicy=JSON.parse(new URLSearchParams(body).get('Policy'));res.setHeader('Content-Type','text/xml');res.end(`<AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/"><AssumeRoleResult><Credentials><AccessKeyId>FIXTUREKEY</AccessKeyId><SecretAccessKey>fixture-secret</SecretAccessKey><SessionToken>fixture-session</SessionToken><Expiration>${new Date(Date.now()+900000).toISOString()}</Expiration></Credentials></AssumeRoleResult></AssumeRoleResponse>`);}else{reads++;res.setHeader('Content-Type','image/jpeg');res.setHeader('Content-Length',bytes.length);res.end(bytes);}});
+  await new Promise(r=>stub.listen(0,'127.0.0.1',r));const endpoint='http://127.0.0.1:'+stub.address().port;
+  const names=['S3_STS_ENDPOINT','S3_PUBLIC_ENDPOINT','S3_SERVICE_ACCESS_KEY','S3_SERVICE_SECRET_KEY'],previous=Object.fromEntries(names.map(n=>[n,process.env[n]]));Object.assign(process.env,{S3_STS_ENDPOINT:endpoint,S3_PUBLIC_ENDPOINT:endpoint,S3_SERVICE_ACCESS_KEY:'fixture',S3_SERVICE_SECRET_KEY:'fixture-only'});
+  try{
+   const id=(await db.query('INSERT INTO pilot_sessions (user_id,ticket_id,upload_namespace) VALUES (?,?,?)',[operator,ownTask,namespace])).insertId;
+   const session={session_id:id,user_id:operator,ticket_id:ownTask,upload_namespace:namespace},storage=require('../src/services/objectStorage');
+   const grant=await storage.grant(session);assert.equal(grant.object_key_prefix,'media/'+namespace+'/');assert.ok(grant.credentials.security_token);assert.deepEqual(capturedPolicy.Statement[0].Action,['s3:PutObject','s3:AbortMultipartUpload','s3:ListMultipartUploadParts']);assert.equal(capturedPolicy.Statement[0].Resource,'arn:aws:s3:::dji-media/media/'+namespace+'/*');
+   await assert.rejects(storage.receive(session,'media/OTHER/photo.jpg'));assert.equal(reads,0);
+   const received=await storage.receive(session,'media/'+namespace+'/photo.jpg');assert.equal(received.media.ticket_id,ownTask);assert.equal(reads,1);
+  }finally{await new Promise(r=>stub.close(r));for(const n of names)if(previous[n]===undefined)delete process.env[n];else process.env[n]=previous[n];}
  });
  await t.test('API key: phạm vi hẹp, idempotent, optimistic revision, không truy cập legacy',async()=>{
   const issued=await call('/api/admin/api-keys',adminToken,{user_id:operator,label:'Fixture integration',permissions:['tasks:read','tasks:write','reports:read'],plant_ids:[plant],expires_days:1});assert.equal(issued.status,200);const key=issued.json.data.token;

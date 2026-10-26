@@ -15,6 +15,7 @@ try {
   // Không có file .env: dùng biến môi trường của hệ thống
 }
 
+require('./src/services/runtimeEnv').load();
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
@@ -58,7 +59,7 @@ const wss = new WebSocketServer({server,path:'/ws',verifyClient:(info,done)=>{
   userForToken(tokenOf(req)).then(user=>{if(!user||user.must_change_password)return done(false,401);req.user=user;done(true);}).catch(()=>done(false,503));
 }});
 wss.on('connection',(socket,req)=>{socket.user=req.user;socket.authToken=tokenOf(req);});
-authRouter.setOnRevoked(({user_id,session_id})=>{for(const c of wss.clients)if(c.user?.user_id===user_id&&(!session_id||c.user.session_id===session_id))c.close(1008,'Phiên đã thu hồi');});
+authRouter.setOnRevoked(({user_id,session_id})=>{require('./src/services/streamAccess').revoke({user_id,session_id});require('./src/services/mqttAccess').revoke({user_id,session_id});for(const c of wss.clients)if(c.user?.user_id===user_id&&(!session_id||c.user.session_id===session_id))c.close(1008,'Phiên đã thu hồi');});
 
 // Nạp cấu hình hệ thống động từ config.json
 const CONFIG_PATH = path.join(__dirname, 'config.json');
@@ -127,7 +128,9 @@ const PORT = Number(process.env.PORT || systemConfig.port || 8080);
 const MQTT_PORT = Number(process.env.MQTT_PORT || systemConfig.mqtt_port || 1883);
 const HOST_IP = process.env.HOST_IP || systemConfig.host_ip || getWifiIp();
 
-app.use(cors());
+app.use(require('./src/middleware/transportSecurity').securityHeaders);
+app.use(require('./src/middleware/transportSecurity').originPolicy);
+app.use(require('./src/middleware/transportSecurity').rateLimit);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 if(process.env.TRUST_PROXY==='1')app.set('trust proxy',1);
@@ -137,7 +140,7 @@ app.use('/api/open/v1',require('./src/routes/openApi'));
 app.get('/openapi.json',(req,res)=>res.sendFile(path.join(__dirname,'public','openapi.json')));
 app.use('/api/workspace',require('./src/routes/workspace'));
 const administrationRouter=require('./src/routes/administration');
-administrationRouter.setOnUserChanged(id=>{for(const c of wss.clients)if(c.user?.user_id===id)c.close(1008,'Quyền tài khoản đã thay đổi');});
+administrationRouter.setOnUserChanged(id=>{require('./src/services/streamAccess').revoke({user_id:id});require('./src/services/mqttAccess').revoke({user_id:id});for(const c of wss.clients)if(c.user?.user_id===id)c.close(1008,'Quyền tài khoản đã thay đổi');});
 app.use('/api/admin',administrationRouter);
 
 // Chặn favicon.ico ngay lập tức tránh nghẽn server
@@ -152,27 +155,6 @@ app.use((req, res, next) => {
 });
 
 // A. OPTIONS & HEAD cho S3 / MinIO Mock Engine
-app.options(['/dji-media/*', '/media/*', '/*/media/*', '/api/media/*', '/uploads/media/*'], (req, res) => {
-  res.set({
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': '*',
-    'Access-Control-Expose-Headers': 'ETag, Content-Length, Content-Type'
-  });
-  res.status(200).end();
-});
-
-app.head(['/dji-media/*', '/media/*', '/*/media/*', '/uploads/media/*'], (req, res) => {
-  res.set({
-    'Access-Control-Allow-Origin': '*',
-    'ETag': `"${crypto.randomUUID().replace(/-/g, '')}"`,
-    'Content-Type': 'image/jpeg',
-    'Content-Length': '0',
-    'Connection': 'keep-alive'
-  });
-  res.status(200).end();
-});
-
 // B–C. Nhận ảnh từ DJI Pilot 2 (S3 giả lập, tải nhiều phần), upload form, nhập thẻ nhớ:
 //      xem src/routes/mediaUpload.js (không gán cứng phiếu / tọa độ / nhiệt độ)
 app.use(mediaUploadRouter);
@@ -204,8 +186,8 @@ app.use('/api/datasets', require('./src/routes/datasets'));
 
 // Tình trạng hệ thống: dashboard dùng để hiện cảnh báo mất CSDL
 app.get('/api/health', (req, res) => {
-  res.json({
-    code: 0,
+  res.status(isDbConnected()&&dbInitDone?200:503).json({
+    code: isDbConnected()&&dbInitDone?0:503,
     data: {
       db: req.user?.role==='ADMIN'?getDbStatus():{connected:isDbConnected()},
       mqtt: { connected: Boolean(mqttClient && mqttClient.connected) },
@@ -235,9 +217,9 @@ app.use('/dashboard', express.static(path.join(__dirname, 'public', 'dashboard')
 // Bản đồ nền nhà máy (thư mục có thể đổi bằng BASEMAP_TILES_DIR)
 app.use('/tiles/basemaps', express.static(basemapsRouter.TILES_ROOT, { fallthrough: false }));
 app.use('/tiles', express.static(path.join(__dirname, 'tiles')));
+app.use('/uploads/waylines',express.static(routeLibrary.WAYLINE_DIR));
+app.use('/uploads/media',express.static(mediaUploadRouter.MEDIA_DIR));
 app.use('/uploads', (req, res, next) => {
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
   if (req.path.endsWith('.kmz')) {
     res.set('Content-Type', 'application/vnd.google-earth.kmz');
     res.set('Content-Disposition', `attachment; filename="${path.basename(req.path)}"`);
@@ -302,18 +284,20 @@ function setupMqtt() {
   const externalMqttUrl = process.env.MQTT_BROKER_URL;
 
   if (externalMqttUrl) {
-    console.log(`[MQTT] Đang kết nối tới External EMQX Broker: ${externalMqttUrl}`);
-    mqttClient = mqtt.connect(externalMqttUrl);
+    console.log('[MQTT] Đang kết nối broker ngoài (cấu hình ACL tại broker)');
+    if(!process.env.MQTT_USERNAME||!process.env.MQTT_PASSWORD)throw new Error('Broker ngoài cần MQTT_USERNAME/MQTT_PASSWORD và ACL tương ứng');
+    mqttClient = mqtt.connect(externalMqttUrl,{username:process.env.MQTT_USERNAME,password:process.env.MQTT_PASSWORD});
     registerMqttEvents(mqttClient);
   } else {
     // Tự động khởi động Embedded Aedes Broker trên Wi-Fi
     console.log(`[MQTT] Đang khởi tạo Embedded MQTT Broker trên port ${MQTT_PORT}...`);
-    const broker = aedes();
+    const broker = aedes({maxClientsIdLength:128,concurrency:100});
+    const internal=require('./src/services/mqttAccess').configure(broker);
     const tcpServer = net.createServer(broker.handle);
 
     tcpServer.listen(MQTT_PORT, '0.0.0.0', () => {
       console.log(`[MQTT] ✓ Embedded MQTT Broker đang lắng nghe trên 0.0.0.0:${MQTT_PORT}`);
-      mqttClient = mqtt.connect(`mqtt://127.0.0.1:${MQTT_PORT}`);
+      mqttClient = mqtt.connect(`mqtt://127.0.0.1:${MQTT_PORT}`,internal);
       registerMqttEvents(mqttClient);
     });
 
@@ -334,8 +318,12 @@ function setupMqtt() {
 let nmsServer = null;
 
 function setupRtmpServer() {
-  const rtmpPort = systemConfig.rtmp_port || 1935;
+  if(process.env.LIVE_STREAM_ENABLED!=='true'){console.log('[Live] Tắt cho tới khi cấu hình transport/ACL');return;}
+  const streamAccess=require('./src/services/streamAccess');
+  const rtmpPort = Number(process.env.RTMP_PORT || systemConfig.rtmp_port || 1935);
   const nmsConfig = {
+    auth:{play:true,publish:true,secret:streamAccess.secret},
+    webadmin:{enable:false},
     rtmp: {
       port: rtmpPort,
       chunk_size: 60000,
@@ -344,7 +332,7 @@ function setupRtmpServer() {
       ping_timeout: 60
     },
     http: {
-      port: 8000,
+      port: Number(process.env.MEDIA_HTTP_PORT||8000),
       allow_origin: '*',
       mediaroot: path.join(__dirname, 'uploads/media')
     },
@@ -354,6 +342,10 @@ function setupRtmpServer() {
   try {
     nmsServer = new NodeMediaServer(nmsConfig);
 
+    nmsServer.on('prePublish',session=>streamAccess.allow(session,'publish'));
+    nmsServer.on('prePlay',session=>streamAccess.allow(session,'play'));
+    nmsServer.on('donePlay',session=>streamAccess.release(session));
+    nmsServer.on('donePublish',session=>streamAccess.release(session));
     // NMS v4 emits a session object (v2 emitted id, path, args).
     nmsServer.on('postPublish', (session, streamPath) => {
       monitoring.publisherEvent('start', session, streamPath).catch(err => console.warn('[Live]', err.message));
@@ -364,7 +356,7 @@ function setupRtmpServer() {
 
     nmsServer.run();
     console.log(`[RTMP Server] ✓ RTMP Server đã mở cổng tcp://0.0.0.0:${rtmpPort}`);
-    console.log(`[RTMP Server] ✓ HTTP-FLV Live Stream cho Web: http://${HOST_IP}:8000/live/m3t_live.flv`);
+    console.log('[RTMP Server] HTTP-FLV có grant theo tài khoản/phiếu; không có đường phát công khai');
   } catch (err) {
     console.error('[RTMP Server] Lỗi khởi động:', err.message);
   }
@@ -396,7 +388,7 @@ setInterval(() => {
 
 // Khởi tạo và đồng bộ kho ảnh từ Database và thư mục đĩa cục bộ
 async function initMediaLibraryFromDbAndDisk() {
-  const uploadDir = path.join(__dirname, 'uploads', 'media');
+  const uploadDir = mediaUploadRouter.MEDIA_DIR;
   if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
   // 1. Nạp toàn bộ ảnh từ bảng media_files trong Database
@@ -449,7 +441,7 @@ function registerMqttEvents(client) {
       // 1. Lưu và phát gói tin thô để Web soi trực tiếp (Live Packet Inspector)
       const logItem = {
         topic: topic,
-        data: data,
+        data: require('./src/middleware/transportSecurity').redact(data),
         time: new Date().toLocaleTimeString(),
         timestamp: Date.now()
       };
@@ -462,7 +454,7 @@ function registerMqttEvents(client) {
       });
 
       // 2. Phân loại và xử lý từng topic thực tế
-      handleDjiMqttMessage(topic, data);
+      handleDjiMqttMessage(topic, data).catch(e=>console.warn('[MQTT] Không xử lý được gói tin:',e.code||e.name));
     } catch (e) {
       console.error(`[MQTT] Lỗi xử lý topic ${topic}:`, e.message);
     }
@@ -473,7 +465,7 @@ function registerMqttEvents(client) {
   });
 }
 
-function handleDjiMqttMessage(topic, json) {
+async function handleDjiMqttMessage(topic, json) {
   const parts = topic.split('/');
   const sn = parts[2];
 
@@ -491,7 +483,7 @@ function handleDjiMqttMessage(topic, json) {
       // ĐÂY LÀ TAY CẦM RC (PILOT 2 GATEWAY)
       const rcInfo = {
         gateway_sn: sn,
-        battery: d.capacity_percent !== undefined ? d.capacity_percent : 80,
+        battery: d.capacity_percent !== undefined ? d.capacity_percent : null,
         app_version: d.app_version || '',
         wireless_link: d.wireless_link || {},
         status: 'ONLINE',
@@ -665,29 +657,10 @@ function handleDjiMqttMessage(topic, json) {
 
     if (method === 'storage_config_get') {
       console.log(`[Storage Config] Cấp cấu hình lưu trữ ảnh cho UAV/Gateway ${sn}`);
-      const replyData = {
-        tid: json.tid,
-        bid: json.bid,
-        timestamp: Date.now(),
-        method: 'storage_config_get',
-        data: {
-          result: 0,
-          output: {
-            bucket: 'dji-media',
-            endpoint: `http://${HOST_IP}:${PORT}`,
-            provider: 'minio',
-            object_key_prefix: 'media/',
-            region: 'local',
-            credentials: {
-              access_key_id: 'minioadmin',
-              access_key_secret: 'minioadmin',
-              security_token: 'token_' + Date.now(),
-              expire: 86400
-            }
-          }
-        }
-      };
-      if (mqttClient) mqttClient.publish(replyTopic, JSON.stringify(replyData));
+      let output=null,result=503;
+      try{const session=await mediaIngest.activeSession(sn);if(session){output=await require('./src/services/objectStorage').grant(session);result=0;}}catch(e){console.warn('[Storage] Chưa cấp được STS thật');}
+      const replyData={tid:json.tid,bid:json.bid,timestamp:Date.now(),method,data:{result,...(output?{output}:{})}};
+      if(mqttClient)mqttClient.publish(replyTopic,JSON.stringify(replyData));
     }
     else if (method === 'media_fast_upload' || method === 'fileupload') {
       console.log(`[Media Upload Request] Nhận yêu cầu upload ảnh từ UAV ${sn}`);
@@ -753,8 +726,8 @@ function triggerMediaSync() {
   const now = Date.now();
   if (now - lastAutoSyncTime < 2500) return; // Khoảng cách tối thiểu 2.5s để tránh nghẽn mạng
   lastAutoSyncTime = now;
-  const gatewaySn = Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
-  const targetSn = Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
+  const gatewaySn = null; // Legacy sync disabled; no arbitrary target.
+  const targetSn = null;
   if (!mqttClient || !gatewaySn) return;
   const syncPayload = {
     tid: crypto.randomUUID(),
@@ -837,6 +810,8 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
   let liveStream = null;
   let pilotToken = null;
   let uploadNamespace = null;
+  let mqttCredentials=null;
+  let publishQuery=null;
   try {
     const sn = v => (typeof v === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(v) ? v : null);
     sessionId = await mediaIngest.startPilotSession({ user: auth.user, ticketId: ticket.ticket_id, rcSn: sn(rcSn), aircraftSn: sn(aircraftSn) });
@@ -845,6 +820,9 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
     ticketRouteList = await require('./src/services/ticketRoutes').routesOfTicket(ticket.ticket_id);
     uploadNamespace = (await query('SELECT upload_namespace FROM pilot_sessions WHERE session_id=?',[sessionId]))[0].upload_namespace;
     pilotToken=await issuePilotToken(auth.user,sessionId,systemConfig.workspace_id);
+    const pilotUser=await userForToken(pilotToken);
+    mqttCredentials=await require('./src/services/mqttAccess').credentials(sessionId,pilotUser);
+    if(liveStream&&process.env.LIVE_STREAM_ENABLED==='true')publishQuery=require('./src/services/streamAccess').mint(liveStream.streamPath,'publish',pilotUser);
   } catch (err) {
     return sendDbError(res, err);
   }
@@ -874,12 +852,11 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
       license: systemConfig.dji_license,
       token: pilotToken,
       mqtt: {
-        host: `tcp://${HOST_IP}:${MQTT_PORT}`,
-        username: 'pilot',
-        password: 'pilot_password',
+        host: process.env.MQTT_PUBLIC_URL || `tcp://${HOST_IP}:${MQTT_PORT}`,
+        ...mqttCredentials,
         clientId: `pilot_${Date.now()}`
       },
-      livestream: liveStream ? { ...liveStream, rtmpUrl: `rtmp://${HOST_IP}:${systemConfig.rtmp_port || 1935}${liveStream.streamPath}` } : null,
+      livestream: liveStream&&publishQuery ? { ...liveStream, rtmpUrl: `${process.env.RTMP_PUBLIC_BASE_URL || 'rtmp://'+HOST_IP+':'+(process.env.RTMP_PORT||systemConfig.rtmp_port||1935)}${liveStream.streamPath}?${publishQuery}` } : null,
       // Tuyến đầu tiên của phiếu (null nếu phiếu chưa gán tuyến): Pilot 2 thấy đủ các tuyến trong thư viện đường bay
       route: firstRoute ? {
         id: firstRoute.route_uuid,
@@ -998,7 +975,7 @@ app.post('/api/routes/push-to-drone', (req,res) => res.status(410).json({code:41
 
 // 6. Điều khiển Bật/Tắt LiveStream Mavic 3T
 app.post('/api/control/live', async (req, res) => {
-  if (process.env.DJI_LIVE_CONTROL_ENABLED !== 'true') {
+  if (process.env.DJI_LIVE_CONTROL_ENABLED !== 'true'||process.env.LIVE_STREAM_ENABLED!=='true') {
     return res.status(409).json({ code: 409, message: 'Bật live trên Pilot 2. Lệnh live từ web chưa được bật cho môi trường này.' });
   }
   // Không tự dựng video_id/lens hoặc lấy UAV đầu tiên trong danh sách.
@@ -1019,7 +996,7 @@ app.post('/api/control/live', async (req, res) => {
     if (!Number.isInteger(quality) || quality < 0 || quality > 4) return res.status(400).json({ code: 400, message: 'Chất lượng live phải từ 0 đến 4' });
     const payload = { tid: crypto.randomUUID(), bid: crypto.randomUUID(), timestamp: Date.now(),
       method: action === 'stop' ? 'live_stop_push' : 'live_start_push', data: action === 'stop' ? { video_id: videoId } : {
-        url_type: 1, url: `rtmp://${HOST_IP}:${systemConfig.rtmp_port || 1935}${stream.streamPath}`, video_id: videoId, video_quality: quality
+        url_type: 1, url: `${process.env.RTMP_PUBLIC_BASE_URL || 'rtmp://'+HOST_IP+':'+(process.env.RTMP_PORT||systemConfig.rtmp_port||1935)}${stream.streamPath}?${require('./src/services/streamAccess').mint(stream.streamPath,'publish',req.user)}`, video_id: videoId, video_quality: quality
       } };
     mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(payload));
     res.status(202).json({ code: 0, message: 'Đã gửi yêu cầu; chờ phản hồi thiết bị và publisher', data: { ...stream, tid: payload.tid, status: 'REQUESTED' } });
@@ -1043,6 +1020,7 @@ app.post('/api/control/rth', (req,res) => res.status(410).json({code:410,message
 
 // 9.1 Bắn gói tin MQTT thử nghiệm vào Broker 1883 và broadcast ra Live Console
 app.post('/api/mqtt/test-publish', (req, res) => {
+  if(process.env.ENABLE_MQTT_DEBUG!=='true')return res.status(410).json({code:410,message:'MQTT debug tắt'});
   const { topic, payload } = req.body;
   if (!topic) {
     return res.status(400).json({ code: 400, message: 'Vui lòng nhập Topic MQTT!' });
@@ -1113,7 +1091,7 @@ app.get('/api/media', async (req, res) => {
 // 11.1 Xóa tất cả ảnh trong thư viện (Cả trên đĩa và Database)
 app.delete('/api/media/all', async (req, res) => {
   try {
-    const uploadDir = path.join(__dirname, 'uploads', 'media');
+    const uploadDir = mediaUploadRouter.MEDIA_DIR;
     if (fs.existsSync(uploadDir)) {
       const files = fs.readdirSync(uploadDir);
       files.forEach(f => {
@@ -1367,32 +1345,16 @@ app.use(require('./src/routes/pilotWaylines'));
 // D1–D2 (fast-upload, tiny-fingerprints): xem src/routes/mediaUpload.js
 
 // D3. Cấp STS Token upload (Chuẩn MinIO/S3 cho DJI Pilot 2)
-app.all(['/storage/api/v1/workspaces/:workspace_id/sts', '/media/api/v1/workspaces/:workspace_id/storage-configs'], (req, res) => {
-  console.log(`[Storage STS] Pilot 2 xin cấp quyền tải ảnh lên Server`);
-  res.json({
-    code: 0,
-    message: 'success',
-    data: {
-      bucket: 'dji-media',
-      credentials: {
-        access_key_id: 'dji_local',
-        access_key_secret: 'dji_local_secret',
-        security_token: 'token_' + Date.now(),
-        expire: 86400
-      },
-      endpoint: `http://${HOST_IP}:${PORT}`,
-      object_key_prefix: 'media/',
-      provider: 'minio',
-      region: 'local'
-    }
-  });
+app.all(['/storage/api/v1/workspaces/:workspace_id/sts','/media/api/v1/workspaces/:workspace_id/storage-configs'],async(req,res)=>{
+ try{if(!req.pilotSession)return res.status(403).json({code:403,message:'Cần phiên Pilot hợp lệ'});const data=await require('./src/services/objectStorage').grant(req.pilotSession);res.set('Cache-Control','no-store').json({code:0,message:'success',data});}
+ catch(e){res.status(503).json({code:503,message:'Chưa cấp được quyền S3/MinIO; kiểm tra cấu hình STS hoặc nhập ảnh trên Web'});}
 });
 
 // D3.1, D4, D5 (PUT S3, upload form, upload-callback): xem src/routes/mediaUpload.js
 
 // D6. Danh sách ảnh cho Pilot 2 Media Library
 app.get(['/media/api/v1/workspaces/:workspace_id/files', '/manage/api/v1/workspaces/:workspace_id/files'], (req, res) => {
-  const list = memoryStore.mediaFiles.map(m => ({
+  const list = memoryStore.mediaFiles.filter(m=>req.pilotSession?m.ticket_id===req.pilotSession.ticket_id:req.user.role==='ADMIN').map(m => ({
     id: String(m.media_id),
     name: m.file_name,
     file_url: `http://${HOST_IP}:${PORT}${m.file_url}`,

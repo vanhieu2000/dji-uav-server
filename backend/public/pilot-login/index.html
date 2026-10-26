@@ -236,8 +236,10 @@
     }
     // Danh sách phiếu chỉ tải sau xác thực.
     let ticketsLoaded=false;
+    for(const id of ['username','password'])document.getElementById(id).addEventListener('input',()=>{ticketsLoaded=false;document.getElementById('ticketSelect').innerHTML='<option value="">Đăng nhập để tải phiếu</option>';});
 
     function addLog(msg) {
+      msg=String(msg).replace(/([?&](?:sign|grant|sig|token|X-Amz-[A-Za-z-]+)=)[^&\s"<>]+/gi,'$1[redacted]');
       const time = new Date().toLocaleTimeString();
       const line=document.createElement("div");line.textContent=`[${time}] ${String(msg).replace(/<[^>]*>/g, "")}`;logBox.append(line);
       logBox.scrollTop = logBox.scrollHeight;
@@ -366,7 +368,7 @@
                 token: data.data.token
               });
               const apiRes = window.djiBridge.platformLoadComponent('api', apiParam);
-              addLog("✓ Nạp module 'api': " + JSON.stringify(apiRes));
+              addLog("Đã gửi cấu hình API tới Pilot 2.");
             } catch (err) {
               addLog("Lỗi nạp module 'api': " + err.message);
             }
@@ -449,7 +451,7 @@
               });
               addLog("Đang nạp module Thing MQTT tới: " + data.data.mqtt.host);
               const thingRes = window.djiBridge.platformLoadComponent('thing', mqttParam);
-              addLog("✓ Nạp module 'thing': " + JSON.stringify(thingRes));
+              addLog("Đã gửi cấu hình MQTT; chờ callback kết nối.");
             } catch (err) {
               addLog("Lỗi nạp module 'thing': " + err.message);
             }

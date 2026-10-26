@@ -20,6 +20,7 @@
  let resetToken=new URLSearchParams(location.hash.slice(1)).get('reset_token');
  if(resetToken){history.replaceState(null,'',location.pathname);form('reset');return;}
  api('me').then(user=>{window.UAV_USER=user;if(user.must_change_password)return form('change',user);if(user.role!=='ADMIN'&&!location.pathname.startsWith('/m')){location.replace('/m/');return;}overlay.remove();
+ if(document.getElementById('account-name')){document.getElementById('account-name').textContent=user.full_name||user.username;document.getElementById('account-email').textContent=user.email||user.role;document.getElementById('account-avatar').textContent=(user.full_name||user.username||'?').slice(0,2).toUpperCase();}
  const tools=document.createElement('div');tools.id='account-tools';const who=document.createElement('span');who.textContent=user.full_name||user.username;tools.append(who);
  if(user.role==='ADMIN'){const a=document.createElement('a');a.href='/dashboard/accounts.html';a.textContent='Quản trị';tools.append(a);}
  const pass=document.createElement('button');pass.textContent='Đổi mật khẩu';pass.onclick=()=>{document.body.append(overlay);form('change',user);};tools.append(pass);

@@ -1,9 +1,9 @@
-const {chromium}=require('playwright-core');const fs=require('fs'),assert=require('assert/strict');
+const engines=require('playwright-core'),engineName=process.env.BROWSER_ENGINE||'chromium',engine=engines[engineName];const fs=require('fs'),assert=require('assert/strict');
 const path=require('path');const req=require('module').createRequire(path.resolve(__dirname,'../package.json'));
 (async()=>{
  const app=req('express')();app.use(req('express').static(path.resolve(__dirname,'../public/dashboard')));
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.on('listening',r));const base='http://127.0.0.1:'+server.address().port;
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH || '/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await engine.launch({...(engineName==='chromium'?{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']}:{}),headless:true});
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));const commands=[];
  await page.addInitScript(()=>{window.WebSocket=class {constructor(){setTimeout(()=>this.onopen&&this.onopen(),10)} send(){} close(){}};});
  await page.route('**/*',async route=>{const u=new URL(route.request().url());
@@ -39,6 +39,7 @@ const path=require('path');const req=require('module').createRequire(path.resolv
   await page.evaluate(()=>GIS.Insights.reports());
   await page.waitForSelector('#insights-reports-root .gis-empty',{state:'attached'});
   assert.deepEqual(commands,[]);assert.deepEqual(errors,[]);
-  console.log('PASS Chromium: dashboard boots, two UAV markers, zero battery, offline event, realtime photo; task UI mounts, legacy simulation sends no commands; no page errors');
+  await page.goto(base+'/accounts.html');await page.waitForSelector('#permission-checks input');assert.equal(await page.locator('#permission-checks input').count(),6);assert.equal(await page.locator('#message').innerText(),'');assert.deepEqual(errors,[]);
+  console.log('PASS '+engineName+': dashboard boots, two UAV markers, zero battery, offline event, realtime photo; task UI mounts, legacy simulation sends no commands; no page errors');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -9,6 +9,7 @@
   update:entry=>operation('readwrite',s=>s.put(entry)),
   async sync(user,onProgress=()=>{}){
    if(queue.running)return;queue.running=true;
+   const work=async()=>{
    try{for(const item of await queue.list()){
     if(item.owner!==user.user_id)continue;
     const form=new FormData();form.append('files',item.file,item.name);
@@ -21,7 +22,9 @@
      await queue.remove(item.id);
     }catch(e){await queue.update({...item,attempts:item.attempts+1,last_error:e.message});onProgress();break;}
     onProgress();
-   }}finally{queue.running=false;onProgress();}
+   }}finally{onProgress();}
+   };
+   try{if(navigator.locks)await navigator.locks.request('uav-photo-sync-'+user.user_id,work);else await work();}finally{queue.running=false;onProgress();}
   }
  };window.PhotoQueue=queue;
 })();

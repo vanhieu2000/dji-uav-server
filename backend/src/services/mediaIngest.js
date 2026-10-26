@@ -91,11 +91,24 @@ const MEDIA_TYPE = { IR: 'THERMAL_PHOTO', WIDE: 'RGB_PHOTO', ZOOM: 'ZOOM_PHOTO',
  *   routeId, deviceSn, flightId (nếu biết)
  * @returns {Promise<{status: 'created'|'duplicate', media: object}>}
  */
+const ingestChains=new Map();
 async function ingestFile(o) {
-    const stat = fs.statSync(o.localPath);
-    const sha = await sha256File(o.localPath);
-    const dup = await query('SELECT * FROM media_files WHERE sha256 = ? LIMIT 1', [sha]);
-    if (dup.length) return { status: 'duplicate', media: dup[0] };
+    const stat=fs.statSync(o.localPath),sha=await sha256File(o.localPath);
+    const work=(ingestChains.get(sha)||Promise.resolve()).then(()=>ingestUnique(o,sha,stat));
+    const tail=work.then(()=>{},()=>{});ingestChains.set(sha,tail);
+    try{return await work;}finally{if(ingestChains.get(sha)===tail)ingestChains.delete(sha);}
+}
+async function ingestUnique(o,sha,stat){
+    const dup=await query('SELECT * FROM media_files WHERE sha256 = ? LIMIT 1',[sha]);
+    if(dup.length){
+        const m=dup[0];
+        if(!m.file_path_local||!fs.existsSync(m.file_path_local)){
+            await query('UPDATE media_files SET file_path_local=?,file_name=?,file_url=?,file_size=? WHERE media_id=?',[o.localPath,o.fileName,'/uploads/media/'+o.fileName,stat.size,m.media_id]);
+            if(m.ticket_id)await query('UPDATE inspection_tickets SET reconciled_at=NULL WHERE ticket_id=?',[m.ticket_id]);
+            return {status:'duplicate',restored:true,media:{...m,file_path_local:o.localPath,file_name:o.fileName,file_url:'/uploads/media/'+o.fileName,file_size:stat.size}};
+        }
+        return {status:'duplicate',media:m};
+    }
 
     const meta = readMeta(o.localPath, o.originalName || o.fileName);
     let thermal = null;

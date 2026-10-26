@@ -1,3 +1,5 @@
+> **Tài liệu cũ trước phần E/H/I.** Cổng, auth, mật khẩu và storage bên dưới có thể đã đổi. Dùng [README hiện tại](README.md) và [hướng dẫn vận hành](docs/OPERATIONS.md); không dùng hướng dẫn cũ để mở dịch vụ production.
+
 # HƯỚNG DẪN KẾT NỐI MAVIC 3T & DJI PILOT 2 VÀO MÁY CHỦ GIÁM SÁT
 
 Hệ thống máy chủ đã được cài đặt và thiết lập sẵn sàng tại thư mục:

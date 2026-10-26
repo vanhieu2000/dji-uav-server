@@ -12,10 +12,10 @@ async function snapshot(id){
   query('SELECT asset_type,asset_id,max_temp_c,delta_t_c,captured_at FROM temperature_history WHERE ticket_id=? AND valid=1 ORDER BY captured_at',[id])
  ]);return {ticket,photos,defects,measurements};
 }
-function image(file){
+function image(file,budget){
  if(!file)return null;
  const root=fs.realpathSync(require('../routes/mediaUpload').MEDIA_DIR),full=path.resolve(file);
- try{const real=fs.realpathSync(full);if(!real.startsWith(root+path.sep))return null;const stat=fs.statSync(real);if(stat.size>25*1024*1024)return null;const bytes=fs.readFileSync(real);return bytes[0]===255&&bytes[1]===216?bytes:null;}catch(e){return null;}
+ try{const real=fs.realpathSync(full);if(!real.startsWith(root+path.sep))return null;const stat=fs.statSync(real);if(stat.size>25*1024*1024||stat.size>budget.remaining)return null;budget.remaining-=stat.size;const bytes=fs.readFileSync(real);return bytes[0]===255&&bytes[1]===216?bytes:null;}catch(e){return null;}
 }
 function lines(d){
  const t=d.ticket;return [
@@ -27,20 +27,23 @@ function lines(d){
  'CHỮ KÝ XÁC NHẬN (bản xuất này chưa ký)', 'Người kiểm tra: ____________________    Ngày: ______________', 'Người phê duyệt: ___________________    Ngày: ______________'
  ];
 }
-async function generate(id,format){
+async function build(id,format){
+ const budget={remaining:40*1024*1024};
  const data=await snapshot(id),text=lines(data),photos=data.photos.slice(0,100);
  if(format==='docx'){
   const children=text.map((s,i)=>new Paragraph({children:[new TextRun({text:s,bold:i===0})],spacing:{after:120}}));
   children.push(new Paragraph(`Phụ lục ảnh: ${photos.length}/${data.photos.length} ảnh đầu tiên (tối đa 100). Ảnh gốc đầy đủ lưu trong phiếu.`));
-  for(const p of photos){children.push(new Paragraph(p.file_name));const bytes=image(p.file_path_local);if(bytes)children.push(new Paragraph({children:[new ImageRun({data:bytes,type:'jpg',transformation:{width:440,height:330}})]}));else children.push(new Paragraph('Không đọc được ảnh gốc hoặc ảnh quá lớn; kiểm tra tệp trong phiếu.'));}
+  for(const p of photos){children.push(new Paragraph(p.file_name));const bytes=image(p.file_path_local,budget);if(bytes)children.push(new Paragraph({children:[new ImageRun({data:bytes,type:'jpg',transformation:{width:440,height:330}})]}));else children.push(new Paragraph('Không đọc được ảnh gốc hoặc ảnh quá lớn; kiểm tra tệp trong phiếu.'));}
   return Packer.toBuffer(new Document({sections:[{children}],styles:{default:{document:{run:{font:'DejaVu Sans',size:22}}}}}));
  }
  if(!fs.existsSync(FONT))throw Error('Chưa cài font Unicode cho báo cáo PDF');
  return new Promise((resolve,reject)=>{
   const doc=new PDFDocument({size:'A4',margin:45}),chunks=[];doc.on('data',c=>chunks.push(c));doc.on('error',reject);doc.on('end',()=>resolve(Buffer.concat(chunks)));
   try{doc.font(FONT).fontSize(11);for(const s of text)doc.text(s,{paragraphGap:8});doc.addPage().text(`Phụ lục ảnh: ${photos.length}/${data.photos.length} ảnh đầu tiên (tối đa 100).`);
-   for(const p of photos){doc.addPage().text(p.file_name);const bytes=image(p.file_path_local);if(bytes){try{doc.image(bytes,45,90,{fit:[500,650]});}catch(e){doc.text('Ảnh không giải mã được.');}}else doc.text('Không đọc được ảnh gốc hoặc ảnh quá lớn.');}doc.end();
+   for(const p of photos){doc.addPage().text(p.file_name);const bytes=image(p.file_path_local,budget);if(bytes){try{doc.image(bytes,45,90,{fit:[500,650]});}catch(e){doc.text('Ảnh không giải mã được.');}}else doc.text('Không đọc được ảnh gốc hoặc ảnh quá lớn.');}doc.end();
   }catch(e){doc.destroy();reject(e);}
  });
 }
+let active=0;
+async function generate(id,format){if(active>=2){const e=new(require('../utils/validate').ValidationError)('Máy chủ đang xuất báo cáo; thử lại sau');e.status=503;throw e;}active++;try{return await build(id,format);}finally{active--;}}
 module.exports={generate,snapshot,lines};

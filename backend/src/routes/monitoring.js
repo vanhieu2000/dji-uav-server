@@ -42,7 +42,8 @@ function createRouter({ monitoring }) {
         const id = v.parseId(req.params.ticketId, 'phiếu kiểm tra');
         const [ticket] = await query('SELECT ticket_id FROM inspection_tickets WHERE ticket_id = ?', [id]);
         if (!ticket) throw new NotFoundError('Không tìm thấy phiếu kiểm tra');
-        ok(res, await monitoring.streams(id));
+        const rows=await monitoring.streams(id);
+        ok(res,req.user?rows.map(r=>require('../services/streamAccess').playback(r,req.user)):rows);
     }));
     return router;
 }
