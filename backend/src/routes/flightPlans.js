@@ -24,6 +24,7 @@ const { deriveGeometry } = require('../services/captureMath');
 const { gridPlan, pointsPlan } = require('../services/flightPlanner');
 const { buildGridKmz, buildPointsKmz } = require('../services/wpmlBuilder');
 const { ASSET_TABLES } = require('../services/photoPoints');
+const ticketRoutes = require('../services/ticketRoutes');
 
 const WAYLINE_DIR = process.env.WAYLINE_DIR || path.join(__dirname, '..', '..', 'uploads', 'waylines');
 const MAX_POINTS = 500;
@@ -191,6 +192,7 @@ router.post('/', asyncHandler(async (req, res) => {
                 r.targets ? JSON.stringify(r.targets) : null, JSON.stringify(publicPlan(r)), md5,
                 r.geometry.altitude_m ?? null, r.stats.photo_count, r.stats.duration_s, v.optionalString(body.description, 'mô tả', 2000)]
         );
+        if (!v.isBlank(body.ticket_id)) await ticketRoutes.addRoute(body.ticket_id, result.insertId);
         const rows = await query('SELECT * FROM flight_routes WHERE route_id = ?', [result.insertId]);
         ok(res, toPublic(rows[0]), `Đã tạo đường bay ${kmz.waypointCount} điểm, khoảng ${r.stats.photo_count} ảnh`);
     } catch (err) {
@@ -210,11 +212,18 @@ router.get('/', asyncHandler(async (req, res) => {
     const params = [];
     let sql = `SELECT r.route_id, r.route_uuid, r.route_name, r.route_kind, r.area_id, r.target_area, r.capture_profile_id,
                       r.waypoint_count, r.altitude_m, r.photo_count, r.duration_s, r.kmz_file_name, r.created_at,
-                      p.profile_name, p.purpose
+                      p.profile_name, p.purpose,
+                      (SELECT GROUP_CONCAT(CONCAT(t.ticket_id, ':', t.ticket_code) ORDER BY t.ticket_id SEPARATOR ',')
+                         FROM ticket_routes tr JOIN inspection_tickets t ON tr.ticket_id = t.ticket_id
+                        WHERE tr.route_id = r.route_id) AS tickets_csv
                FROM flight_routes r LEFT JOIN capture_profiles p ON r.capture_profile_id = p.profile_id WHERE 1=1`;
     if (req.query.area_id) { sql += ' AND r.area_id = ?'; params.push(v.parseId(req.query.area_id, 'area_id')); }
     sql += ' ORDER BY r.route_id DESC LIMIT 500';
-    ok(res, (await query(sql, params)).map(r => ({ ...r, kmz_url: `/api/flight-plans/${r.route_id}/kmz` })));
+    ok(res, (await query(sql, params)).map(({ tickets_csv: csv, ...r }) => ({
+        ...r,
+        tickets: csv ? csv.split(',').map(x => { const i = x.indexOf(':'); return { ticket_id: Number(x.slice(0, i)), ticket_code: x.slice(i + 1) }; }) : [],
+        kmz_url: `/api/flight-plans/${r.route_id}/kmz`
+    })));
 }));
 
 async function loadRoute(id) {
@@ -235,9 +244,22 @@ router.get('/:id/kmz', asyncHandler(async (req, res) => {
     res.download(file, row.kmz_file_name);
 }));
 
+// Gán / bỏ gán đường bay vào phiếu
+router.post('/:id/tickets', asyncHandler(async (req, res) => {
+    await ticketRoutes.addRoute((req.body || {}).ticket_id, req.params.id);
+    ok(res, null, 'Đã gán đường bay vào phiếu');
+}));
+
+router.delete('/:id/tickets/:ticketId', asyncHandler(async (req, res) => {
+    await ticketRoutes.removeRoute(req.params.ticketId, req.params.id);
+    ok(res, null, 'Đã bỏ gán đường bay khỏi phiếu');
+}));
+
 router.delete('/:id', asyncHandler(async (req, res) => {
     const row = await loadRoute(req.params.id);
+    const affectedTickets = await ticketRoutes.ticketsOfRoute(row.route_id);
     await query('DELETE FROM flight_routes WHERE route_id = ?', [row.route_id]);
+    for (const t of affectedTickets) await ticketRoutes.syncAssigned(t);
     fs.rm(path.join(WAYLINE_DIR, path.basename(row.kmz_file_name)), { force: true }, () => {});
     ok(res, null, 'Đã xóa đường bay');
 }));

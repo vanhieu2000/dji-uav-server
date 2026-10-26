@@ -137,3 +137,8 @@
 .gis-cv-big{font-size:14px;margin:6px 0}
 .gis-cv-big .tag{font-size:16px;line-height:26px;padding:0 10px}
 .gis-ok-note{color:var(--ok);font-weight:600;font-size:12.5px;margin-top:6px}
+
+/* Gán phiếu cho đường bay */
+.gis-tk-chips{gap:4px;align-items:center}
+.gis-tk-chip button{border:0;background:transparent;color:inherit;cursor:pointer;padding:0 2px;font-weight:700}
+.gis-tk-add{height:24px;width:auto;font-size:11px;padding:0 4px}

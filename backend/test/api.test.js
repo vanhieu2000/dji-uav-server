@@ -582,6 +582,39 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal(await lib.findRoute(''), null);
     });
 
+    await t.test('gán đường bay vào phiếu: nhiều tuyến / phiếu, đồng bộ assigned_route_id', async () => {
+        const tk = (await api('POST', '/api/tickets', { ticket_name: 'Phiếu có tuyến', inspection_type: 'SOLAR_PANEL', target_facility: 'INV-01' })).body.data;
+        const grid = (await api('GET', '/api/capture-profiles')).body.data.find(p => p.profile_code === 'SOLAR_THERMAL');
+        const r1 = (await api('POST', '/api/flight-plans', { profile_id: grid.profile_id, area_id: areaId, route_name: 'Tuyến chính', ticket_id: tk.ticket_id })).body.data;
+        const r2 = (await api('POST', '/api/flight-plans', { profile_id: grid.profile_id, area_id: areaId, route_name: 'Tuyến bù' })).body.data;
+        assert.equal((await api('POST', `/api/flight-plans/${r2.route_id}/tickets`, { ticket_id: tk.ticket_id })).status, 200);
+        let detail = (await api('GET', `/api/tickets/${tk.ticket_id}`)).body.data;
+        assert.deepEqual(detail.routes.map(r => r.route_name), ['Tuyến chính', 'Tuyến bù']);
+        assert.equal(detail.ticket.assigned_route_id, r1.route_id);
+        const list = (await api('GET', '/api/flight-plans')).body.data;
+        assert.deepEqual(list.find(r => r.route_id === r1.route_id).tickets, [{ ticket_id: tk.ticket_id, ticket_code: tk.ticket_code }]);
+        // Đổi thứ tự, bỏ tuyến
+        assert.equal((await api('PUT', `/api/tickets/${tk.ticket_id}/routes`, { route_ids: [r2.route_id, r1.route_id] })).status, 200);
+        detail = (await api('GET', `/api/tickets/${tk.ticket_id}`)).body.data;
+        assert.equal(detail.ticket.assigned_route_id, r2.route_id);
+        assert.equal((await api('DELETE', `/api/flight-plans/${r2.route_id}/tickets/${tk.ticket_id}`)).status, 200);
+        detail = (await api('GET', `/api/tickets/${tk.ticket_id}`)).body.data;
+        assert.equal(detail.routes.length, 1);
+        assert.equal(detail.ticket.assigned_route_id, r1.route_id);
+        assert.equal((await api('PUT', `/api/tickets/${tk.ticket_id}/routes`, { route_ids: [999999] })).status, 400);
+        assert.equal((await api('POST', `/api/flight-plans/${r1.route_id}/tickets`, { ticket_id: 999999 })).status, 404);
+        // Phiếu có 2 tuyến, xóa tuyến đầu → "tuyến đầu tiên" chuyển sang tuyến còn lại
+        await api('POST', `/api/flight-plans/${r2.route_id}/tickets`, { ticket_id: tk.ticket_id });
+        await api('DELETE', `/api/flight-plans/${r1.route_id}`);
+        detail = (await api('GET', `/api/tickets/${tk.ticket_id}`)).body.data;
+        assert.equal(detail.ticket.assigned_route_id, r2.route_id);
+        // Xóa tuyến còn lại → phiếu không còn tuyến
+        await api('DELETE', `/api/flight-plans/${r2.route_id}`);
+        detail = (await api('GET', `/api/tickets/${tk.ticket_id}`)).body.data;
+        assert.equal(detail.routes.length, 0);
+        assert.equal(detail.ticket.assigned_route_id, null);
+    });
+
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
         await db.closePool();
         const r = await api('GET', '/api/solar/areas');

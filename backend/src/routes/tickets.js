@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { query, sendDbError } = require('../config/db');
+const ticketRoutes = require('../services/ticketRoutes');
+const { asyncHandler, ok } = require('../utils/http');
 
 // 1. Lấy danh sách phiếu kiểm tra
 router.get('/', async (req, res) => {
@@ -85,10 +87,13 @@ router.get('/:id', async (req, res) => {
             WHERE d.ticket_id = ?
         `, [ticketId]);
 
+        const routes = await ticketRoutes.routesOfTicket(ticket.ticket_id);
+
         res.json({
             code: 0,
             data: {
                 ticket,
+                routes,
                 photos,
                 defects
             }
@@ -120,5 +125,11 @@ router.patch('/:id/status', async (req, res) => {
         sendDbError(res, err);
     }
 });
+
+// 5. Đặt danh sách đường bay của phiếu (theo thứ tự): { route_ids: [..] }
+router.put('/:id/routes', asyncHandler(async (req, res) => {
+    const ids = await ticketRoutes.setRoutes(req.params.id, (req.body || {}).route_ids);
+    ok(res, { route_ids: ids }, `Phiếu có ${ids.length} đường bay`);
+}));
 
 module.exports = router;

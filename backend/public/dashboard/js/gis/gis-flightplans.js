@@ -7,7 +7,7 @@
   const GIS = window.GIS;
   const esc = GIS.esc;
 
-  const st = { root: null, map: null, previewLayer: null, profiles: [], tree: null, lastPreview: null, routes: [] };
+  const st = { root: null, map: null, previewLayer: null, profiles: [], tree: null, lastPreview: null, routes: [], tickets: [] };
 
   const fmtTime = s => `${Math.floor(s / 60)} phút ${s % 60} giây`;
 
@@ -45,6 +45,8 @@
   function readBody() {
     const kind = st.root.querySelector('[name="fp-kind"]:checked').value;
     const body = { profile_id: st.root.querySelector('#gis-fp-profile').value, route_name: st.root.querySelector('#gis-fp-name').value.trim() };
+    const tk = st.root.querySelector('#gis-fp-ticket').value;
+    if (tk) body.ticket_id = tk;
     if (kind === 'GRID') body.area_id = (st.root.querySelector('#gis-fp-area') || {}).value;
     else body.targets = [...st.root.querySelectorAll('.gis-tgt input:checked')].map(i => ({ asset_type: i.dataset.type, asset_id: Number(i.value) }));
     return body;
@@ -120,13 +122,15 @@
     const res = await GIS.run(() => GIS.api('GET', '/api/flight-plans'));
     st.routes = res ? res.data : [];
     st.root.querySelector('#gis-fp-routes').innerHTML = st.routes.length ? `<div class="tbl-wrap"><table>
-      <thead><tr><th>Tên</th><th>Kiểu</th><th>Hồ sơ</th><th>Ảnh</th><th>Thời gian</th><th></th></tr></thead>
+      <thead><tr><th>Tên</th><th>Kiểu</th><th>Hồ sơ</th><th>Ảnh</th><th>Thời gian</th><th>Phiếu (Pilot 2 thấy tuyến khi chọn phiếu)</th><th></th></tr></thead>
       <tbody>${st.routes.map(r => `<tr data-id="${r.route_id}">
         <td><b>${esc(r.route_name)}</b><div class="faint">${esc(r.target_area || '')} · ${esc(new Date(r.created_at).toLocaleString('vi-VN'))}</div></td>
         <td>${r.route_kind === 'GRID' ? 'Quét lưới' : r.route_kind === 'POINTS' ? 'Điểm' : 'Vẽ tay'}</td>
         <td>${esc(r.profile_name || '')}</td>
         <td class="num">${esc(r.photo_count ?? '')}</td>
         <td class="num">${r.duration_s ? fmtTime(r.duration_s) : ''}</td>
+        <td><div class="gis-row gis-tk-chips">${(r.tickets || []).map(t => `<span class="gis-chip gis-tk-chip">${esc(t.ticket_code)} <button type="button" data-act="untk" data-tk="${t.ticket_id}" aria-label="Bỏ gán phiếu">×</button></span>`).join('')}
+          <select class="input gis-tk-add" aria-label="Gán vào phiếu"><option value="">+ gán phiếu</option>${st.tickets.filter(t => !(r.tickets || []).some(x => x.ticket_id === t.ticket_id)).map(t => `<option value="${t.ticket_id}">${esc(t.ticket_code)}</option>`).join('')}</select></div></td>
         <td class="gis-row"><button class="btn sm" data-act="show">Xem</button><a class="btn sm" href="${esc(r.kmz_url)}" download>KMZ</a><button class="btn sm danger" data-act="del">Xóa</button></td>
       </tr>`).join('')}</tbody></table></div>` : '<div class="gis-empty">Chưa có đường bay nào.</div>';
   }
@@ -139,6 +143,11 @@
     if (act.dataset.act === 'show') {
       const res = await GIS.run(() => GIS.api('GET', `/api/flight-plans/${id}`));
       if (res && res.data.plan) { drawPlan(res.data.plan); renderStats(res.data.plan); }
+    }
+    if (act.dataset.act === 'untk') {
+      const res = await GIS.run(() => GIS.api('DELETE', `/api/flight-plans/${id}/tickets/${act.dataset.tk}`), 'Đã bỏ gán phiếu');
+      if (res) loadRoutes();
+      return;
     }
     if (act.dataset.act === 'del') {
       if (!window.confirm('Xóa đường bay này (kèm file KMZ)?')) return;
@@ -172,6 +181,7 @@
               </div>
               <div id="gis-fp-target"></div>
               <div class="field"><label for="gis-fp-profile">Hồ sơ chụp</label><select class="input" id="gis-fp-profile"></select></div>
+              <div class="field"><label for="gis-fp-ticket">Gán vào phiếu (tùy chọn)</label><select class="input" id="gis-fp-ticket"></select></div>
               <div class="field"><label for="gis-fp-name">Tên đường bay</label><input class="input" id="gis-fp-name" placeholder="VD: Quét nhiệt INV-01 tháng 11"></div>
               <div class="gis-row">
                 <button class="btn" type="button" id="gis-fp-preview">🔍 Xem trước</button>
@@ -189,14 +199,25 @@
         root.querySelector('#gis-fp-preview').addEventListener('click', preview);
         root.querySelector('#gis-fp-create').addEventListener('click', create);
         root.querySelector('#gis-fp-routes').addEventListener('click', onRoutesClick);
+        root.querySelector('#gis-fp-routes').addEventListener('change', async e => {
+          const sel = e.target.closest('.gis-tk-add');
+          if (!sel || !sel.value) return;
+          const id = Number(sel.closest('tr').dataset.id);
+          const res = await GIS.run(() => GIS.api('POST', `/api/flight-plans/${id}/tickets`, { ticket_id: sel.value }), 'Đã gán đường bay vào phiếu');
+          if (res) loadRoutes();
+        });
         root.querySelector('#gis-fp-target').addEventListener('change', () => { st.root.querySelector('#gis-fp-create').disabled = true; });
         root.querySelector('#gis-fp-profile').addEventListener('change', () => { st.root.querySelector('#gis-fp-create').disabled = true; });
         await initMap();
       }
-      const [profiles, tree] = await Promise.all([
+      const [profiles, tree, tickets] = await Promise.all([
         GIS.run(() => GIS.api('GET', '/api/capture-profiles')),
-        GIS.run(() => GIS.api('GET', '/api/assets/tree'))
+        GIS.run(() => GIS.api('GET', '/api/assets/tree')),
+        GIS.run(() => GIS.api('GET', '/api/tickets'))
       ]);
+      st.tickets = (tickets ? tickets.data : []).filter(t => ['PENDING', 'ASSIGNED', 'EXECUTING'].includes(t.status));
+      st.root.querySelector('#gis-fp-ticket').innerHTML = '<option value="">(không gán)</option>' +
+        st.tickets.map(t => `<option value="${t.ticket_id}">${esc(t.ticket_code)} – ${esc(t.ticket_name)}</option>`).join('');
       st.profiles = profiles ? profiles.data : [];
       st.tree = tree ? tree.data : null;
       renderForm();
