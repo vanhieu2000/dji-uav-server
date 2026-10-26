@@ -36,58 +36,8 @@ router.get('/detections', async (req, res) => {
 });
 
 // 2. Webhook/Endpoint dành cho AI Team (Đội Vision) đẩy kết quả phân tích
-router.post('/webhook/vision-result', async (req, res) => {
-    try {
-        const { media_id, ticket_id, detections } = req.body;
-        // detections là mảng: [{ defect_type, confidence, bounding_box, max_temperature, delta_temp, crop_image_url }]
-        if (!media_id || !Array.isArray(detections)) {
-            return res.status(400).json({ code: 400, message: 'Dữ liệu không đúng định dạng. Cần media_id và danh sách detections' });
-        }
-
-        const insertedIds = [];
-        for (const det of detections) {
-            const result = await query(
-                `INSERT INTO ai_defect_detections 
-                 (media_id, ticket_id, defect_type, confidence, bounding_box_json, max_temperature, delta_temperature, crop_image_url)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    media_id,
-                    ticket_id || null,
-                    det.defect_type || 'OTHER',
-                    det.confidence || 0.0,
-                    det.bounding_box ? JSON.stringify(det.bounding_box) : null,
-                    det.max_temperature || null,
-                    det.delta_temp || null,
-                    det.crop_image_url || null
-                ]
-            );
-            insertedIds.push(result.insertId);
-
-            // Tự động tạo Defect Alert nếu lỗi nghiêm trọng hoặc nhiệt độ vượt ngưỡng
-            const isHighTemp = det.max_temperature && det.max_temperature >= 65.0;
-            const alertLevel = isHighTemp ? 'CRITICAL' : 'WARNING';
-            const alertTitle = `Phát hiện ${det.defect_type === 'HOTSPOT_PANEL' ? 'Điểm Phát Nhiệt Pin' : (det.defect_type === 'DISCONNECTOR_OVERHEAT' ? 'Quá Nhiệt Dao Cách Ly' : 'Khiếm Khuyết Bất Thường')}`;
-            const alertMsg = `AI phát hiện lỗi ${det.defect_type} với độ tin cậy ${(det.confidence * 100).toFixed(1)}%. Nhiệt độ ghi nhận: ${det.max_temperature || 'N/A'}°C`;
-
-            await query(
-                `INSERT INTO defect_alerts (detection_id, ticket_id, alert_level, title, message)
-                 VALUES (?, ?, ?, ?, ?)`,
-                [result.insertId, ticket_id || null, alertLevel, alertTitle, alertMsg]
-            );
-        }
-
-        // Cập nhật trạng thái has_hotspot trong media_files
-        await query('UPDATE media_files SET has_hotspot = 1 WHERE media_id = ?', [media_id]);
-
-        res.json({
-            code: 0,
-            message: `Tiếp nhận thành công ${insertedIds.length} khiếm khuyết từ AI Vision Team`,
-            data: { inserted_ids: insertedIds }
-        });
-    } catch (err) {
-        console.error('[AI Bridge Error]', err);
-        sendDbError(res, err);
-    }
+router.post('/webhook/vision-result', (req, res) => {
+    res.status(410).json({ code: 410, message: 'Webhook v1 đã thay bằng POST /api/vision/results (contract 2.0, xác thực, job_id và result_version).' });
 });
 
 // 3. Lấy danh sách cảnh báo (Defect Alerts)

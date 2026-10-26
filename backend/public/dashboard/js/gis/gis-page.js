@@ -11,6 +11,7 @@
     ['profiles', 'Hồ sơ chụp'],
     ['flights', 'Lập đường bay'],
     ['history', 'Lịch sử chuyến bay'],
+    ['vision', 'Xử lý Vision'],
     ['media', 'Nhập ảnh thẻ nhớ'],
     ['coverage', 'Kiểm tra đủ ảnh'],
     ['datasets', 'Xuất ảnh cho Vision'],
@@ -27,6 +28,7 @@
     if (tab === 'tree') GIS.Assets.open(pane);
     if (tab === 'profiles') GIS.Profiles.render(pane);
     if (tab === 'flights') GIS.FlightPlans.render(pane);
+    if (tab === 'vision') GIS.Vision.render(pane);
     if (tab === 'history') GIS.FlightHistory.render(pane);
     if (tab === 'media') GIS.MediaImport.render(pane);
     if (tab === 'coverage') GIS.Coverage.render(pane);

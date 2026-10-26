@@ -131,7 +131,7 @@ app.get('/favicon.ico', (req, res) => res.status(204).end());
 // Middleware ghi log chi tiết mọi HTTP request từ Pilot 2 (bỏ qua static files & favicon)
 app.use((req, res, next) => {
   if (!req.url.startsWith('/dashboard') && !req.url.startsWith('/pilot-login') && !req.url.startsWith('/uploads') && !req.url.includes('favicon.ico') && !req.url.endsWith('.png') && !req.url.endsWith('.js') && !req.url.endsWith('.css')) {
-    console.log(`[Pilot 2 HTTP] ${req.method} ${req.originalUrl}`);
+    console.log(`[Pilot 2 HTTP] ${req.method} ${req.path}`);
   }
   next();
 });
@@ -171,6 +171,9 @@ app.use('/api/solar', solarRouter);
 app.use('/api/substation', substationRouter);
 app.use('/api/tickets', ticketsRouter);
 app.use('/api/ai', aiRouter);
+const visionRouter = require('./src/routes/vision');
+visionRouter.setOnResult(broadcastWebSocket);
+app.use('/api/vision', visionRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/assets', assetsRouter);
 app.use('/api/basemaps', basemapsRouter);
@@ -1661,6 +1664,7 @@ app.get('/', (req, res) => {
 // THEO DÕI KẾT NỐI CSDL: nâng cấp schema & nạp ảnh khi kết nối lần đầu
 // ===================================================================
 let dbInitDone = false;
+let visionStop = null;
 let dbInitRunning = false;
 const MIGRATION_RETRY_MS = 30000;
 
@@ -1671,6 +1675,16 @@ async function initDatabase() {
   try {
     await runMigrations(dbConfig);
     dbInitDone = true;
+    if (!visionStop && process.env.VISION_ENABLED === 'true') {
+      const endpoint = process.env.VISION_ENDPOINT, publicBase = process.env.VISION_PUBLIC_BASE_URL, secret = process.env.VISION_WEBHOOK_SECRET;
+      if (!endpoint || !publicBase || !secret) console.warn('[Vision] Chưa đủ VISION_ENDPOINT, VISION_PUBLIC_BASE_URL, VISION_WEBHOOK_SECRET; worker tắt.');
+      else {
+        const allowedUrl = value => { try { const u = new URL(value); return !u.username && !u.password && (u.protocol === 'https:' || (u.protocol === 'http:' && ['127.0.0.1','localhost'].includes(u.hostname))); } catch(e) { return false; } };
+        if (!allowedUrl(endpoint) || !allowedUrl(publicBase)) console.warn('[Vision] Dùng HTTPS hoặc loopback cho endpoint và public base.');
+        else visionStop = require('./src/services/visionJobs').startWorker({ endpoint, publicBase, secret, apiToken: process.env.VISION_API_TOKEN });
+      }
+    }
+
     const dangling = await flightTracker.closeDangling();
     if (dangling) console.log(`[Chuyến bay] Đóng ${dangling} chuyến còn mở từ lần chạy trước.`);
     // Làm sạch ảnh nhận bằng code cũ (giá trị gán cứng) – chỉ chạm các dòng chưa có sha256

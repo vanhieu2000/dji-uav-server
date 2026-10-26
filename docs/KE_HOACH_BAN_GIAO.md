@@ -200,9 +200,9 @@ Ghi kết quả vào mục 8 và sửa code nếu tên trường DJI khác.
 - [x] C6 – KPI DCL vượt ngưỡng/max nhiệt lấy SQL; bỏ nhãn khu 3.36 MWp và marker UAV giả trước OSD. Biểu đồ mẫu còn lại thuộc G.
 
 ### Giai đoạn D – Tích hợp AI Vision (~4 ngày, sau khi chốt đặc tả)
-- [ ] Gửi job sang Vision, nhận webhook kết quả (khung pixel, loại lỗi, độ tin cậy, nhiệt độ).
-- [ ] Đổi pixel → tọa độ mặt đất (dùng RTK + gimbal + FOV), gắn đúng tấm pin / mối nối, cập nhật trạng thái tấm.
-- [ ] Ngưỡng cảnh báo lấy từ cấu hình (bỏ 65 °C cứng trong `ai_bridge.js`).
+- [x] D1 – Hàng đợi bền vững + webhook contract 2.0, auth/idempotency/version/retry, input hash và link hết hạn; tab Xử lý Vision. CÒN: đội Vision triển khai endpoint/model thật và thử tích hợp. Xem docs/VISION_CONTRACT.md.
+- [ ] D2 – Đã có phép chiếu nadir khi RTK + AGL/FOV/lens được xác nhận, trạng thái UNRESOLVED khi thiếu; xác nhận tài sản bằng tay có audit và cập nhật pin. CÒN: tự gán chắc chắn, địa hình/camera xiên/calibration và PoC với ảnh M3T thật; không giả sử relative altitude = AGL.
+- [x] D3 – Ngưỡng cấu hình qua alert_rules/UI, confidence/max nhiệt/ΔT; webhook v1 không xác thực được thay 410 → v2, bỏ 65 °C cứng. Chưa cấu hình rule bật thì không tự sinh cảnh báo nhiệt.
 
 ### Giai đoạn F – Phiếu kiểm tra & dữ liệu nhiệm vụ (~4 ngày) – hạng mục #20, #21, #24, #25
 - [ ] Phiếu pin: chọn khu / chuỗi cụ thể (bảng `ticket_details`), tổ công tác (người), thời gian kế hoạch / thực tế, hồ sơ chụp, tuyến bay.
@@ -353,3 +353,6 @@ Kiểm tra: `npm test` và `npm run test:browser` (Chromium, API/WS fixture, 0 l
 Giới hạn: auth/workspace/stream ACL thuộc E/I, chưa triển khai public. HMS lưu mã/mức gốc, chưa tự dịch code theo model. `MEDIA_HTTP_BASE_URL` hỗ trợ reverse proxy HTTPS; standalone HTTP-FLV không đồng nghĩa WebRTC/NAT đã đạt. D cần contract/service/model từ Vision, không chọn/train mô hình thay họ.
 
 Kết quả C3–C6: 53 kiểm thử Node/MySQL đạt, không skip; Chromium smoke đạt (2 UAV, pin 0%, OFFLINE, ảnh realtime, không lệnh). NMS v4 có grace window 30 giây trước donePublish; trạng thái dừng phản ánh theo sự kiện đó, không hứa tức thời.
+
+### D1/D3 – 26/10/2026
+Contract 2.0 và worker tắt mặc định; endpoint/model/secret do đội Vision cung cấp qua cấu hình an toàn. Không đổi framework hoặc viết training. Migration 008, API và UI Xử lý Vision; D2 giữ chưa xong vì thiếu calibration/ảnh/địa hình thật. Phần F độc lập sẽ tiếp tục, không đợi dịch vụ Vision.

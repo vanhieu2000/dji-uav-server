@@ -369,3 +369,27 @@ test('dashboard: tất cả script inline và module mới parse được', () =
     assert.ok(count > 0);
     new vm.Script(fs.readFileSync(path.join(__dirname, '../public/dashboard/js/gis/gis-live-monitor.js'), 'utf8'));
 });
+
+test('Vision contract: bbox, nguồn ảnh, model version, ngưỡng cấu hình', () => {
+    const { resultInput, severity, legacyType } = require('../src/services/visionContract');
+    const body = { contract_version:'2.0',job_id:require('crypto').randomUUID(),media_id:1,input_sha256:'a'.repeat(64),result_version:1,model_version:'fixture',status:'SUCCEEDED',detections:[] };
+    assert.equal(resultInput(body).detections.length,0);
+    assert.throws(()=>resultInput({...body,model_version:''}));
+    assert.throws(()=>resultInput({...body,result_version:0}));
+    assert.equal(severity({confidence:1,max_temp_c:100},null),null);
+    assert.equal(severity({confidence:.9,max_temp_c:0},{enabled:1,min_confidence:.8,max_temp_c:0}), 'CRITICAL');
+    assert.equal(legacyType('BYPASS_DIODE'),'HOTSPOT_PANEL');
+});
+
+test('chiếu pixel: không dùng RelativeAltitude thay AGL, không đoán tọa độ khi thiếu RTK/calibration', () => {
+    const { projectPixel } = require('../src/services/imageProjection');
+    const d={bbox:[4,4,2,2],image_width:10,image_height:10};
+    const m={latitude:10,longitude:106,rtk_flag:50,gimbal_pitch:-90,gimbal_yaw:0,gimbal_roll:0,lens:'IR'};
+    const c={confirmed:true,agl_m:30,hfov_deg:60,vfov_deg:50,image_width:10,image_height:10,lens:'IR'};
+    assert.equal(projectPixel(m,d,null),null);
+    assert.equal(projectPixel({...m,rtk_flag:0},d,c),null);
+    assert.equal(projectPixel({...m,gimbal_pitch:0},d,c),null);
+    assert.equal(projectPixel({...m,lens:'WIDE'},d,c),null);
+    const p=projectPixel(m,d,c);assert.equal(p.latitude,10);assert.equal(p.longitude,106);
+    assert.ok(projectPixel(m,{...d,bbox:[8,4,1,2]},c).longitude>106);
+});

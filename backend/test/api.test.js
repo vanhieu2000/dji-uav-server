@@ -768,6 +768,75 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal(stats.body.data.overheated_disconnectors, measured.n);
     });
 
+    await t.test('Vision v2: file thật, queue, callback version/idempotency, ngưỡng và rollback', async () => {
+        const crypto = require('crypto');
+        const jobs = require('../src/services/visionJobs');
+        const fixture = path.join(__dirname, 'fixtures/vision-input.jpg');
+        const sha = await require('../src/services/mediaIngest').sha256File(fixture);
+        const [tk] = await db.query('SELECT ticket_id FROM inspection_tickets ORDER BY ticket_id LIMIT 1');
+        const row = await db.query(`INSERT INTO media_files (ticket_id,device_sn,file_name,file_url,file_path_local,sha256,source,lens)
+            VALUES (?, 'VISION-FIXTURE','vision-input.jpg','/fixture',?,?,'SD_IMPORT','WIDE')`, [tk.ticket_id,fixture,sha]);
+        const mediaId = row.insertId;
+        const job = await jobs.enqueue(mediaId);
+        assert.equal(job.status, 'QUEUED');
+        assert.equal((await jobs.enqueue(mediaId)).job_id, job.job_id);
+        const admin = { Authorization: 'Bearer '+require('jsonwebtoken').sign({user_id:1,role:'ADMIN'},process.env.JWT_SECRET) };
+        assert.equal((await api('PUT','/api/vision/rules/PANEL',{enabled:true})).status,401);
+        assert.equal((await api('PUT','/api/vision/rules/PANEL',{max_temp_c:80,delta_t_c:20,min_confidence:.8,enabled:true},admin)).status,200);
+        const payload = { contract_version:'2.0', job_id:job.job_id, media_id:mediaId, input_sha256:sha, result_version:1,
+            model_version:'fixture-model-1', status:'SUCCEEDED', detections:[{defect_type:'HOTSPOT_CELL',confidence:.9,image:'rgb',image_width:16,image_height:16,bbox:[0,0,4,4],max_temp_c:90,delta_t_c:25}] };
+        process.env.VISION_WEBHOOK_SECRET = crypto.randomBytes(32).toString('hex');
+        const machine = {Authorization:'Bearer '+process.env.VISION_WEBHOOK_SECRET};
+        assert.equal((await api('POST','/api/vision/results',payload)).status,401);
+        // Synchronous callback during request must win over worker's DISPATCHED update.
+        let delivered;
+        await jobs.dispatchOne({ endpoint:'http://127.0.0.1/vision', publicBase:'http://127.0.0.1:8080', secret:process.env.VISION_WEBHOOK_SECRET,
+            fetchImpl:async (url,init)=>{delivered=JSON.parse(init.body);assert.equal(init.headers['Idempotency-Key'],job.job_id);const r=await api('POST','/api/vision/results',payload,machine);assert.equal(r.status,200,JSON.stringify(r.body));return {ok:true};} });
+        assert.equal(delivered.input.verification,'JPEG_HEADER_AND_SHA256');
+        const [done] = await db.query('SELECT * FROM vision_jobs WHERE job_id=?',[job.job_id]);
+        assert.equal(done.status,'SUCCEEDED');
+        const duplicate = await api('POST','/api/vision/results',payload,machine);
+        assert.equal(duplicate.body.data.duplicate,true);
+        const [counts] = await db.query('SELECT COUNT(*) AS n FROM ai_defect_detections WHERE vision_job_id=?',[job.job_id]);
+        assert.equal(counts.n,1);
+        const [alert] = await db.query('SELECT a.alert_level FROM defect_alerts a JOIN ai_defect_detections d ON a.detection_id=d.detection_id WHERE d.vision_job_id=?',[job.job_id]);
+        assert.equal(alert.alert_level,'CRITICAL');
+        const bad = structuredClone(payload);bad.detections[0].bbox=[15,15,5,5];bad.result_version=2;
+        assert.equal((await api('POST','/api/vision/results',bad,machine)).status,400);
+        const wrong=structuredClone(payload);wrong.input_sha256='0'.repeat(64);
+        assert.equal((await api('POST','/api/vision/results',wrong,machine)).status,409);
+        const changed=structuredClone(payload);changed.detections[0].confidence=.7;
+        assert.equal((await api('POST','/api/vision/results',changed,machine)).status,409);
+        // Human-confirmed asset mapping is explicit, version-checked and audited.
+        await db.query("INSERT IGNORE INTO users (user_id,username,password_hash,full_name,role) VALUES (1,'fixture-reviewer','unused','Fixture','ADMIN')");
+        const [panel] = await db.query('SELECT panel_id FROM solar_panels LIMIT 1');
+        const [det] = await db.query('SELECT detection_id FROM ai_defect_detections WHERE vision_job_id=?',[job.job_id]);
+        const mapped=await api('POST',`/api/vision/detections/${det.detection_id}/asset`,{asset_type:'PANEL',asset_id:panel.panel_id,result_version:1},admin);
+        assert.equal(mapped.status,200,JSON.stringify(mapped.body));
+        assert.equal((await db.query('SELECT status FROM solar_panels WHERE panel_id=?',[panel.panel_id]))[0].status,'DEFECT');
+        const [audit]=await db.query('SELECT COUNT(*) AS n FROM vision_asset_reviews WHERE vision_job_id=?',[job.job_id]);assert.equal(audit.n,1);
+        assert.equal((await api('POST',`/api/vision/detections/${det.detection_id}/asset`,{asset_type:'PANEL',asset_id:panel.panel_id,result_version:9},admin)).status,400);
+        const empty={...payload,result_version:2,detections:[]};
+        assert.equal((await api('POST','/api/vision/results',empty,machine)).status,200);
+        const [media] = await db.query('SELECT has_hotspot FROM media_files WHERE media_id=?',[mediaId]);assert.equal(media.has_hotspot,0);
+        const [left] = await db.query('SELECT COUNT(*) AS n FROM ai_defect_detections WHERE vision_job_id=?',[job.job_id]);assert.equal(left.n,0);
+        assert.equal((await api('POST','/api/vision/results',payload,machine)).status,409);
+        assert.equal((await api('POST','/api/ai/webhook/vision-result',{})).status,410);
+        const expiry=Math.floor(Date.now()/1000)+60;
+        const token=jobs.inputToken(job,expiry,process.env.VISION_WEBHOOK_SECRET);
+        const download=await fetch(app.base+`/api/vision/jobs/${job.job_id}/input?expires=${expiry}&token=${token}`);
+        assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),fs.readFileSync(fixture));
+        assert.equal((await api('GET',`/api/vision/jobs/${job.job_id}/input?expires=${expiry}&token=bad`)).status,401);
+        // Invalid file is recorded as INVALID, not submitted over HTTP.
+        const invalid=await db.query(`INSERT INTO media_files (device_sn,file_name,file_url,file_path_local,sha256,source,lens)
+            VALUES ('FIXTURE','missing.jpg','/missing','/missing',?,'CLOUD','IR')`,['f'.repeat(64)]);
+        assert.equal((await jobs.enqueue(invalid.insertId)).status,'INVALID');
+        await db.query("UPDATE vision_jobs SET status='QUEUED', attempts=0 WHERE job_id=?",[job.job_id]);
+        await jobs.dispatchOne({endpoint:'http://127.0.0.1',publicBase:'http://127.0.0.1',secret:'fixture',fetchImpl:async()=>{throw new Error('fixture timeout');}});
+        const [retry]=await db.query('SELECT status,attempts,last_error FROM vision_jobs WHERE job_id=?',[job.job_id]);
+        assert.equal(retry.status,'RETRY_WAIT');assert.equal(retry.attempts,1);
+    });
+
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
         await db.closePool();
         const r = await api('GET', '/api/solar/areas');

@@ -32,7 +32,8 @@
    * body là FormData thì gửi nguyên (tải file).
    */
   GIS.api = async function (method, url, body) {
-    const init = { method, headers: {} };
+    const token = localStorage.getItem('uav_token');
+    const init = { method, headers: token ? { Authorization: `Bearer ${token}` } : {} };
     if (body instanceof FormData) {
       init.body = body;
     } else if (body !== undefined) {
