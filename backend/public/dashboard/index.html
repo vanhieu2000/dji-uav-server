@@ -9,6 +9,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- Leaflet GIS CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<!-- Công cụ vẽ ranh giới trên bản đồ (Leaflet-Geoman) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.css"/>
+<link rel="stylesheet" href="css/gis.css"/>
 <style>
 :root{
   box-sizing:border-box;
@@ -553,17 +556,11 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
               <h3 style="margin-bottom:8px">Tìm kiếm & Phát nhiệt Hotspot</h3>
               <div class="search" style="max-width:none">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-                <input id="quick-panel-search" placeholder="Nhập mã tấm pin hoặc DCL..." aria-label="Tìm kiếm">
+                <input id="quick-panel-search" placeholder="Nhập mã tấm pin hoặc DCL rồi Enter..." aria-label="Tìm kiếm">
               </div>
-              <div class="list" style="margin-top:10px">
-                <div class="item" style="cursor:pointer" onclick="selectHotspotItem('PANEL-LN-01-003',11.830514,106.590518,68.2)">
-                  <div class="ic bad">☀️</div>
-                  <div><div class="t">PANEL-LN-01-003</div><div class="s">Phát nhiệt Hotspot · 68.2 °C</div></div>
-                </div>
-                <div class="item" style="cursor:pointer" onclick="selectHotspotItem('DCL-171-7',11.832650,106.592615,83.5)">
-                  <div class="ic bad">⚡</div>
-                  <div><div class="t">DCL 171-7 Pha A</div><div class="s">Quá nhiệt tiếp xúc · 83.5 °C</div></div>
-                </div>
+              <!-- Bất thường mới nhất từ AI (renderSolarAnomalyList) -->
+              <div class="list gis-anomaly-list" id="solar-anomaly-list" style="margin-top:10px">
+                <div class="gis-empty">Đang tải...</div>
               </div>
             </div>
           </div>
@@ -626,7 +623,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
               <dt>Pha</dt><dd><b id="dcl-detail-phase">Pha A</b></dd>
               <dt>Nhiệt độ đo</dt><dd><b class="num down" id="dcl-detail-temp" style="font-size:15px">83.5 °C</b></dd>
               <dt>Ngưỡng cho phép</dt><dd class="num" id="dcl-detail-max">75.0 °C</dd>
-              <dt>Tọa độ GPS</dt><dd class="num">11.832650, 106.592615</dd>
+              <dt>Tọa độ GPS</dt><dd class="num" id="dcl-detail-gps">--</dd>
             </dl>
             <button class="btn primary" style="width:100%;justify-content:center;margin-top:auto" onclick="triggerThermalPhoto()">📸 Chụp đo lại dao cách ly này</button>
           </div>
@@ -840,66 +837,16 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
         </div>
       </section>
 
-      <!-- VIEW 8: CÀI ĐẶT TÀI SẢN (TABLE ĐẦY ĐỦ THÊM / SỬA / XÓA) -->
+      <!-- VIEW 8: CÀI ĐẶT TÀI SẢN (cây tài sản + bản đồ chỉnh sửa, nhập Excel, bản đồ nền) -->
       <section class="page-view view-scrollable" id="view-assets">
         <div class="page-head">
           <div>
             <h1>Cài đặt tài sản</h1>
-            <p class="muted" style="margin:2px 0 0;font-size:12.5px">Khai báo danh mục Khu vực pin mặt trời và Dao cách ly trạm biến áp</p>
-          </div>
-          <div class="actions">
-            <button class="btn primary" id="btn-asset-add-action" onclick="openAddAssetModal()">+ Thêm mới</button>
+            <p class="muted" style="margin:2px 0 0;font-size:12.5px">Nhà máy → khu vực → chuỗi → tấm pin; trạm → ngăn lộ → dao cách ly → mối nối. Vẽ ranh giới, đặt vị trí và điểm chụp ảnh trên bản đồ.</p>
           </div>
         </div>
-
-        <div class="tabs">
-          <button class="on" id="tab-asset-solar" onclick="switchAssetSubTab('solar')">Khu vực Pin Mặt Trời</button>
-          <button id="tab-asset-dcl" onclick="switchAssetSubTab('dcl')">Dao Cách Ly Trạm 110kV</button>
-        </div>
-
-        <!-- Bảng 1: Khu vực Pin -->
-        <section class="card flat" id="asset-subtab-solar">
-          <div class="tbl-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Mã khu vực</th>
-                  <th>Tên khu vực</th>
-                  <th>Số chuỗi pin</th>
-                  <th>Công suất (kWp)</th>
-                  <th>Tọa độ GPS</th>
-                  <th>Hành động</th>
-                </tr>
-              </thead>
-              <tbody id="assets-solar-table-body">
-                <!-- Render từ API /api/solar/areas -->
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- Bảng 2: Dao cách ly -->
-        <section class="card flat" id="asset-subtab-dcl" style="display:none">
-          <div class="tbl-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Mã DCL</th>
-                  <th>Tên dao cách ly</th>
-                  <th>Ngăn lộ</th>
-                  <th>Pha</th>
-                  <th>Nhiệt độ hiện tại</th>
-                  <th>Ngưỡng cho phép (°C)</th>
-                  <th>Tọa độ GPS</th>
-                  <th>Hành động</th>
-                </tr>
-              </thead>
-              <tbody id="assets-dcl-table-body">
-                <!-- Render từ API /api/substation/disconnectors -->
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <!-- Nội dung do js/gis/gis-page.js dựng -->
+        <div id="gis-assets-root"></div>
       </section>
 
       <!-- VIEW 9: CẤU HÌNH HỆ THỐNG -->
@@ -1373,6 +1320,17 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <!-- FLV.js cho Luồng Video Live Stream Mavic 3T -->
 <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.js"></script>
+<!-- Đọc / ghi Excel trên trình duyệt (nhập danh mục tài sản) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Module bản đồ & tài sản (Giai đoạn 1) -->
+<script src="js/gis/gis-core.js"></script>
+<script src="js/gis/gis-layers.js"></script>
+<script src="js/gis/gis-asset-forms.js"></script>
+<script src="js/gis/gis-assets.js"></script>
+<script src="js/gis/gis-import.js"></script>
+<script src="js/gis/gis-basemaps.js"></script>
+<script src="js/gis/gis-page.js"></script>
 
 <script>
 /* ---------- DỮ LIỆU ĐANG HOẠT ĐỘNG ---------- */
@@ -1386,25 +1344,20 @@ let gBaseLayerManual = null;
 let gAutoFollow = true;
 let gSelectedDroneSn = '1581F5FJC243K00DNRRT';
 
+// native: mức zoom sâu nhất nguồn ảnh có; phóng to hơn thì Leaflet phóng ảnh lên thay vì báo "không có dữ liệu"
 const BASEMAPS = {
-  google_hybrid: { name: 'Google Vệ Tinh', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attr: 'Google Maps Satellite' },
-  google_roadmap: { name: 'Google Đường Bộ', url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', attr: 'Google Maps Roadmap' },
-  google_terrain: { name: 'Google Địa Hình', url: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', attr: 'Google Terrain' },
-  satellite: { name: 'Esri Vệ Tinh', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: 'Esri World Imagery' },
-  streets: { name: 'OpenStreetMap', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: 'OpenStreetMap' },
-  dark: { name: 'Tối Kỹ Thuật', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attr: 'CartoDB Dark' },
-  offline: { name: 'Ngoại Tuyến', url: '/tiles/{z}/{x}/{y}.png', attr: 'Offline Local Tile Server' }
+  google_hybrid: { name: 'Google Vệ Tinh', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attr: 'Google Maps Satellite', native: 20 },
+  google_roadmap: { name: 'Google Đường Bộ', url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', attr: 'Google Maps Roadmap', native: 20 },
+  google_terrain: { name: 'Google Địa Hình', url: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', attr: 'Google Terrain', native: 20 },
+  satellite: { name: 'Esri Vệ Tinh', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: 'Esri World Imagery', native: 18 },
+  streets: { name: 'OpenStreetMap', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: 'OpenStreetMap', native: 19 },
+  dark: { name: 'Tối Kỹ Thuật', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attr: 'CartoDB Dark', native: 20 },
+  offline: { name: 'Ngoại Tuyến', url: '/tiles/{z}/{x}/{y}.png', attr: 'Offline Local Tile Server', native: 19 }
 };
 
-let localZones = [
- {id:'INV-01',name:'Dãy Pin Inverter 01',strings:12,panels:672,bad:3,power:'3,36 MWp',lat:11.830500,lng:106.590500,route:'Tuyến Quét Nhiệt Inverter 01-08'},
- {id:'INV-02',name:'Dãy Pin Inverter 02',strings:12,panels:672,bad:1,power:'3,36 MWp',lat:11.831500,lng:106.590500,route:'Tuyến Quét Nhiệt Inverter 01-08'}
-];
-
-let localDcls = [
- {code:'171-1',name:'Dao cách ly 171-1 Pha A',bay:'Ngăn 171',phase:'A',kv:110,t:48.2,th:75,st:'ok',lat:11.832620,lng:106.592610},
- {code:'171-7',name:'Dao cách ly 171-7 Pha A',bay:'Ngăn 171',phase:'A',kv:110,t:83.5,th:75,st:'bad',lat:11.832650,lng:106.592615}
-];
+// Nạp từ CSDL khi khởi động (loadSolarAreasFromDb / loadDclFromDb), không dùng dữ liệu mẫu
+let localZones = [];
+let localDcls = [];
 
 let localTickets = [];
 
@@ -1484,8 +1437,7 @@ function switchView(viewName){
  } else if(viewName === 'reports'){
   setTimeout(renderReportsSvgCharts, 50);
  } else if(viewName === 'assets'){
-  loadSolarAreasFromDb();
-  loadDclFromDb();
+  if(window.GIS && GIS.AssetsPage) GIS.AssetsPage.open();
  }
 }
 
@@ -1500,19 +1452,19 @@ function setBasemap(type, target){
  if(!target || target === 'solar'){
   if(gMap){
    if(gBaseLayerSolar) gMap.removeLayer(gBaseLayerSolar);
-   gBaseLayerSolar = L.tileLayer(cfg.url, { maxZoom: 21, attribution: cfg.attr }).addTo(gMap);
+   gBaseLayerSolar = L.tileLayer(cfg.url, { maxZoom: 22, maxNativeZoom: cfg.native || 19, attribution: cfg.attr }).addTo(gMap);
   }
  }
  if(!target || target === 'substation'){
   if(gMapSub){
    if(gBaseLayerSub) gMapSub.removeLayer(gBaseLayerSub);
-   gBaseLayerSub = L.tileLayer(cfg.url, { maxZoom: 21, attribution: cfg.attr }).addTo(gMapSub);
+   gBaseLayerSub = L.tileLayer(cfg.url, { maxZoom: 22, maxNativeZoom: cfg.native || 19, attribution: cfg.attr }).addTo(gMapSub);
   }
  }
  if(!target || target === 'manual'){
   if(gMapManual){
    if(gBaseLayerManual) gMapManual.removeLayer(gBaseLayerManual);
-   gBaseLayerManual = L.tileLayer(cfg.url, { maxZoom: 21, attribution: cfg.attr }).addTo(gMapManual);
+   gBaseLayerManual = L.tileLayer(cfg.url, { maxZoom: 22, maxNativeZoom: cfg.native || 19, attribution: cfg.attr }).addTo(gMapManual);
   }
  }
 }
@@ -1531,7 +1483,54 @@ function initSolarMap(){
  droneMarker = L.marker([11.831200, 106.591300], { icon: droneIcon }).addTo(gMap);
  droneMarker.bindPopup('<b>DJI Mavic 3T (Realtime)</b><br>SN: 1581F5FJC243K00DNRRT<br><span style="color:var(--ink3)">Trạng thái: Đang chờ OSD...</span>');
 
- renderZonesOnMap();
+ // Lớp tài sản thật từ CSDL (khu vực, chuỗi, tấm pin, bất thường...) + tâm theo nhà máy
+ if(window.GIS){
+  GIS.centerOnPlant(gMap, 17);
+  gGisSolar = GIS.attachMap(gMap, { kind: 'solar', onData: renderSolarAnomalyList });
+ }
+}
+
+/* Danh sách bất thường (AI) ở bảng bên của bản đồ pin, thay cho dữ liệu mẫu */
+let gGisSolar = null;
+let gGisSub = null;
+function renderSolarAnomalyList(data, ctl){
+ const box = document.getElementById('solar-anomaly-list');
+ if(!box) return;
+ const rows = (data.anomalies || []).slice(0, 8);
+ if(!rows.length){
+  box.innerHTML = '<div class="gis-empty">Chưa có kết quả bất thường từ AI.</div>';
+  return;
+ }
+ box.innerHTML = rows.map((a, i)=>`
+  <div class="item" data-i="${i}">
+   <div class="ic bad">${a.dcl_code ? '⚡' : '☀️'}</div>
+   <div><div class="t">${GIS.esc(a.panel_serial || (a.dcl_code ? 'DCL ' + a.dcl_code + ' ' + a.phase : (GIS.DEFECT_LABELS[a.defect_type] || a.defect_type)))}</div>
+   <div class="s">${GIS.esc(GIS.DEFECT_LABELS[a.defect_type] || a.defect_type)}${a.max_temperature != null ? ' · ' + Number(a.max_temperature).toFixed(1) + ' °C' : ''}</div></div>
+  </div>`).join('');
+ box.onclick = e => {
+  const it = e.target.closest('[data-i]');
+  if(it) ctl.focus({ type: 'panel', lat: rows[it.dataset.i].lat, lng: rows[it.dataset.i].lng, code: rows[it.dataset.i].panel_serial || rows[it.dataset.i].dcl_code, name: GIS.DEFECT_LABELS[rows[it.dataset.i].defect_type] });
+ };
+}
+
+/* Bấm dao cách ly trên bản đồ trạm: hiện thông tin thật ở bảng bên */
+function showDclDetail(item){
+ const d = item && item.data;
+ if(!d) return;
+ const set = (id, html)=>{ const el = document.getElementById(id); if(el) el.innerHTML = html; };
+ const hasTemp = d.last_inspected_temp != null;
+ const over = hasTemp && Number(d.last_inspected_temp) > Number(d.max_allowed_temp);
+ const tempTxt = hasTemp ? Number(d.last_inspected_temp).toFixed(1) + ' °C' : 'Chưa đo';
+ set('dcl-detail-title', GIS.esc(d.dcl_name || d.dcl_code));
+ const tag = document.getElementById('dcl-detail-tag');
+ if(tag){ tag.className = 'tag ' + (!hasTemp ? 'off' : over ? 'bad' : 'ok'); tag.textContent = !hasTemp ? 'Chưa đo' : over ? 'Quá nhiệt' : 'Bình thường'; }
+ set('dcl-detail-thumb-temp', GIS.esc(tempTxt));
+ set('dcl-detail-code', '<b>' + GIS.esc(d.dcl_code) + '</b>');
+ set('dcl-detail-bay', GIS.esc(d.bay_code));
+ set('dcl-detail-phase', GIS.esc(d.phase === '3PHASE' ? '3 pha' : 'Pha ' + d.phase));
+ set('dcl-detail-temp', GIS.esc(tempTxt));
+ set('dcl-detail-max', GIS.esc(Number(d.max_allowed_temp).toFixed(1)) + ' °C');
+ set('dcl-detail-gps', GIS.fmt(d.latitude) + ', ' + GIS.fmt(d.longitude));
 }
 
 function initSubstationMap(){
@@ -1540,11 +1539,15 @@ function initSubstationMap(){
  L.control.zoom({ position: 'topright' }).addTo(gMapSub);
  setBasemap('satellite', 'substation');
 
- localDcls.forEach(d=>{
-  const col = d.st === 'bad' ? 'var(--hot)' : 'var(--ok)';
-  const m = L.circleMarker([d.lat, d.lng], { radius: 8, color: col, fillColor: col, fillOpacity: 0.9, weight: 2 }).addTo(gMapSub);
-  m.bindPopup(`<b>${d.name}</b><br>Nhiệt độ: <b>${d.t} °C</b> / ${d.th} °C`);
- });
+ if(window.GIS){
+  // Trạm đầu tiên có tọa độ làm tâm; chưa có thì theo nhà máy
+  GIS.api('GET', '/api/substation').then(r=>{
+   const s = r.data.find(x=>x.center_lat != null);
+   if(s) gMapSub.setView([s.center_lat, s.center_lng], 18);
+   else GIS.centerOnPlant(gMapSub, 17);
+  }).catch(()=>GIS.centerOnPlant(gMapSub, 17));
+  gGisSub = GIS.attachMap(gMapSub, { kind: 'substation', onSelect: showDclDetail });
+ }
 }
 
 function initManualMap(){
@@ -1561,13 +1564,11 @@ function initManualMap(){
  manualDroneMarker = L.marker([11.831200, 106.591300], { icon: droneIcon }).addTo(gMapManual);
  manualDroneMarker.bindPopup('<b>DJI Mavic 3T (Realtime)</b><br>SN: 1581F5FJC243K00DNRRT<br><span style="color:var(--ink3)">Trạng thái: Đang theo dõi...</span>');
 
- localZones.forEach(z=>{
-  L.circle([z.lat, z.lng], { color: 'var(--brand)', fillColor: 'var(--brand)', fillOpacity: 0.15, radius: 85, weight: 2 }).addTo(gMapManual).bindPopup(`<b>${z.name}</b>`);
- });
- localDcls.forEach(d=>{
-  const col = d.st === 'bad' ? 'var(--hot)' : 'var(--ok)';
-  L.circleMarker([d.lat, d.lng], { radius: 7, color: col, fillColor: col, fillOpacity: 0.9, weight: 2 }).addTo(gMapManual).bindPopup(`<b>${d.name}</b>`);
- });
+ // Lớp tài sản thật (khu vực, dao cách ly, bất thường) thay cho dữ liệu mẫu
+ if(window.GIS){
+  GIS.centerOnPlant(gMapManual, 17);
+  GIS.attachMap(gMapManual, { kind: 'manual' });
+ }
 
  // TƯƠNG TÁC TRỰC TIẾP TRÊN BẢN ĐỒ: Click để lấy tọa độ, khoảng cách và điều khiển bay/chụp
  gMapManual.on('click', function(e){
@@ -1746,15 +1747,6 @@ function saveMapPointAsDevice(lat, lng){
  if(inputFac) inputFac.value = `Tọa độ GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 }
 
-function renderZonesOnMap(){
- if(!gMap) return;
- localZones.forEach(z=>{
-  const circle = L.circle([z.lat, z.lng], {
-   color: 'var(--brand)', fillColor: 'var(--brand)', fillOpacity: 0.15, radius: 85, weight: 2
-  }).addTo(gMap);
-  circle.bindPopup(`<b>${z.name}</b><br>Công suất: ${z.power}<br>Tuyến: ${z.route}`);
- });
-}
 
 /* ===================================================================
    CHỨC NĂNG THẬT 1: ĐIỀU KHIỂN CHỤP ẢNH KẾT HỢP LIVE & SHUTTER (HYBRID)
@@ -2147,7 +2139,12 @@ async function refreshDashboardData(){
 function renderZonesDropdown(){
  const sel = document.getElementById('select-focus-zone');
  if(!sel) return;
- sel.innerHTML = localZones.map(z=>`<option value="${z.id}">${z.name}</option>`).join('');
+ if(!localZones.length){
+  sel.innerHTML = '<option value="">Chưa có khu vực (thêm ở Cài đặt tài sản)</option>';
+  return;
+ }
+ sel.innerHTML = localZones.map(z=>`<option value="${escapeHtml(z.id)}">${escapeHtml(z.name)}</option>`).join('');
+ sel.dispatchEvent(new Event('change'));
 }
 
 function selectHotspotItem(name, lat, lng, temp){
@@ -2364,18 +2361,19 @@ async function loadSolarAreasFromDb(){
     const res = await fetch('/api/solar/areas');
     const data = await res.json();
     if(data.code === 0 && Array.isArray(data.data)){
+      // Số liệu thật từ CSDL (không còn giá trị mặc định giả)
       localZones = data.data.map(z=>({
         id: z.area_code,
         db_id: z.area_id,
         name: z.area_name,
-        strings: z.total_strings || 12,
-        panels: (z.total_strings || 12) * 56,
-        bad: z.active_defects || 0,
-        power: `${(z.total_capacity_kwp || 3360) / 1000} MWp`,
-        kwp: z.total_capacity_kwp || 3360,
-        lat: Number(z.center_lat),
-        lng: Number(z.center_lng),
-        route: `Tuyến Quét Nhiệt ${z.area_code}`
+        strings: Number(z.string_count) || 0,
+        panels: Number(z.panel_count) || 0,
+        bad: Number(z.abnormal_count) || 0,
+        power: z.total_capacity_kwp != null ? `${(z.total_capacity_kwp / 1000).toFixed(2)} MWp` : '--',
+        kwp: z.total_capacity_kwp,
+        lat: z.center_lat != null ? Number(z.center_lat) : null,
+        lng: z.center_lng != null ? Number(z.center_lng) : null,
+        route: 'Chưa gán (Giai đoạn 3)'
       }));
       renderSolarAreasTable();
       renderZonesDropdown();
@@ -2508,18 +2506,19 @@ async function loadDclFromDb(){
     const res = await fetch('/api/substation/disconnectors');
     const data = await res.json();
     if(data.code === 0 && Array.isArray(data.data)){
+      // Đúng tên cột của bảng disconnectors; nhiệt độ chưa đo thì để trống, không gán số giả
       localDcls = data.data.map(d=>({
         id: d.disconnector_id,
-        code: d.disconnector_code,
-        name: d.disconnector_name || `Dao cách ly ${d.disconnector_code} Pha ${d.phase}`,
-        bay: d.bay_code || 'Ngăn 171',
+        code: d.dcl_code,
+        name: d.dcl_name || `Dao cách ly ${d.dcl_code} Pha ${d.phase}`,
+        bay: d.bay_code,
         phase: d.phase,
-        kv: d.voltage_kv || 110,
-        t: Number(d.latest_temperature || (d.dcl_code === '171-7' ? 83.5 : 48.2)),
-        th: Number(d.max_allowed_temp || 75.0),
-        st: Number(d.latest_temperature || (d.dcl_code === '171-7' ? 83.5 : 48.2)) > Number(d.max_allowed_temp || 75.0) ? 'bad' : 'ok',
-        lat: Number(d.latitude || 11.832620),
-        lng: Number(d.longitude || 106.592610)
+        kv: 110,
+        t: d.last_inspected_temp != null ? Number(d.last_inspected_temp) : null,
+        th: Number(d.max_allowed_temp),
+        st: d.last_inspected_temp != null && Number(d.last_inspected_temp) > Number(d.max_allowed_temp) ? 'bad' : 'ok',
+        lat: d.latitude != null ? Number(d.latitude) : null,
+        lng: d.longitude != null ? Number(d.longitude) : null
       }));
       renderDclTable();
     }
@@ -2941,8 +2940,6 @@ function startFlvLivePlayer(){
   }catch(e){
     console.error('[FLV Init Error]', e);
   }
-}
-
 }
 
 /* ===================================================================
@@ -3872,6 +3869,11 @@ function setupRealtimeTelemetry(){
     appendConsoleLog(msg.log);
    }
 
+   // 1.0 Trạng thái kết nối CSDL (hiện / ẩn thanh cảnh báo đỏ)
+   if(msg.type === 'db_status' && window.GIS){
+    GIS.onDbStatus(msg.data);
+   }
+
    // 1.1 Luồng Live Stream video từ Mavic 3T
    if(msg.type === 'stream_started'){
     toast('✓ Đã nhận luồng phát trực tiếp từ Mavic 3T! Đang hiển thị...');
@@ -4583,13 +4585,26 @@ document.addEventListener('DOMContentLoaded', ()=>{
   }
  });
 
+ // 4.1 Ô tìm kiếm ở bảng bên bản đồ pin: Enter để bay tới tài sản khớp nhất
+ document.getElementById('quick-panel-search')?.addEventListener('keydown', async (e)=>{
+  if(e.key !== 'Enter' || !window.GIS) return;
+  const q = e.target.value.trim();
+  if(q.length < 2) return;
+  const res = await GIS.run(()=>GIS.api('GET', '/api/assets/search?q=' + encodeURIComponent(q) + '&limit=5'));
+  const hit = res && res.data.find(r=>r.lat != null);
+  if(!hit){ GIS.toast('Không tìm thấy tài sản có tọa độ khớp "' + q + '"', 'error'); return; }
+  if(gGisSolar) gGisSolar.focus(hit);
+ });
+
  // 5. Lắng nghe chọn khu vực
  document.getElementById('select-focus-zone')?.addEventListener('change', (e)=>{
   const z = localZones.find(x=>x.id===e.target.value);
-  if(z && gMap){
-   gMap.flyTo([z.lat, z.lng], 18, { duration: 1.2 });
+  if(z){
+   if(gMap && z.lat != null) gMap.flyTo([z.lat, z.lng], 18, { duration: 1.2 });
    document.getElementById('zone-detail-title').innerText = z.name;
    document.getElementById('zone-detail-code').innerText = z.id;
+   document.getElementById('zone-detail-strings').innerText = z.strings;
+   document.getElementById('zone-detail-panels').innerText = z.panels;
    document.getElementById('zone-detail-power').innerText = z.power;
    document.getElementById('zone-detail-route').innerText = z.route;
   }

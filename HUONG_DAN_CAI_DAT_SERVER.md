@@ -29,6 +29,29 @@ Tài liệu này hướng dẫn cách đưa toàn bộ hệ thống Server đi�
   - Khởi động đồng thời: Web Server (8080), MQTT Broker (1883), RTMP Server (1935), HTTP Video (8000) và động cơ DJI Thermal SDK v1.8.
   - Tự động mở Dashboard trên trình duyệt: `http://localhost:8080/dashboard`.
 
+### Bước 2.1: Cấu hình (bắt buộc từ bản có Bản đồ & Tài sản)
+1. Chép `.env.example` thành `.env` ở thư mục gốc dự án, điền mật khẩu MySQL (`MYSQL_PASSWORD`) và khóa DJI (`DJI_APP_ID`, `DJI_APP_KEY`, `DJI_APP_LICENSE`).
+   Khi chạy local, server tự đọc file `.env` này. File `.env` không được đưa lên git.
+2. Lần đầu: tạo CSDL bằng `mysql_init/01_schema.sql` (và `02_seed_data.sql` nếu cần dữ liệu mẫu).
+3. Các bảng mới (bản đồ nền, mối nối dao cách ly, điểm chụp ảnh...) **tự được thêm khi server kết nối được MySQL**.
+   Có thể chạy tay: `cd backend` rồi `npm run migrate`. Mỗi file trong `backend/src/db/migrations` chỉ chạy 1 lần, không xóa dữ liệu cũ.
+4. Mất kết nối MySQL: Dashboard hiện thanh đỏ cảnh báo, API trả lỗi 503 (không còn tự dùng dữ liệu mẫu), server tự thử kết nối lại mỗi 10 giây.
+
+### Bước 2.2: Khai báo tài sản và bản đồ nền
+* Vào **Cài đặt tài sản** trên Dashboard:
+  - **Cây tài sản & bản đồ**: tạo nhà máy (tâm bản đồ), khu vực pin (vẽ ranh giới), chuỗi pin (bấm điểm đầu/cuối để sinh vị trí tấm pin), trạm → ngăn lộ → dao cách ly → mối nối, điểm chụp ảnh.
+  - **Nhập Excel**: tải file mẫu, điền theo mã đang quản lý, bấm *Kiểm tra* rồi *Ghi vào hệ thống*.
+  - **Bản đồ nền**: xuất ảnh bay thành ô ảnh XYZ (DJI Terra / Pix4D / QGIS), nén `.zip` dạng `{z}/{x}/{y}.png` rồi tải lên.
+    File quá lớn: chép thẳng thư mục vào `backend/tiles/basemaps/<tên>` và dùng *Đăng ký thư mục có sẵn*.
+
+### Bước 2.3: Chạy kiểm thử (cho lập trình viên)
+```bash
+cd backend
+npm test
+```
+Test tự tạo CSDL riêng `dji_uav_test` rồi xóa sau khi chạy, không đụng dữ liệu thật.
+Để thử luồng UAV khi không có máy bay, có thể dùng bộ giả lập MQTT mã nguồn mở `YuYongJu/dji-cloud-simulator` (chạy riêng, trỏ về cổng 1883).
+
 ### Bước 3 (Tùy chọn - Chạy tự động cùng Windows không tắt):
 Để server tự động chạy ngầm dưới nền và tự khởi động lại khi server reboot:
 1. Mở PowerShell hoặc CMD với quyền Administrator trên server:
@@ -77,7 +100,8 @@ Hệ thống đã chuẩn bị sẵn file `docker-compose.yml` gồm các contai
      ```text
      http://<IP_CỦA_SERVER>:8080/pilot-login
      ```
-3. Đăng nhập tài khoản điều khiển (ví dụ: `admin` / mật khẩu `admin123`).
+3. Đăng nhập bằng tài khoản có trong hệ thống và **chọn phiếu kiểm tra** đang chờ / đang thực hiện
+   (phiếu tạo trên Dashboard, mục *Phiếu kiểm tra*). Chưa có phiếu nào thì không đăng nhập được.
 4. Khi kết nối thành công, drone sẽ tự động gửi:
    - Tọa độ GPS thời gian thực về bản đồ Dashboard.
    - Luồng camera nhiệt và camera quang học về Web.

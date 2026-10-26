@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { query } = require('../config/db');
+const { query, sendDbError } = require('../config/db');
 
 // 1. Lấy danh sách kết quả AI phát hiện lỗi
 router.get('/detections', async (req, res) => {
@@ -31,7 +31,7 @@ router.get('/detections', async (req, res) => {
         const rows = await query(sql, params);
         res.json({ code: 0, data: rows });
     } catch (err) {
-        res.status(500).json({ code: 500, message: err.message });
+        sendDbError(res, err);
     }
 });
 
@@ -86,7 +86,7 @@ router.post('/webhook/vision-result', async (req, res) => {
         });
     } catch (err) {
         console.error('[AI Bridge Error]', err);
-        res.status(500).json({ code: 500, message: err.message });
+        sendDbError(res, err);
     }
 });
 
@@ -115,7 +115,7 @@ router.get('/alerts', async (req, res) => {
         const rows = await query(sql, params);
         res.json({ code: 0, data: rows });
     } catch (err) {
-        res.status(500).json({ code: 500, message: err.message });
+        sendDbError(res, err);
     }
 });
 

@@ -155,19 +155,18 @@
     <form id="loginForm">
       <div class="form-group">
         <label for="username">Tài Khoản Điều Khiển</label>
-        <input type="text" id="username" value="pilot" required>
+        <input type="text" id="username" autocomplete="username" required>
       </div>
 
       <div class="form-group">
         <label for="password">Mật Khẩu</label>
-        <input type="password" id="password" value="pilot123" required>
+        <input type="password" id="password" autocomplete="current-password" required>
       </div>
 
       <div class="form-group">
         <label for="ticketSelect">Phiếu Kiểm Tra Hiện Tại</label>
-        <select id="ticketSelect">
-          <option value="1">PKT-PIN-2026-001 (Kiểm tra nhiệt Dãy Pin Block A)</option>
-          <option value="2">PKT-DCL-2026-002 (Kiểm tra tiếp xúc Dao cách ly 171)</option>
+        <select id="ticketSelect" required>
+          <option value="">Đang tải danh sách phiếu...</option>
         </select>
       </div>
 
@@ -209,6 +208,32 @@
     const connectBtn = document.getElementById('connectBtn');
 
     serverIpText.innerText = window.location.host;
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[ch]));
+    }
+
+    // Nạp phiếu đang chờ / đang thực hiện từ MySQL
+    async function loadTickets() {
+      const select = document.getElementById('ticketSelect');
+      try {
+        const res = await fetch('/api/pilot/tickets');
+        const data = await res.json();
+        if (data.code !== 0) throw new Error(data.message || 'Không tải được phiếu');
+        if (!data.data.length) {
+          select.innerHTML = '<option value="">Chưa có phiếu nào đang chờ. Tạo phiếu trên Dashboard trước.</option>';
+          return;
+        }
+        select.innerHTML = data.data.map(t =>
+          `<option value="${t.ticket_id}">${escapeHtml(t.ticket_code)} (${escapeHtml(t.ticket_name)})</option>`
+        ).join('');
+      } catch (err) {
+        select.innerHTML = '<option value="">Lỗi tải phiếu: ' + escapeHtml(err.message) + '</option>';
+      }
+    }
+    loadTickets();
 
     function addLog(msg) {
       const time = new Date().toLocaleTimeString();
@@ -282,7 +307,7 @@
         if (data.code === 0) {
           addLog("✓ Xác thực thành công: " + data.data.workspace_name);
           statusBox.className = "status-box success";
-          statusBox.innerHTML = `<strong>KẾT NỐI THÀNH CÔNG!</strong><br>Đã gán: ${data.data.assigned_ticket}<br>MQTT Host: ${data.data.mqtt.host}`;
+          statusBox.innerHTML = `<strong>KẾT NỐI THÀNH CÔNG!</strong><br>Đã gán: ${escapeHtml(data.data.assigned_ticket)}<br>MQTT Host: ${escapeHtml(data.data.mqtt.host)}`;
 
           // Nếu đang chạy trong app DJI Pilot 2 thực tế:
           if (isDjiBridge || (typeof window !== 'undefined' && window.djiBridge)) {
@@ -378,7 +403,7 @@
 
             // 7. Cài đặt Workspace ID
             try {
-              window.djiBridge.platformSetWorkspaceId("e3dea0f5-37f2-4d79-ae58-490af3228069");
+              window.djiBridge.platformSetWorkspaceId(data.data.workspace_id);
               addLog("✓ Đã cài đặt Workspace ID");
             } catch (e) {
               addLog("Lưu ý setWorkspaceId: " + e.message);
@@ -410,13 +435,13 @@
 
         } else {
           statusBox.className = "status-box error";
-          statusBox.innerHTML = `<strong>Lỗi kết nối:</strong> ${data.message}`;
+          statusBox.innerHTML = `<strong>Lỗi kết nối:</strong> ${escapeHtml(data.message)}`;
           connectBtn.disabled = false;
           connectBtn.innerText = "THỬ LẠI";
         }
       } catch (err) {
         statusBox.className = "status-box error";
-        statusBox.innerHTML = `<strong>Không thể kết nối đến Server:</strong> ${err.message}`;
+        statusBox.innerHTML = `<strong>Không thể kết nối đến Server:</strong> ${escapeHtml(err.message)}`;
         addLog("Lỗi: " + err.message);
         connectBtn.disabled = false;
         connectBtn.innerText = "THỬ LẠI";

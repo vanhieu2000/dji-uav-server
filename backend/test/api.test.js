@@ -1,0 +1,302 @@
+/**
+ * Test tích hợp API tài sản & bản đồ trên CSDL test riêng (dji_uav_test).
+ * Bỏ qua nếu máy không có MySQL.
+ */
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
+const AdmZip = require('adm-zip');
+const h = require('./helpers');
+
+test('API tài sản & bản đồ', async (t) => {
+    if (!(await h.mysqlAvailable())) {
+        t.skip('Không kết nối được MySQL, bỏ qua test tích hợp');
+        return;
+    }
+    await h.resetTestDatabase();
+    const db = require('../src/config/db');
+    assert.equal(await db.testConnection(), true);
+    const app = await h.startTestApp();
+    const { api } = app;
+
+    t.after(async () => {
+        await app.close();
+        await db.closePool();
+        await h.dropTestDatabase();
+        fs.rmSync(process.env.BASEMAP_TILES_DIR, { recursive: true, force: true });
+    });
+
+    let plantId, areaId, stringId, subId, bayId, dclId;
+
+    await t.test('migration chạy lại không lỗi (mỗi file 1 lần)', async () => {
+        const { runMigrations } = require('../src/db/migrate');
+        const again = await runMigrations({ ...h.rootConfig(), database: h.TEST_DB }, { log: () => {} });
+        assert.deepEqual(again, []);
+    });
+
+    await t.test('chưa có nhà máy: tạo khu vực báo lỗi rõ ràng', async () => {
+        const r = await api('POST', '/api/solar/areas', { area_code: 'A1', area_name: 'Khu A1' });
+        assert.equal(r.status, 400);
+        assert.match(r.body.message, /Chưa có nhà máy/);
+    });
+
+    await t.test('nhà máy: tạo và sửa tâm bản đồ', async () => {
+        const r = await api('POST', '/api/solar/plants', { plant_code: 'TM01', plant_name: 'Thác Mơ', center_lat: 11.85, center_lng: 107.0 });
+        assert.equal(r.status, 200);
+        plantId = r.body.data.plant_id;
+        const u = await api('PUT', `/api/solar/plants/${plantId}`, { center_lat: 11.86 });
+        assert.equal(u.status, 200);
+        const list = await api('GET', '/api/solar/plants');
+        assert.equal(list.body.data[0].center_lat, 11.86);
+    });
+
+    await t.test('khu vực: đa giác tự tính tâm, trùng mã trả 409, sửa từng phần', async () => {
+        const polygon = { type: 'Polygon', coordinates: [[[107.0, 11.85], [107.002, 11.85], [107.002, 11.852], [107.0, 11.852], [107.0, 11.85]]] };
+        const r = await api('POST', '/api/solar/areas', { area_code: 'INV-01', area_name: 'Inverter 01', polygon_geojson: polygon });
+        assert.equal(r.status, 200, JSON.stringify(r.body));
+        areaId = r.body.data.area_id;
+        const got = await api('GET', `/api/solar/areas/${areaId}`);
+        assert.ok(Math.abs(got.body.data.center_lat - 11.851) < 1e-6);
+        const dup = await api('POST', '/api/solar/areas', { area_code: 'INV-01', area_name: 'Trùng' });
+        assert.equal(dup.status, 409);
+        const bad = await api('POST', '/api/solar/areas', { area_code: 'X', area_name: 'X', polygon_geojson: { type: 'Polygon', coordinates: [[[1, 2]]] } });
+        assert.equal(bad.status, 400);
+        const upd = await api('PUT', `/api/solar/areas/${areaId}`, { total_capacity_kwp: 2500 });
+        assert.equal(upd.status, 200);
+        const missing = await api('PUT', '/api/solar/areas/99999', { area_name: 'x' });
+        assert.equal(missing.status, 404);
+    });
+
+    await t.test('chuỗi pin + tự sinh tấm pin + lọc theo khung nhìn', async () => {
+        const s = await api('POST', '/api/solar/strings', { area_id: areaId, string_code: 'STR-01' });
+        assert.equal(s.status, 200);
+        stringId = s.body.data.string_id;
+        const g = await api('POST', `/api/solar/strings/${stringId}/generate-panels`, {
+            start_lat: 11.8505, start_lng: 107.0005, end_lat: 11.8505, end_lng: 107.0015, count: 24
+        });
+        assert.equal(g.status, 200, JSON.stringify(g.body));
+        assert.equal(g.body.data.created, 24);
+        // Sinh lại: thay thế, không nhân đôi
+        await api('POST', `/api/solar/strings/${stringId}/generate-panels`, {
+            start_lat: 11.8505, start_lng: 107.0005, end_lat: 11.8505, end_lng: 107.0015, count: 24
+        });
+        const all = await api('GET', `/api/solar/panels?string_id=${stringId}&limit=100`);
+        assert.equal(all.body.data.length, 24);
+        assert.equal(all.body.data[0].panel_serial, 'INV-01-STR-01-001');
+        const inBox = await api('GET', '/api/solar/panels?bbox=11.85,107.0004,11.851,107.0010&limit=3');
+        assert.equal(inBox.body.data.length, 3);
+        assert.equal(inBox.body.truncated, true);
+        const strings = await api('GET', `/api/solar/strings?area_id=${areaId}`);
+        assert.equal(strings.body.data[0].actual_panel_count, 24);
+        assert.ok(strings.body.data[0].line_geojson);
+    });
+
+    await t.test('trạm, ngăn lộ, dao cách ly: sửa / xóa theo disconnector_id', async () => {
+        const s = await api('POST', '/api/substation', { substation_code: 'TBA-110', substation_name: 'TBA 110kV', center_lat: 11.853, center_lng: 107.003 });
+        assert.equal(s.status, 200, JSON.stringify(s.body));
+        subId = s.body.data.substation_id;
+        const b = await api('POST', '/api/substation/bays', { substation_id: subId, bay_code: '171', bay_name: 'Ngăn 171' });
+        bayId = b.body.data.bay_id;
+        const d = await api('POST', '/api/substation/disconnectors', { bay_id: bayId, dcl_code: '171-7', phase: 'A', latitude: 11.8531, longitude: 107.0031 });
+        assert.equal(d.status, 200);
+        dclId = d.body.data.disconnector_id;
+        const dB = await api('POST', '/api/substation/disconnectors', { bay_id: bayId, dcl_code: '171-7', phase: 'B' });
+        const u = await api('PUT', `/api/substation/disconnectors/${dclId}`, { max_allowed_temp: 75 });
+        assert.equal(u.status, 200, JSON.stringify(u.body));
+        const list = await api('GET', `/api/substation/disconnectors?bay_id=${bayId}`);
+        assert.equal(list.body.data.find(x => x.disconnector_id === dclId).max_allowed_temp, 75);
+        assert.equal(list.body.data.find(x => x.phase === 'A').dcl_name, 'Dao cách ly 171-7 Pha A');
+        // Xóa pha B không ảnh hưởng pha A (trước đây xóa theo mã sẽ xóa cả 3 pha)
+        const del = await api('DELETE', `/api/substation/disconnectors/${dB.body.data.disconnector_id}`);
+        assert.equal(del.status, 200);
+        const after = await api('GET', `/api/substation/disconnectors?bay_id=${bayId}`);
+        assert.equal(after.body.data.length, 1);
+        const badId = await api('DELETE', '/api/substation/disconnectors/171-7');
+        assert.equal(badId.status, 400);
+    });
+
+    await t.test('mối nối dao cách ly', async () => {
+        const c = await api('POST', '/api/substation/contacts', { disconnector_id: dclId, contact_code: '171-7A-01', position_desc: 'Đầu cực phía thanh cái', latitude: 11.85311, longitude: 107.00311 });
+        assert.equal(c.status, 200, JSON.stringify(c.body));
+        const list = await api('GET', `/api/substation/contacts?disconnector_id=${dclId}`);
+        assert.equal(list.body.data.length, 1);
+        const bad = await api('POST', '/api/substation/contacts', { disconnector_id: 99999, contact_code: 'X' });
+        assert.equal(bad.status, 400);
+    });
+
+    await t.test('điểm chụp ảnh gắn tài sản', async () => {
+        const p = await api('POST', '/api/assets/photo-points', { asset_type: 'DISCONNECTOR', asset_id: dclId, latitude: 11.8532, longitude: 107.0032, altitude_m: 15, gimbal_pitch: -20 });
+        assert.equal(p.status, 200, JSON.stringify(p.body));
+        const bad = await api('POST', '/api/assets/photo-points', { asset_type: 'DISCONNECTOR', asset_id: 99999, latitude: 1, longitude: 1 });
+        assert.equal(bad.status, 400);
+        const list = await api('GET', `/api/assets/photo-points?asset_type=DISCONNECTOR&asset_id=${dclId}`);
+        assert.equal(list.body.data[0].hover_seconds, 2);
+        assert.equal(list.body.data[0].camera_mode, 'WIDE_IR');
+    });
+
+    await t.test('tìm kiếm chung: khớp mã chính xác lên đầu, có tọa độ', async () => {
+        const r = await api('GET', '/api/assets/search?q=171-7');
+        assert.equal(r.status, 200);
+        assert.equal(r.body.data[0].type, 'disconnector');
+        assert.ok(r.body.data[0].lat);
+        const panel = await api('GET', '/api/assets/search?q=STR-01-012');
+        assert.equal(panel.body.data[0].type, 'panel');
+        assert.equal(panel.body.data[0].code, 'INV-01-STR-01-012');
+        const empty = await api('GET', '/api/assets/search?q=');
+        assert.equal(empty.status, 400);
+    });
+
+    await t.test('cây tài sản và lớp bản đồ', async () => {
+        const tree = await api('GET', '/api/assets/tree');
+        assert.equal(tree.status, 200, JSON.stringify(tree.body));
+        assert.equal(tree.body.data.areas[0].strings[0].actual_panel_count, 24);
+        assert.equal(tree.body.data.substations[0].bays[0].disconnectors[0].contacts.length, 1);
+        const f = await api('GET', '/api/assets/features?layers=areas,panels,disconnectors,contacts,photo_points,anomalies');
+        assert.equal(f.status, 200, JSON.stringify(f.body));
+        assert.equal(f.body.data.areas[0].polygon_geojson.type, 'Polygon');
+        assert.equal(f.body.data.panels.need_bbox, true);
+        const withBox = await api('GET', '/api/assets/features?layers=panels&bbox=11.85,107,11.851,107.002');
+        assert.equal(withBox.body.data.panels.items.length, 24);
+        const unknown = await api('GET', '/api/assets/features?layers=xyz');
+        assert.equal(unknown.status, 400);
+
+        // Lớp bất thường: lấy tọa độ theo DCL đã gắn, lọc theo khung nhìn ngay trong SQL
+        const m = await db.query("INSERT INTO media_files (device_sn, file_name, file_url, latitude, longitude) VALUES ('SN', 'a.jpg', '/u/a.jpg', 1, 1)");
+        await db.query("INSERT INTO ai_defect_detections (media_id, defect_type, confidence, max_temperature, disconnector_id) VALUES (?, 'DISCONNECTOR_OVERHEAT', 0.9, 88, ?)", [m.insertId, dclId]);
+        const an = await api('GET', '/api/assets/features?layers=anomalies&bbox=11.85,107,11.86,107.01');
+        assert.equal(an.status, 200, JSON.stringify(an.body));
+        assert.equal(an.body.data.anomalies.length, 1);
+        assert.equal(an.body.data.anomalies[0].lat, 11.8531); // tọa độ DCL, không phải tọa độ ảnh (1,1)
+        const outside = await api('GET', '/api/assets/features?layers=anomalies&bbox=0,0,0.5,0.5');
+        assert.equal(outside.body.data.anomalies.length, 0);
+    });
+
+    await t.test('nhập Excel: kiểm tra trước, ghi sau, báo dòng lỗi', async () => {
+        const rows = [
+            { _row: 2, area_code: 'INV-01', string_code: 'STR-02', panel_count: 2 },
+            { _row: 3, area_code: 'INV-01', string_code: 'STR-01', string_name: 'Đổi tên' },
+            { _row: 4, area_code: 'KHONG-CO', string_code: 'STR-09' },
+            { _row: 5, area_code: 'INV-01', string_code: 'STR-02' }
+        ];
+        const c = await api('POST', '/api/assets/import/check', { entity: 'strings', rows });
+        assert.equal(c.status, 200, JSON.stringify(c.body));
+        assert.deepEqual(c.body.data.summary, { total: 4, insert: 1, update: 1, error: 2 });
+        assert.match(c.body.data.rows[2].errors[0], /KHONG-CO/);
+        assert.match(c.body.data.rows[3].errors[0], /Trùng với dòng 2/);
+        const refused = await api('POST', '/api/assets/import/commit', { entity: 'strings', rows });
+        assert.equal(refused.status, 400);
+        const commit = await api('POST', '/api/assets/import/commit', { entity: 'strings', rows, skip_errors: true });
+        assert.equal(commit.status, 200, JSON.stringify(commit.body));
+        assert.equal(commit.body.data.written, 2);
+        const list = await api('GET', `/api/solar/strings?area_id=${areaId}`);
+        assert.equal(list.body.data.length, 2);
+        assert.equal(list.body.data.find(s => s.string_code === 'STR-01').string_name, 'Đổi tên');
+        // Ô trống không ghi đè: STR-01 vẫn giữ đường line_geojson
+        assert.ok(list.body.data.find(s => s.string_code === 'STR-01').line_geojson);
+
+        const dcl = await api('POST', '/api/assets/import/commit', {
+            entity: 'disconnectors',
+            rows: [{ substation_code: 'TBA-110', bay_code: '171', dcl_code: '171-1', phase: 'c', latitude: '11,8533', longitude: '107,0033' }]
+        });
+        assert.equal(dcl.status, 200, JSON.stringify(dcl.body));
+        const found = await api('GET', '/api/assets/search?q=171-1');
+        assert.equal(found.body.data[0].phase, 'C');
+        assert.equal(found.body.data[0].lat, 11.8533);
+        const wrong = await api('POST', '/api/assets/import/check', { entity: 'users', rows: [{}] });
+        assert.equal(wrong.status, 400);
+        // Chặn tấn công qua thuộc tính có sẵn của Object (trước đây ghi được vào bảng bất kỳ)
+        for (const entity of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+            const evil = await api('POST', '/api/assets/import/commit', {
+                entity, rows: [{ table: 'users', idCol: 'user_id', existingId: 1, fields: { role: 'X' } }]
+            });
+            assert.equal(evil.status, 400, entity);
+        }
+        const layerEvil = await api('GET', '/api/assets/features?layers=constructor');
+        assert.equal(layerEvil.status, 400);
+        // Mã khác nhau chỉ ở dấu tiếng Việt được coi là trùng (giống MySQL)
+        const accent = await api('POST', '/api/assets/import/check', { entity: 'strings', rows: [{ area_code: 'INV-01', string_code: 'STR-0Ì' }, { area_code: 'INV-01', string_code: 'STR-0I' }] });
+        assert.equal(accent.body.data.summary.error, 1);
+    });
+
+    await t.test('bản đồ nền: tải ZIP, đặt mặc định, xóa', async () => {
+        const zip = new AdmZip();
+        zip.addFile('ThacMo/17/104700/61500.png', Buffer.from('png1'));
+        zip.addFile('ThacMo/18/209400/123000.png', Buffer.from('png2'));
+        zip.addFile('ThacMo/18/209401/123001.png', Buffer.from('png3'));
+        const form = new FormData();
+        form.append('map_name', 'Ảnh bay Thác Mơ 2026');
+        form.append('file', new Blob([zip.toBuffer()]), 'thacmo.zip');
+        const up = await api('POST', '/api/basemaps/upload', form);
+        assert.equal(up.status, 200, JSON.stringify(up.body));
+        const map = up.body.data;
+        assert.match(map.map_code, /^anh-bay-thac-mo-2026-/);
+        assert.equal(map.tile_count, 3);
+        assert.equal(map.min_zoom, 17);
+        assert.equal(map.max_zoom, 18);
+        assert.match(map.tile_url, /\/tiles\/basemaps\/.+\/\{z\}\/\{x\}\/\{y\}\.png$/);
+        assert.ok(fs.existsSync(path.join(process.env.BASEMAP_TILES_DIR, map.map_code, '18', '209401', '123001.png')));
+
+        const notZip = new FormData();
+        notZip.append('map_name', 'x');
+        notZip.append('file', new Blob(['abc']), 'x.txt');
+        assert.equal((await api('POST', '/api/basemaps/upload', notZip)).status, 400);
+
+        const broken = new FormData();
+        broken.append('map_name', 'hỏng');
+        broken.append('file', new Blob(['not a zip']), 'broken.zip');
+        const br = await api('POST', '/api/basemaps/upload', broken);
+        assert.equal(br.status, 400);
+        assert.match(br.body.message, /ZIP/);
+
+        const act = await api('PUT', `/api/basemaps/${map.map_id}`, { is_active: true, opacity: 0.8 });
+        assert.equal(act.status, 200, JSON.stringify(act.body));
+        assert.equal(act.body.data.is_active, true);
+        const del = await api('DELETE', `/api/basemaps/${map.map_id}`);
+        assert.equal(del.status, 200);
+        assert.ok(!fs.existsSync(path.join(process.env.BASEMAP_TILES_DIR, map.map_code)));
+    });
+
+    await t.test('xóa tài sản thì dọn điểm chụp ảnh mồ côi (kể cả xóa dây chuyền)', async () => {
+        const c = await api('POST', '/api/substation/contacts', { disconnector_id: dclId, contact_code: 'TMP-01' });
+        await api('POST', '/api/assets/photo-points', { asset_type: 'DCL_CONTACT', asset_id: c.body.data.contact_id, latitude: 11.85, longitude: 107 });
+        const before = (await api('GET', '/api/assets/photo-points')).body.data.length;
+        // Xóa cả DCL: mối nối bị xóa dây chuyền, điểm chụp của DCL và mối nối đều phải mất
+        const del = await api('DELETE', `/api/substation/disconnectors/${dclId}`);
+        assert.equal(del.status, 200);
+        const after = (await api('GET', '/api/assets/photo-points')).body.data;
+        assert.equal(after.length, before - 2);
+        assert.ok(after.every(p => !['DISCONNECTOR', 'DCL_CONTACT'].includes(p.asset_type)));
+    });
+
+    await t.test('migration tách câu lệnh, bỏ qua câu đã áp dụng', async () => {
+        const { splitStatements } = require('../src/db/migrate');
+        assert.equal(splitStatements('-- chú thích; có chấm phẩy\nCREATE TABLE a (x INT);\nALTER TABLE a ADD COLUMN y INT;\n').length, 2);
+        // Giả lập lần chạy trước dừng giữa chừng: xóa dấu đã chạy 001 rồi chạy lại
+        const mysql = require('mysql2/promise');
+        const c = await mysql.createConnection({ ...h.rootConfig(), database: h.TEST_DB });
+        await c.query('DELETE FROM schema_migrations');
+        await c.end();
+        const { runMigrations } = require('../src/db/migrate');
+        assert.deepEqual(await runMigrations({ ...h.rootConfig(), database: h.TEST_DB }, { log: () => {} }), ['001_gis_assets.sql']);
+    });
+
+    await t.test('phiếu đang chờ cho Pilot 2 lấy từ CSDL', async () => {
+        await api('POST', '/api/tickets', { ticket_name: 'Kiểm tra khu INV-01', inspection_type: 'SOLAR_PANEL', target_facility: 'INV-01' });
+        const { listActiveTickets, findTicketById } = require('../src/services/ticketService');
+        const list = await listActiveTickets();
+        assert.equal(list.length, 1);
+        assert.equal(list[0].livestream_channel, 'm3t_live');
+        assert.equal((await findTicketById(list[0].ticket_id)).ticket_name, 'Kiểm tra khu INV-01');
+        assert.equal(await findTicketById('abc'), null);
+    });
+
+    await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
+        await db.closePool();
+        const r = await api('GET', '/api/solar/areas');
+        assert.equal(r.status, 503);
+        const tickets = await api('GET', '/api/tickets');
+        assert.equal(tickets.status, 503);
+        assert.equal(db.getStatus().connected, false);
+    });
+});

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { query } = require('../config/db');
+const { query, sendDbError } = require('../config/db');
 
 // 1. Lấy danh sách phiếu kiểm tra
 router.get('/', async (req, res) => {
@@ -31,7 +31,7 @@ router.get('/', async (req, res) => {
         const rows = await query(sql, params);
         res.json({ code: 0, data: rows });
     } catch (err) {
-        res.status(500).json({ code: 500, message: err.message });
+        sendDbError(res, err);
     }
 });
 
@@ -61,7 +61,7 @@ router.post('/', async (req, res) => {
             data: { ticket_id: result.insertId, ticket_code }
         });
     } catch (err) {
-        res.status(500).json({ code: 500, message: err.message });
+        sendDbError(res, err);
     }
 });
 
@@ -94,7 +94,7 @@ router.get('/:id', async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ code: 500, message: err.message });
+        sendDbError(res, err);
     }
 });
 
@@ -117,7 +117,7 @@ router.patch('/:id/status', async (req, res) => {
         await query(`UPDATE inspection_tickets SET status = ? ${timeFieldUpdate} WHERE ticket_id = ?`, [status, ticketId]);
         res.json({ code: 0, message: 'Cập nhật trạng thái thành công' });
     } catch (err) {
-        res.status(500).json({ code: 500, message: err.message });
+        sendDbError(res, err);
     }
 });
 

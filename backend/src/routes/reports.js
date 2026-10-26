@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { query } = require('../config/db');
+const { query, sendDbError } = require('../config/db');
 
 // 1. Thống kê tổng quan Dashboard (Overview KPI)
 router.get('/overview', async (req, res) => {
@@ -25,7 +25,7 @@ router.get('/overview', async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ code: 500, message: err.message });
+        sendDbError(res, err);
     }
 });
 
@@ -39,7 +39,7 @@ router.get('/defects-by-type', async (req, res) => {
         `);
         res.json({ code: 0, data: rows });
     } catch (err) {
-        res.status(500).json({ code: 500, message: err.message });
+        sendDbError(res, err);
     }
 });
 
@@ -79,7 +79,7 @@ router.get('/ticket/:id', async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ code: 500, message: err.message });
+        sendDbError(res, err);
     }
 });
 

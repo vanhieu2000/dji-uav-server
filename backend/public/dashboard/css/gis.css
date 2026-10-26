@@ -1,0 +1,96 @@
+/* =====================================================================
+   Giao diện các module bản đồ & tài sản (dùng biến màu có sẵn của dashboard)
+   ===================================================================== */
+
+/* Cảnh báo mất CSDL */
+.gis-db-banner{display:none;background:var(--hot);color:#fff;padding:8px 18px;font-size:12.5px;line-height:1.5}
+.gis-db-banner.show{display:block}
+.gis-db-detail{opacity:.8}
+.gis-toast-error{background:var(--hot)!important;color:#fff!important}
+
+.gis-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.gis-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.gis-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.gis-empty{padding:16px;color:var(--ink3);font-size:12.5px;text-align:center}
+.gis-error{color:var(--hot)}
+.gis-chip{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--brand);background:var(--brand-soft);border-radius:4px;padding:1px 6px}
+.gis-check{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;height:32px}
+.gis-textarea{height:auto!important;padding:6px 9px!important;resize:vertical}
+
+/* Trang tài sản: cây | bản đồ | chi tiết */
+#gis-assets-root{display:flex;flex-direction:column;min-height:0;flex:1}
+.gis-tab-pane{min-height:0;flex:1}
+.gis-assets-layout{display:grid;grid-template-columns:280px minmax(0,1fr) 340px;gap:12px;height:calc(100vh - 210px);min-height:520px}
+.gis-tree-panel,.gis-detail{background:var(--surface);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.gis-tree-tools{padding:10px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.gis-tree{overflow:auto;flex:1;padding:6px 4px 12px}
+.gis-tree ul{list-style:none;margin:0;padding-left:14px}
+.gis-tree-root{padding-left:2px!important}
+.gis-tree-group{font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.04em;padding:12px 6px 4px}
+.gis-node{display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:6px;cursor:pointer;font-size:12.5px;min-width:0}
+.gis-node:hover{background:var(--surface2)}
+.gis-node.on{background:var(--brand-soft);box-shadow:inset 2px 0 0 var(--brand)}
+.gis-node-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gis-node .tag{font-size:10.5px;line-height:16px;padding:0 5px}
+.gis-caret{border:0;background:transparent;width:18px;height:18px;padding:0;color:var(--ink3);font-size:11px;flex:none}
+.gis-caret.leaf{cursor:default;opacity:.5}
+
+.gis-assets-map{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;min-height:0}
+#gis-assets-map{position:absolute;inset:0}
+.gis-map-mode{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:800;background:var(--ink);color:var(--bg);padding:6px 8px 6px 14px;border-radius:99px;font-size:12.5px;font-weight:600;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.gis-map-mode[hidden]{display:none}
+
+.gis-detail{overflow:auto;padding:14px;gap:12px}
+.gis-detail-head h2{margin-top:4px;font-size:16px;word-break:break-word}
+.gis-form{display:flex;flex-direction:column;gap:9px}
+.gis-fieldset{border:1px solid var(--line);border-radius:9px;padding:10px;margin:0;display:flex;flex-direction:column;gap:8px}
+.gis-fieldset legend{font-size:11.5px;font-weight:700;color:var(--ink2);padding:0 4px}
+.gis-fieldset p{font-size:12px}
+.gis-actions{padding-top:4px}
+.gis-photo-list{display:flex;flex-direction:column;gap:4px;font-size:12px}
+.gis-photo-item{display:flex;justify-content:space-between;align-items:center;gap:6px;background:var(--surface2);border-radius:6px;padding:4px 6px}
+
+/* Nhập Excel & bản đồ nền */
+.gis-import .card,.gis-basemaps .card{display:flex;flex-direction:column;gap:12px}
+.gis-basemaps{display:flex;flex-direction:column;gap:12px}
+.gis-imp-controls .field,.gis-bm-form .field{min-width:200px}
+.gis-col-list code,.gis-basemaps code{background:var(--surface2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11.5px}
+.gis-imp-summary{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.gis-imp-errors{max-height:320px;overflow:auto;margin-top:8px}
+.gis-bm-preview{height:360px}
+#gis-bm-map{height:100%}
+.gis-bm-opacity{padding:0;height:24px}
+.gis-details summary{cursor:pointer;font-weight:600;font-size:12.5px;color:var(--ink2)}
+
+/* Trên bản đồ */
+.gis-search{background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:0 6px 20px rgba(0,0,0,.18);width:300px;max-width:calc(100vw - 80px)}
+.gis-search input{border:0;background:transparent;width:100%;height:34px;padding:0 10px;font-size:12.5px;outline:0;color:var(--ink)}
+.gis-search-results{max-height:300px;overflow:auto}
+.gis-search-results button{display:block;width:100%;text-align:left;border:0;border-top:1px solid var(--line);background:transparent;padding:6px 10px;font-size:12px;color:var(--ink);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gis-search-results button:hover:not([disabled]){background:var(--surface2)}
+.gis-search-results button[disabled]{opacity:.5;cursor:not-allowed}
+.gis-search-empty{padding:8px 10px;font-size:12px;color:var(--ink3);border-top:1px solid var(--line)}
+.gis-map-hint{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);z-index:700;background:rgba(16,36,42,.9);color:#fff;font-size:12px;padding:5px 12px;border-radius:99px;pointer-events:none}
+.gis-label{background:rgba(16,36,42,.78);color:#fff;border:0;border-radius:4px;font-size:10.5px;font-weight:700;padding:1px 5px;box-shadow:none}
+.gis-label::before{display:none}
+.gis-pop{font-size:12px;line-height:1.5;min-width:170px}
+.gis-pop-img{display:block;width:100%;max-height:160px;object-fit:cover;border-radius:6px;margin-top:6px}
+.gis-icon-photo{font-size:15px;line-height:20px;text-align:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+.gis-icon-anomaly span{display:block;width:18px;height:18px;border-radius:50%;background:var(--hot);border:2px solid #fff;box-shadow:0 0 0 0 rgba(207,47,94,.7);animation:gis-pulse 1.8s infinite}
+.gis-icon-focus span{display:block;width:34px;height:34px;border-radius:50%;border:3px solid var(--sun);box-shadow:0 0 0 4px rgba(229,154,12,.3);animation:gis-pulse 1.2s infinite}
+@keyframes gis-pulse{0%{box-shadow:0 0 0 0 rgba(207,47,94,.6)}70%{box-shadow:0 0 0 12px rgba(207,47,94,0)}100%{box-shadow:0 0 0 0 rgba(207,47,94,0)}}
+@media (prefers-reduced-motion:reduce){.gis-icon-anomaly span,.gis-icon-focus span{animation:none}}
+
+/* Danh sách bất thường ở bảng bên của bản đồ pin */
+.gis-anomaly-list .item{cursor:pointer}
+
+@media (max-width:1200px){
+  .gis-assets-layout{grid-template-columns:240px minmax(0,1fr);height:auto}
+  .gis-assets-map{height:460px}
+  .gis-detail{grid-column:1 / -1}
+}
+@media (max-width:760px){
+  .gis-assets-layout{grid-template-columns:1fr}
+  .gis-tree-panel{max-height:320px}
+  .gis-grid3{grid-template-columns:1fr 1fr}
+}

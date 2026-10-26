@@ -5,10 +5,19 @@
  * ===================================================================
  */
 
+const path = require('path');
+
+// Chạy local (không qua Docker): nạp biến môi trường từ file .env ở thư mục gốc dự án.
+// Biến đã có sẵn (do docker-compose truyền vào) được giữ nguyên.
+try {
+  process.loadEnvFile(path.join(__dirname, '..', '.env'));
+} catch (e) {
+  // Không có file .env: dùng biến môi trường của hệ thống
+}
+
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
-const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -21,8 +30,12 @@ const NodeMediaServer = require('node-media-server');
 const AdmZip = require('adm-zip');
 
 // Database và các module định tuyến chuẩn hóa
-const { testConnection, query, isDbConnected } = require('./src/config/db');
-const { authRouter } = require('./src/routes/auth');
+const { testConnection, query, isDbConnected, getStatus: getDbStatus, onStatusChange: onDbStatusChange, dbConfig, sendDbError } = require('./src/config/db');
+const { runMigrations } = require('./src/db/migrate');
+const { authRouter, verifyLogin } = require('./src/routes/auth');
+const assetsRouter = require('./src/routes/assets');
+const basemapsRouter = require('./src/routes/basemaps');
+const { listActiveTickets, findTicketById } = require('./src/services/ticketService');
 const solarRouter = require('./src/routes/solar');
 const substationRouter = require('./src/routes/substation');
 const ticketsRouter = require('./src/routes/tickets');
@@ -261,6 +274,20 @@ app.use('/api/substation', substationRouter);
 app.use('/api/tickets', ticketsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/reports', reportsRouter);
+app.use('/api/assets', assetsRouter);
+app.use('/api/basemaps', basemapsRouter);
+
+// Tình trạng hệ thống: dashboard dùng để hiện cảnh báo mất CSDL
+app.get('/api/health', (req, res) => {
+  res.json({
+    code: 0,
+    data: {
+      db: getDbStatus(),
+      mqtt: { connected: Boolean(mqttClient && mqttClient.connected) },
+      uptime_s: Math.round(process.uptime())
+    }
+  });
+});
 
 // Trạng thái bản đồ Online / Offline
 app.get('/api/map/status', (req, res) => {
@@ -279,6 +306,8 @@ app.delete('/api/mqtt/logs', (req, res) => {
 // Thư mục static cho Pilot 2 và Dashboard
 app.use('/pilot-login', express.static(path.join(__dirname, 'public', 'pilot-login')));
 app.use('/dashboard', express.static(path.join(__dirname, 'public', 'dashboard')));
+// Bản đồ nền nhà máy (thư mục có thể đổi bằng BASEMAP_TILES_DIR)
+app.use('/tiles/basemaps', express.static(basemapsRouter.TILES_ROOT, { fallthrough: false }));
 app.use('/tiles', express.static(path.join(__dirname, 'tiles')));
 app.use('/uploads', (req, res, next) => {
   res.set('Access-Control-Allow-Origin', '*');
@@ -327,33 +356,7 @@ const memoryStore = {
   devices: {},
   // Trạng thái tay cầm điều khiển Pilot 2 thật
   gateways: {},
-  // Danh mục phiếu kiểm tra
-  tickets: [
-    {
-      ticket_id: 1,
-      ticket_code: 'PKT-PIN-2026-001',
-      ticket_name: 'Kiểm tra nhiệt chuỗi tấm pin Dãy Block A - Tìm điểm Hotspot',
-      inspection_type: 'SOLAR_PANEL',
-      target_facility: 'Dãy tấm pin Inverter Block A',
-      status: 'PENDING',
-      assigned_route_id: 1,
-      route_name: 'Đường bay quét nhiệt Block A',
-      inspector_name: 'Kỹ sư Vận Hành',
-      livestream_channel: 'm3t_live'
-    },
-    {
-      ticket_id: 2,
-      ticket_code: 'PKT-DCL-2026-002',
-      ticket_name: 'Kiểm tra phát nhiệt tiếp xúc Dao cách ly DCL-171-1 & DCL-171-7',
-      inspection_type: 'DISCONNECTOR',
-      target_facility: 'Ngăn lộ 171 Trạm biến áp 110kV',
-      status: 'PENDING',
-      assigned_route_id: 2,
-      route_name: 'Đường bay kiểm tra DCL 171',
-      inspector_name: 'Kỹ sư Vận Hành',
-      livestream_channel: 'm3t_live'
-    }
-  ],
+  // Phiếu kiểm tra: KHÔNG giữ trong bộ nhớ, luôn đọc từ MySQL (ticketService)
   // Tuyến bay KMZ thực tế (Đồng bộ trực tiếp từ thư mục uploads/waylines)
   routes: [],
   // Kho ảnh chụp thật được đồng bộ về
@@ -902,20 +905,55 @@ setInterval(() => {
 // REST API CHO ĐIỀU KHIỂN & QUẢN LÝ THỦ CÔNG TRÊN WEB
 // ===================================================================
 
-// 1. Endpoint đăng nhập Pilot 2
-app.post('/api/pilot/login', (req, res) => {
-  const { username, password, ticketId } = req.body;
-  console.log(`[Pilot 2 Login] Remote vừa đăng nhập: User=${username}, TicketID=${ticketId}`);
+// 1. Danh sách phiếu đang thực hiện cho màn hình đăng nhập Pilot 2
+app.get('/api/pilot/tickets', async (req, res) => {
+  try {
+    const tickets = await listActiveTickets();
+    res.json({
+      code: 0,
+      data: tickets.map(t => ({
+        ticket_id: t.ticket_id,
+        ticket_code: t.ticket_code,
+        ticket_name: t.ticket_name,
+        inspection_type: t.inspection_type,
+        status: t.status
+      }))
+    });
+  } catch (err) {
+    sendDbError(res, err);
+  }
+});
 
-  const ticket = memoryStore.tickets.find(t => t.ticket_id == ticketId) || memoryStore.tickets[0];
+// 1.0 Endpoint đăng nhập Pilot 2: kiểm tra tài khoản và phiếu trong MySQL
+app.post('/api/pilot/login', async (req, res) => {
+  const { username, password, ticketId } = req.body || {};
+  console.log(`[Pilot 2 Login] Remote yêu cầu đăng nhập: User=${username}, TicketID=${ticketId}`);
+
+  let auth;
+  let ticket;
+  try {
+    auth = await verifyLogin(username, password);
+    if (!auth.ok) {
+      return res.status(auth.status).json({ code: auth.status, message: auth.message });
+    }
+    ticket = await findTicketById(ticketId);
+  } catch (err) {
+    return sendDbError(res, err);
+  }
+  if (!ticket) {
+    return res.status(400).json({ code: 400, message: 'Vui lòng chọn phiếu kiểm tra hợp lệ.' });
+  }
+  if (!['PENDING', 'ASSIGNED', 'EXECUTING'].includes(ticket.status)) {
+    return res.status(409).json({ code: 409, message: `Phiếu ${ticket.ticket_code} đã ${ticket.status === 'COMPLETED' ? 'hoàn thành' : 'hủy'}, chọn phiếu khác.` });
+  }
 
   // THÔNG BÁO TỨC THÌ LÊN DASHBOARD TRÊN MÁY TÍNH
   broadcastWebSocket({
     type: 'client_connected',
     source: 'pilot2_http_login',
-    user: username,
+    user: auth.user.username,
     ticket: ticket.ticket_code,
-    workspace: 'Dự Án Điện Mặt Trời & TBA 110kV',
+    workspace: systemConfig.workspace_name,
     timestamp: new Date().toLocaleTimeString()
   });
 
@@ -925,9 +963,11 @@ app.post('/api/pilot/login', (req, res) => {
     data: {
       workspace_name: systemConfig.workspace_name,
       workspace_id: systemConfig.workspace_id,
+      ticket_id: ticket.ticket_id,
       assigned_ticket: `${ticket.ticket_code} - ${ticket.ticket_name}`,
+      user: auth.user,
       license: systemConfig.dji_license,
-      token: `pilot_token_${Date.now()}`,
+      token: auth.token,
       mqtt: {
         host: `tcp://${HOST_IP}:${MQTT_PORT}`,
         username: 'pilot',
@@ -966,37 +1006,7 @@ app.post('/api/pilot/log', (req, res) => {
   res.json({ code: 0 });
 });
 
-// 2. Danh sách Phiếu kiểm tra
-app.get('/api/tickets', (req, res) => {
-  res.json(memoryStore.tickets);
-});
-
-// 3. Tạo mới Phiếu kiểm tra thủ công
-app.post('/api/tickets', (req, res) => {
-  const { ticket_code, ticket_name, inspection_type, target_facility, assigned_route_id, inspector_name } = req.body;
-  if (!ticket_code || !ticket_name) {
-    return res.status(400).json({ code: -1, message: 'Vui lòng nhập mã phiếu và tiêu đề!' });
-  }
-
-  const route = memoryStore.routes.find(r => r.route_id == assigned_route_id);
-  const newTicket = {
-    ticket_id: memoryStore.tickets.length + 1,
-    ticket_code: ticket_code.trim(),
-    ticket_name: ticket_name.trim(),
-    inspection_type: inspection_type || 'SOLAR_PANEL',
-    target_facility: target_facility || 'Chưa xác định',
-    status: 'PENDING',
-    assigned_route_id: assigned_route_id ? parseInt(assigned_route_id) : 1,
-    route_name: route ? route.route_name : 'Đường bay mặc định',
-    inspector_name: inspector_name || 'Kỹ sư Vận Hành',
-    livestream_channel: 'm3t_live',
-    created_at: new Date()
-  };
-
-  memoryStore.tickets.unshift(newTicket);
-  console.log(`[Ticket Created] Tạo phiếu mới: ${newTicket.ticket_code}`);
-  res.json({ code: 0, message: 'Tạo phiếu thành công', data: newTicket });
-});
+// Phiếu kiểm tra: xem src/routes/tickets.js (lưu trong MySQL, /api/tickets)
 
 // 4. Danh sách Đường bay KMZ
 app.get('/api/routes', (req, res) => {
@@ -2321,6 +2331,34 @@ app.get('/', (req, res) => {
 });
 
 // ===================================================================
+// THEO DÕI KẾT NỐI CSDL: nâng cấp schema & nạp ảnh khi kết nối lần đầu
+// ===================================================================
+let dbInitDone = false;
+let dbInitRunning = false;
+const MIGRATION_RETRY_MS = 30000;
+
+/** Nâng cấp schema rồi nạp thư viện ảnh. Lỗi thì tự thử lại sau 30 giây. */
+async function initDatabase() {
+  if (dbInitDone || dbInitRunning || !isDbConnected()) return;
+  dbInitRunning = true;
+  try {
+    await runMigrations(dbConfig);
+    dbInitDone = true;
+    initMediaLibraryFromDbAndDisk().catch(err => console.warn('[Media Init]', err.message));
+  } catch (err) {
+    console.error(`[Migration] ✗ Lỗi nâng cấp CSDL, thử lại sau ${MIGRATION_RETRY_MS / 1000}s:`, err.message);
+    setTimeout(initDatabase, MIGRATION_RETRY_MS).unref();
+  } finally {
+    dbInitRunning = false;
+  }
+}
+
+onDbStatusChange((status) => {
+  broadcastWebSocket({ type: 'db_status', data: status });
+  if (status.connected) initDatabase();
+});
+
+// ===================================================================
 // KHỞI ĐỘNG SERVER
 // ===================================================================
 server.listen(PORT, '0.0.0.0', () => {
@@ -2335,8 +2373,6 @@ server.listen(PORT, '0.0.0.0', () => {
 
   setupMqtt();
   setupRtmpServer();
-  testConnection().then(() => {
-    initMediaLibraryFromDbAndDisk().catch(err => console.warn('[Media Init]', err.message));
-  }).catch(err => console.warn('[DB Init]', err.message));
+  testConnection().catch(err => console.warn('[DB Init]', err.message));
   startMapHealthCheck(broadcastWebSocket);
 });
