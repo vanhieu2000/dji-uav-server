@@ -1082,19 +1082,273 @@ app.post('/api/control/live', async (req, res) => {
 });
 
 // 7. Lệnh chụp ảnh từ Web (Hỗ trợ chụp Kép RGB+Nhiệt, chỉ RGB, chỉ Nhiệt, hoặc Zoom)
-app.post('/api/control/photo', (req,res) => res.status(410).json({code:410,message:'Thao tác này không thuộc luồng M3T/Pilot 2 đã hỗ trợ. Dùng hồ sơ chụp KMZ và vận hành trên Pilot 2; server chỉ nhận ảnh gốc.'}));
+app.post('/api/control/photo', (req, res) => {
+  const { device_sn, mode } = req.body || {};
+  const targetSn = device_sn || Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
+  const gatewaySn = gatewayOfAircraft[targetSn] || Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
+
+  const photoMode = mode || 'dual';
+
+  if (mqttClient && mqttClient.connected) {
+    // 1. Chuyển chế độ camera sang Chụp Ảnh (Photo Mode = 0)
+    const switchPayload = {
+      tid: crypto.randomUUID(),
+      bid: crypto.randomUUID(),
+      timestamp: Date.now(),
+      method: 'camera_mode_switch',
+      data: {
+        payload_index: '67-0-0',
+        camera_mode: 0
+      }
+    };
+    mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(switchPayload));
+    if (targetSn && targetSn !== gatewaySn) {
+      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(switchPayload));
+    }
+
+    // 2. Phát lệnh Chụp Ảnh Shutter chuẩn DJI Cloud API cho Mavic 3T
+    const photoPayload = {
+      tid: crypto.randomUUID(),
+      bid: crypto.randomUUID(),
+      timestamp: Date.now(),
+      method: 'camera_photo_take',
+      data: {
+        payload_index: '67-0-0'
+      }
+    };
+    mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(photoPayload));
+    if (targetSn && targetSn !== gatewaySn) {
+      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(photoPayload));
+    }
+    console.log(`[Drone Control] ✓ Đã phát lệnh Chụp Ảnh (${photoMode}) tới Drone (${targetSn}) & Remote (${gatewaySn})`);
+
+    // 3. Tự động kích hoạt kéo ảnh từ thẻ nhớ Drone về máy tính sau 3.5 giây
+    setTimeout(() => {
+      if (mqttClient && mqttClient.connected) {
+        const syncPayload = {
+          tid: crypto.randomUUID(),
+          bid: crypto.randomUUID(),
+          timestamp: Date.now(),
+          method: 'media_files_sync',
+          data: {}
+        };
+        mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(syncPayload));
+        if (targetSn && targetSn !== gatewaySn) {
+          mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(syncPayload));
+        }
+        console.log(`[Drone Control] 🔄 Tự động gửi media_files_sync kéo ảnh vừa chụp về máy tính`);
+      }
+    }, 3500);
+
+    res.json({ code: 0, message: `Đã gửi lệnh chụp ảnh (${photoMode.toUpperCase()}) thành công tới máy bay!`, target: targetSn });
+  } else {
+    res.status(503).json({ code: 503, message: 'MQTT Broker chưa kết nối, không thể phát lệnh chụp ảnh' });
+  }
+});
 
 // 7.0 Tiếp nhận ảnh chụp tức thời (Live Stream Realtime Snapshot) từ giao diện Web
-app.post('/api/media/snapshot', (req,res) => res.status(410).json({code:410,message:'Thao tác này không thuộc luồng M3T/Pilot 2 đã hỗ trợ. Dùng hồ sơ chụp KMZ và vận hành trên Pilot 2; server chỉ nhận ảnh gốc.'}));
+app.post('/api/media/snapshot', async (req, res) => {
+  try {
+    const { image_base64, mode = 'thermal', lat, lng, alt, max_temperature, ticket_id } = req.body || {};
+    if (!image_base64) {
+      return res.status(400).json({ code: -1, message: 'Thiếu dữ liệu hình ảnh base64' });
+    }
+
+    const base64Data = image_base64.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    const suffix = mode === 'thermal' ? '_T' : (mode === 'wide' ? '_W' : '_Z');
+    const fileName = `SNAP_${Date.now()}${suffix}.JPG`;
+    const uploadDir = path.join(__dirname, 'uploads', 'media');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    const localFilePath = path.join(uploadDir, fileName);
+
+    fs.writeFileSync(localFilePath, buffer);
+    console.log(`[Snapshot Realtime] ✓ Đã lưu ảnh tức thời từ luồng Live: ${fileName}`);
+
+    const isThermal = mode === 'thermal' || fileName.includes('_T');
+    const isZoom = mode === 'zoom';
+    const mediaType = isThermal ? 'THERMAL_PHOTO' : (isZoom ? 'ZOOM_PHOTO' : 'RGB_PHOTO');
+
+    const targetSn = Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
+    const dev = memoryStore.devices[targetSn] || {};
+    const num = v => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+
+    let record = null;
+    try {
+      const ing = await mediaIngest.ingestFile({
+        localPath: localFilePath, fileName, originalName: fileName, source: 'MANUAL',
+        ticketId: num(ticket_id), deviceSn: targetSn || undefined
+      });
+      const lens = isThermal ? 'IR' : (isZoom ? 'ZOOM' : 'WIDE');
+      const fields = {
+        latitude: num(lat) ?? (dev.lat ?? null),
+        longitude: num(lng) ?? (dev.lng ?? null),
+        relative_altitude: num(alt) ?? (dev.rel_alt ?? null),
+        max_temperature: num(max_temperature) ?? (isThermal ? (dev.thermal_max ?? null) : null),
+        lens, media_type: mediaType
+      };
+      if (isDbConnected()) {
+        await query(
+          'UPDATE media_files SET latitude = ?, longitude = ?, relative_altitude = ?, max_temperature = ?, lens = ?, media_type = ? WHERE media_id = ?',
+          [fields.latitude, fields.longitude, fields.relative_altitude, fields.max_temperature, fields.lens, fields.media_type, ing.media.media_id]
+        );
+      }
+      record = { ...ing.media, ...fields };
+    } catch (e) {
+      record = {
+        file_name: fileName,
+        file_url: `/uploads/media/${fileName}`,
+        latitude: num(lat) ?? (dev.lat ?? null),
+        longitude: num(lng) ?? (dev.lng ?? null),
+        relative_altitude: num(alt) ?? (dev.rel_alt ?? null),
+        max_temperature: num(max_temperature) ?? (isThermal ? (dev.thermal_max ?? null) : null),
+        media_type: mediaType,
+        created_at: new Date()
+      };
+    }
+
+    if (!memoryStore.mediaFiles) memoryStore.mediaFiles = [];
+    memoryStore.mediaFiles.unshift(record);
+
+    broadcastWebSocket({
+      type: 'media_synced',
+      data: record
+    });
+
+    res.json({
+      code: 0,
+      message: 'Đã chụp và lưu ảnh hiện trường thành công vào kho ảnh!',
+      data: record
+    });
+  } catch (err) {
+    console.error('[Snapshot Error]', err);
+    res.status(500).json({ code: 500, message: 'Lỗi lưu ảnh chụp: ' + err.message });
+  }
+});
 
 // 7.1 Lệnh yêu cầu Pilot 2 / UAV kích hoạt đồng bộ toàn bộ ảnh từ thẻ nhớ về Server
-app.post('/api/control/media-sync', (req,res) => res.status(410).json({code:410,message:'Thao tác này không thuộc luồng M3T/Pilot 2 đã hỗ trợ. Dùng hồ sơ chụp KMZ và vận hành trên Pilot 2; server chỉ nhận ảnh gốc.'}));
+app.post('/api/control/media-sync', (req, res) => {
+  const targetSn = req.body?.device_sn || Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
+  const gatewaySn = gatewayOfAircraft[targetSn] || Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
+
+  const payload = {
+    tid: crypto.randomUUID(),
+    bid: crypto.randomUUID(),
+    timestamp: Date.now(),
+    method: 'media_files_sync',
+    data: {}
+  };
+
+  if (mqttClient && mqttClient.connected) {
+    mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(payload));
+    if (targetSn && targetSn !== gatewaySn) {
+      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(payload));
+    }
+    console.log(`[Media Sync] ✓ Đã gửi lệnh media_files_sync tới Gateway (${gatewaySn}) & Drone (${targetSn})`);
+    res.json({ code: 0, message: 'Đã gửi yêu cầu đồng bộ ảnh từ Drone về máy chủ!' });
+  } else {
+    res.status(503).json({ code: 503, message: 'MQTT Broker chưa kết nối' });
+  }
+});
 
 // 8. Lệnh chỉnh góc Gimbal (nhìn 90° tấm pin hoặc nhìn ngang dao cách ly)
-app.post('/api/control/gimbal', (req,res) => res.status(410).json({code:410,message:'Thao tác này không thuộc luồng M3T/Pilot 2 đã hỗ trợ. Dùng hồ sơ chụp KMZ và vận hành trên Pilot 2; server chỉ nhận ảnh gốc.'}));
+app.post('/api/control/gimbal', (req, res) => {
+  const { pitch, device_sn } = req.body || {};
+  const targetSn = device_sn || Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
+  const gatewaySn = gatewayOfAircraft[targetSn] || Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
+
+  const pVal = parseFloat(pitch);
+  const targetPitch = Number.isFinite(pVal) ? pVal : -90;
+
+  const payload = {
+    tid: crypto.randomUUID(),
+    bid: crypto.randomUUID(),
+    timestamp: Date.now(),
+    method: 'gimbal_rotate',
+    data: {
+      payload_index: '67-0-0',
+      pitch: targetPitch,
+      roll: 0,
+      yaw: 0
+    }
+  };
+
+  if (mqttClient && mqttClient.connected) {
+    mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(payload));
+    if (targetSn && targetSn !== gatewaySn) {
+      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(payload));
+    }
+    console.log(`[Gimbal Control] ✓ Đã gửi lệnh chỉnh Gimbal Pitch = ${targetPitch}° tới ${gatewaySn} & ${targetSn}`);
+    res.json({ code: 0, message: `Đã gửi lệnh chỉnh Gimbal sang ${targetPitch}° thành công!`, data: payload });
+  } else {
+    res.status(503).json({ code: 503, message: 'MQTT Broker chưa kết nối' });
+  }
+});
 
 // 9. Lệnh Gọi Máy Bay Về (RTH)
-app.post('/api/control/rth', (req,res) => res.status(410).json({code:410,message:'Thao tác này không thuộc luồng M3T/Pilot 2 đã hỗ trợ. Dùng hồ sơ chụp KMZ và vận hành trên Pilot 2; server chỉ nhận ảnh gốc.'}));
+app.post('/api/control/rth', (req, res) => {
+  const { device_sn } = req.body || {};
+  const targetSn = device_sn || Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
+  const gatewaySn = gatewayOfAircraft[targetSn] || Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
+
+  const payload = {
+    tid: crypto.randomUUID(),
+    bid: crypto.randomUUID(),
+    timestamp: Date.now(),
+    method: 'flight_return_home',
+    data: {}
+  };
+
+  if (mqttClient && mqttClient.connected) {
+    mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(payload));
+    if (targetSn && targetSn !== gatewaySn) {
+      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(payload));
+    }
+    console.log(`[Drone Control] 🏠 Đã phát lệnh Return to Home (RTH) tới Gateway (${gatewaySn}) & Mavic 3T (${targetSn})`);
+    res.json({ code: 0, message: 'Đã gửi lệnh Gọi Máy Bay Về (RTH) thành công!', data: payload });
+  } else {
+    res.status(503).json({ code: 503, message: 'MQTT Broker chưa kết nối' });
+  }
+});
+
+// 9.1 Lệnh Bay tới tọa độ chỉ định (Fly-to-Point) chuẩn DJI Cloud API
+app.post(['/api/control/fly-to', '/api/control/flyto'], (req, res) => {
+  const { lat, lng, alt, latitude, longitude, altitude, device_sn } = req.body || {};
+  const targetLat = parseFloat(lat ?? latitude);
+  const targetLng = parseFloat(lng ?? longitude);
+  const targetAlt = parseFloat(alt ?? altitude) || 35.0; // Độ cao an toàn mặc định 35m
+
+  if (!Number.isFinite(targetLat) || !Number.isFinite(targetLng)) {
+    return res.status(400).json({ code: 400, message: 'Thiếu tọa độ vĩ độ (lat) hoặc kinh độ (lng)' });
+  }
+
+  const targetSn = device_sn || Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
+  const gatewaySn = gatewayOfAircraft[targetSn] || Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
+
+  const payload = {
+    tid: crypto.randomUUID(),
+    bid: crypto.randomUUID(),
+    timestamp: Date.now(),
+    method: 'fly_to_point',
+    data: {
+      target_latitude: targetLat,
+      target_longitude: targetLng,
+      target_height: targetAlt
+    }
+  };
+
+  if (mqttClient && mqttClient.connected) {
+    mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(payload));
+    if (targetSn && targetSn !== gatewaySn) {
+      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(payload));
+    }
+    console.log(`[Drone Control] 🛸 Đã phát lệnh Fly-to-Point tới [${targetLat}, ${targetLng}, H=${targetAlt}m]`);
+    res.json({ code: 0, message: `Đã gửi lệnh điều khiển Drone bay tới [${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}]`, data: payload });
+  } else {
+    res.status(503).json({ code: 503, message: 'MQTT Broker chưa kết nối' });
+  }
+});
 
 // 9.1 Bắn gói tin MQTT thử nghiệm vào Broker 1883 và broadcast ra Live Console
 app.post('/api/mqtt/test-publish', (req, res) => {

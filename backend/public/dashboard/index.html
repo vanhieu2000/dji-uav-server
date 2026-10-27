@@ -766,6 +766,7 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
         <!-- THANH ICON HÀNG DỌC BÊN TRÁI BẢN ĐỒ (TIẾT KIỆM KHÔNG GIAN, KHÔNG ĐÈ LỚP) -->
         <div class="map-left-toolbar">
           <button class="map-icon-btn active" id="btn-toggle-live-pip" onclick="toggleAndStartLive()" title="🎥 Kích Hoạt & Xem Live Cam 1080p" aria-label="🎥 Kích Hoạt & Xem Live Cam 1080p" data-tip="🎥 Kích Hoạt & Xem Live Cam 1080p">🎥</button>
+          <button class="map-icon-btn" style="background:#0284c7" onclick="captureLiveSnapshot()" title="⚡ Chụp Snapshot từ luồng Live" aria-label="⚡ Chụp Snapshot từ luồng Live" data-tip="⚡ Chụp Snapshot từ luồng Live">⚡</button>
           <button class="map-icon-btn" style="background:#0d6e6e" onclick="triggerPhoto('dual')" title="📸 Chụp Kép (RGB 48MP + Nhiệt)" aria-label="📸 Chụp Kép (RGB 48MP + Nhiệt)" data-tip="📸 Chụp Kép (RGB 48MP + Nhiệt)">📸</button>
           <button class="map-icon-btn" style="background:#2563eb" onclick="triggerPhoto('wide')" title="📷 Chụp RGB 48MP" aria-label="📷 Chụp RGB 48MP" data-tip="📷 Chụp RGB 48MP">📷</button>
           <button class="map-icon-btn" style="background:#cf2f5e" onclick="triggerPhoto('thermal')" title="🌡️ Chụp Hồng Ngoại Nhiệt" aria-label="🌡️ Chụp Hồng Ngoại Nhiệt" data-tip="🌡️ Chụp Hồng Ngoại Nhiệt">🌡️</button>
@@ -1656,24 +1657,84 @@ function toggleAndStartLive(){
   manualStartLive();
 }
 
-async function triggerPhoto(){ toast('Chụp theo hồ sơ KMZ trên Pilot 2. Ảnh gốc được đồng bộ qua Cloud hoặc nhập thẻ nhớ; không tạo ảnh mô phỏng.'); }
+async function triggerPhoto(mode){
+  const m = mode || 'dual';
+  toast(`Đang gửi lệnh Chụp Ảnh (${m.toUpperCase()}) tới Mavic 3T...`);
+  try {
+    const res = await fetch('/api/control/photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: m, device_sn: gSelectedDroneSn })
+    });
+    const d = await res.json();
+    if(res.ok && d.code === 0){
+      toast('✓ ' + (d.message || 'Đã kích hoạt chụp ảnh thành công!'));
+    } else {
+      toast('⚠️ ' + (d.message || 'Lỗi chụp ảnh'));
+    }
+  } catch(e){
+    toast('Lỗi chụp ảnh: ' + e.message);
+  }
+}
 
 function triggerThermalPhoto(){
- triggerPhoto('thermal');
+  triggerPhoto('thermal');
+}
+
+async function captureLiveSnapshot(){
+  const video = document.getElementById('manual-live-video');
+  if(!video || video.style.display === 'none' || !video.videoWidth){
+    toast('Chưa có luồng video trực tiếp đang phát để chụp ảnh tức thời.');
+    return;
+  }
+  toast('Đang chụp ảnh tức thời từ khung hình Live Cam...');
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1920;
+    canvas.height = video.videoHeight || 1080;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const base64 = canvas.toDataURL('image/jpeg', 0.92);
+
+    const res = await fetch('/api/media/snapshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_base64: base64,
+        mode: gCurrentCamMode || 'wide',
+        device_sn: gSelectedDroneSn
+      })
+    });
+    const d = await res.json();
+    if(res.ok && d.code === 0){
+      toast('✓ Đã lưu ảnh hiện trường thành công vào kho ảnh!');
+      loadInitialMedia();
+    } else {
+      toast('⚠️ ' + (d.message || 'Lỗi lưu ảnh snapshot'));
+    }
+  } catch(e){
+    toast('Lỗi chụp snapshot: ' + e.message);
+  }
 }
 
 async function triggerMediaSync(){
- toast('Đang yêu cầu DJI Pilot 2 đồng bộ ảnh từ thẻ nhớ Drone...');
- try{
-  const res = await fetch('/api/control/media-sync', { method: 'POST' });
-  const d = await res.json();
-  if(res.ok){
-   toast('✓ ' + (d.message || 'Đã gửi lệnh đồng bộ!'));
-   setTimeout(loadInitialMedia, 2000);
+  toast('Đang yêu cầu DJI Pilot 2 đồng bộ ảnh từ thẻ nhớ Drone...');
+  try{
+    const res = await fetch('/api/control/media-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_sn: gSelectedDroneSn })
+    });
+    const d = await res.json();
+    if(res.ok && d.code === 0){
+      toast('✓ ' + (d.message || 'Đã gửi lệnh đồng bộ!'));
+      setTimeout(loadInitialMedia, 2000);
+    } else {
+      toast('⚠️ ' + (d.message || 'Chưa gửi được lệnh đồng bộ'));
+    }
+  }catch(e){
+    console.warn(e);
   }
- }catch(e){
-  console.warn(e);
- }
 }
 
 /* ===================================================================
