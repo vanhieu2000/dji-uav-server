@@ -1,7 +1,7 @@
 /** Fail closed: API chưa có resolver phạm vi chỉ ADMIN dùng; không lọc quyền bằng UI. */
 const {authenticateToken}=require('../routes/auth');
 const {query}=require('../config/db');
-const PUBLIC_AUTH=new Set(['/api/auth/login','/api/auth/forgot-password','/api/auth/reset-password','/api/pilot/login']);
+const PUBLIC_AUTH=new Set(['/api/auth/login','/api/auth/forgot-password','/api/auth/reset-password','/api/pilot/login','/api/pilot/tickets','/api/pilot/log']);
 function protectedPath(p){return /^\/(api|wayline|manage|storage|media|dji-media|uploads|tiles)(\/|$)/.test(p);}
 function accessControl(req,res,next){
     if(!protectedPath(req.path)||PUBLIC_AUTH.has(req.path)||req.path==='/api/health'||req.path==='/api/vision/results'||/^\/api\/vision\/jobs\/[a-f0-9-]+\/input$/.test(req.path))return next();

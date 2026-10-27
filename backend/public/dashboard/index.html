@@ -1231,7 +1231,9 @@ let gBaseLayerSolar = null;
 let gBaseLayerSub = null;
 let gBaseLayerManual = null;
 let gAutoFollow = true;
-let gSelectedDroneSn = null;
+let gSelectedDroneSn = '1581F5FJC243K00DNRRT';
+let gDroneIsOnline = false;
+let gLastOsdAt = 0;
 
 // native: mức zoom sâu nhất nguồn ảnh có; phóng to hơn thì Leaflet phóng ảnh lên thay vì báo "không có dữ liệu"
 const BASEMAPS = {
@@ -1309,6 +1311,7 @@ function switchView(viewName){
  location.hash = module?route:viewName;
  if(window.placeLiveVideo) window.placeLiveVideo(viewName);
  if(viewName==='dashboard'&&window.GIS?.Insights) GIS.Insights.overview();
+ if(typeof refreshAllOsdDisplays === 'function') refreshAllOsdDisplays();
 
  // Căn chỉnh kích thước bản đồ mượt mà hoặc nạp dữ liệu
  if(viewName === 'map-solar'){
@@ -1384,6 +1387,7 @@ function initSolarMap(){
  if(window.GIS){
   GIS.centerOnPlant(gMap, 17);
   gGisSolar = GIS.attachMap(gMap, { kind: 'solar', onData: renderSolarAnomalyList });
+  if(GIS.LiveMonitor) GIS.LiveMonitor.addMap(gMap);
  }
 }
 
@@ -1444,6 +1448,7 @@ function initSubstationMap(){
    else GIS.centerOnPlant(gMapSub, 17);
   }).catch(()=>GIS.centerOnPlant(gMapSub, 17));
   gGisSub = GIS.attachMap(gMapSub, { kind: 'substation', onSelect: showDclDetail });
+  if(GIS.LiveMonitor) GIS.LiveMonitor.addMap(gMapSub);
  }
 }
 
@@ -1458,6 +1463,7 @@ function initManualMap(){
  if(window.GIS){
   GIS.centerOnPlant(gMapManual, 17);
   GIS.attachMap(gMapManual, { kind: 'manual' });
+  if(GIS.LiveMonitor) GIS.LiveMonitor.addMap(gMapManual);
  }
 
  // TƯƠNG TÁC TRỰC TIẾP TRÊN BẢN ĐỒ: Click để lấy tọa độ, khoảng cách và điều khiển bay/chụp
@@ -3305,68 +3311,165 @@ function setupRealtimeTelemetry(){
     renderMediaGrid();
    }
 
-   // 3. Telemetry OSD
-   if(msg.type === 'osd' && msg.data && msg.device_sn === gSelectedDroneSn){
-    const d = msg.data;
-    if(d.lat && d.lng){
-     if(droneMarker) droneMarker.setLatLng([d.lat, d.lng]);
-     if(manualDroneMarker) manualDroneMarker.setLatLng([d.lat, d.lng]);
-
-     if(gAutoFollow){
-      if(gMap && gCurrentView === 'map-solar'){
-       gMap.panTo([d.lat, d.lng], { animate: true, duration: 0.5 });
-      } else if(gMapManual && gCurrentView === 'control-manual'){
-       gMapManual.panTo([d.lat, d.lng], { animate: true, duration: 0.5 });
-      }
-     }
+   // 3. Telemetry OSD từ UAV hoặc Gateway
+   if(msg.type === 'osd' && msg.data){
+    const sn = msg.device_sn || msg.sn;
+    if(!gSelectedDroneSn && sn) gSelectedDroneSn = sn;
+    if(!gSelectedDroneSn || sn === gSelectedDroneSn){
+     window.gLastOsdAt = Date.now();
+     setDroneOnlineState(true, sn, msg.data);
     }
-    const alt = (d.alt !== undefined && d.alt !== null) ? Number(d.alt).toFixed(1) + ' m' : '-- m';
-    const spd = (d.speed !== undefined && d.speed !== null) ? Number(d.speed).toFixed(1) + ' m/s' : '-- m/s';
-    const bat = (d.battery !== undefined && d.battery !== null) ? d.battery + '%' : '--%';
-    const thMax = (d.thermal_max !== undefined && d.thermal_max !== null) ? Number(d.thermal_max).toFixed(1) + ' °C' : '-- °C';
+   }
 
-    // Cập nhật thẻ trạng thái Topbar & Dashboard khi có tín hiệu thật
-    const topDrone = document.getElementById('topbar-drone-status');
-    if(topDrone) topDrone.innerHTML = `<span class="dot"></span>Mavic 3T: ONLINE (${bat})`;
-    const dashBadge = document.getElementById('dash-drone-badge');
-    if(dashBadge){
-     dashBadge.className = 'tag ok';
-     dashBadge.innerText = `Mavic 3T: ONLINE (${bat})`;
+   // 3.1 Nhận sự kiện thay đổi trạng thái thiết bị từ Server (ONLINE / OFFLINE)
+   if(msg.type === 'device_status' || msg.type === 'device_offline' || msg.type === 'device_online'){
+    const sn = msg.device_sn || msg.sn;
+    const isOnline = msg.status === 'ONLINE' || msg.type === 'device_online';
+    if(!isOnline){
+     setDroneOnlineState(false, sn);
+    } else {
+     setDroneOnlineState(true, sn, msg.data);
     }
-    const kpiSt = document.getElementById('kpi-drone-st');
-    if(kpiSt) { kpiSt.innerText = 'ONLINE'; kpiSt.style.color = 'var(--ok)'; }
-    const kpiSub = document.getElementById('kpi-drone-sub');
-    if(kpiSub) kpiSub.innerText = `Pin: ${bat} · Alt: ${alt}`;
-
-    // Cập nhật tất cả các màn hình OSD
-    window.gLastOsd = d;
-    const elAltDash = document.getElementById('hud-alt-dash'); if(elAltDash) elAltDash.innerText = alt;
-    const elSpdDash = document.getElementById('hud-spd-dash'); if(elSpdDash) elSpdDash.innerText = spd;
-    const elBatDash = document.getElementById('hud-bat-dash'); if(elBatDash) elBatDash.innerText = bat;
-    const elThDash = document.getElementById('hud-th-dash'); if(elThDash) elThDash.innerText = thMax;
-
-    // Cập nhật OSD cho cả 3 bản đồ
-    const updateOsdSet = (pfx) => {
-     const elA = document.getElementById(pfx + '-alt'); if(elA) elA.innerText = alt;
-     const elS = document.getElementById(pfx + '-spd'); if(elS) elS.innerText = spd;
-     const elB = document.getElementById(pfx + '-bat'); if(elB) elB.innerText = bat;
-     const elT = document.getElementById(pfx + '-thermal'); if(elT) elT.innerText = thMax;
-     const dot = document.getElementById(pfx.split('-')[0] + '-dot-status');
-     if(dot) dot.className = 'dot';
-    };
-    updateOsdSet('solar-hud');
-    updateOsdSet('sub-hud');
-    updateOsdSet('manual-hud');
-    const manStatText = document.getElementById('manual-status-text');
-    if(manStatText) manStatText.innerText = `Mavic 3T (${bat})`;
-
-    // Chỉ hiển thị số đo nhận được; không tự phát lệnh chụp khi thấy nhiệt độ cao.
-
    }
   }catch(e){}
  };
  wsRealtime.onclose = () => { setTimeout(setupRealtimeTelemetry, 3000); };
 }
+
+function setDroneOnlineState(isOnline, sn, d){
+ window.gDroneIsOnline = isOnline;
+ const topDrone = document.getElementById('topbar-drone-status');
+ const dashBadge = document.getElementById('dash-drone-badge');
+ const kpiSt = document.getElementById('kpi-drone-st');
+ const kpiSub = document.getElementById('kpi-drone-sub');
+
+ if(!isOnline){
+  if(topDrone) topDrone.innerHTML = `<span class="dot off"></span>Mavic 3T: OFFLINE`;
+  if(dashBadge){
+   dashBadge.className = 'tag off';
+   dashBadge.innerText = (sn || 'Mavic 3T') + ' · OFFLINE';
+  }
+  if(kpiSt){
+   kpiSt.innerText = 'NGẮT KẾT NỐI';
+   kpiSt.style.color = 'var(--ink3)';
+  }
+  if(kpiSub) kpiSub.innerText = (sn || 'Mavic 3T') + ' (Tắt nguồn hoặc mất sóng)';
+
+  const resetHud = (pfx) => {
+   const elA = document.getElementById(pfx + '-alt'); if(elA) elA.innerText = '—';
+   const elS = document.getElementById(pfx + '-spd'); if(elS) elS.innerText = '—';
+   const elB = document.getElementById(pfx + '-bat'); if(elB) elB.innerText = '—';
+   const elT = document.getElementById(pfx + '-thermal'); if(elT) elT.innerText = '—';
+   const dot = document.getElementById(pfx.split('-')[0] + '-dot-status');
+   if(dot) dot.className = 'dot off';
+  };
+  resetHud('solar-hud');
+  resetHud('sub-hud');
+  resetHud('manual-hud');
+  const elAltDash = document.getElementById('hud-alt-dash'); if(elAltDash) elAltDash.innerText = '—';
+  const elSpdDash = document.getElementById('hud-spd-dash'); if(elSpdDash) elSpdDash.innerText = '—';
+  const elBatDash = document.getElementById('hud-bat-dash'); if(elBatDash) elBatDash.innerText = '—';
+  const elThDash = document.getElementById('hud-th-dash'); if(elThDash) elThDash.innerText = '—';
+  const manStatText = document.getElementById('manual-status-text');
+  if(manStatText) manStatText.innerText = 'Chưa kết nối';
+  return;
+ }
+
+ // Khi ONLINE: Tích lũy OSD để không bị null các trường rời rạc
+ const prev = window.gLastOsd || {};
+ const curr = d || {};
+ const merged = { ...prev, ...curr };
+ window.gLastOsd = merged;
+
+ const alt = (merged.alt != null) ? Number(merged.alt).toFixed(1) + ' m' : '-- m';
+ const spd = (merged.speed != null) ? Number(merged.speed).toFixed(1) + ' m/s' : '-- m/s';
+ const bat = (merged.battery != null) ? merged.battery + '%' : '--%';
+ const thMax = (merged.thermal_max != null) ? Number(merged.thermal_max).toFixed(1) + ' °C' : '-- °C';
+
+ if(topDrone) topDrone.innerHTML = `<span class="dot"></span>Mavic 3T: ONLINE (${bat})`;
+ if(dashBadge){
+  dashBadge.className = 'tag ok';
+  dashBadge.innerText = (sn || 'Mavic 3T') + ` · ONLINE · ${bat}`;
+ }
+ if(kpiSt) { kpiSt.innerText = 'ONLINE'; kpiSt.style.color = 'var(--ok)'; }
+ if(kpiSub) kpiSub.innerText = `${sn || 'Mavic 3T'} · Pin: ${bat} · Alt: ${alt}`;
+
+ const elAltDash = document.getElementById('hud-alt-dash'); if(elAltDash) elAltDash.innerText = alt;
+ const elSpdDash = document.getElementById('hud-spd-dash'); if(elSpdDash) elSpdDash.innerText = spd;
+ const elBatDash = document.getElementById('hud-bat-dash'); if(elBatDash) elBatDash.innerText = bat;
+ const elThDash = document.getElementById('hud-th-dash'); if(elThDash) elThDash.innerText = thMax;
+
+ const updateOsdSet = (pfx) => {
+  const elA = document.getElementById(pfx + '-alt'); if(elA) elA.innerText = alt;
+  const elS = document.getElementById(pfx + '-spd'); if(elS) elS.innerText = spd;
+  const elB = document.getElementById(pfx + '-bat'); if(elB) elB.innerText = bat;
+  const elT = document.getElementById(pfx + '-thermal'); if(elT) elT.innerText = thMax;
+  const dot = document.getElementById(pfx.split('-')[0] + '-dot-status');
+  if(dot) dot.className = 'dot';
+ };
+ updateOsdSet('solar-hud');
+ updateOsdSet('sub-hud');
+ updateOsdSet('manual-hud');
+ const manStatText = document.getElementById('manual-status-text');
+ if(manStatText) manStatText.innerText = `Mavic 3T (${bat})`;
+
+ // Cập nhật vị trí Marker trên bản đồ Solar và Manual
+ if(merged.lat && merged.lng){
+  if(gMap){
+   if(!droneMarker){
+    droneMarker = L.circleMarker([merged.lat, merged.lng], { radius: 9, weight: 3, color: '#0284c7', fillColor: '#22c55e', fillOpacity: 0.9 }).addTo(gMap);
+    droneMarker.bindPopup(`<b>Mavic 3T</b><br>${sn || 'UAV'}`);
+   } else {
+    droneMarker.setLatLng([merged.lat, merged.lng]);
+   }
+  }
+  if(gMapManual){
+   if(!manualDroneMarker){
+    manualDroneMarker = L.circleMarker([merged.lat, merged.lng], { radius: 9, weight: 3, color: '#0284c7', fillColor: '#22c55e', fillOpacity: 0.9 }).addTo(gMapManual);
+    manualDroneMarker.bindPopup(`<b>Mavic 3T</b><br>${sn || 'UAV'}`);
+   } else {
+    manualDroneMarker.setLatLng([merged.lat, merged.lng]);
+   }
+  }
+  if(gAutoFollow){
+   if(gMap && gCurrentView === 'map-solar'){
+    gMap.panTo([merged.lat, merged.lng], { animate: true, duration: 0.5 });
+   } else if(gMapManual && gCurrentView === 'control-manual'){
+    gMapManual.panTo([merged.lat, merged.lng], { animate: true, duration: 0.5 });
+   }
+  }
+ }
+}
+
+function refreshAllOsdDisplays(){
+ setDroneOnlineState(Boolean(window.gDroneIsOnline), gSelectedDroneSn, window.gLastOsd);
+}
+
+// Watchdog: Nếu 15 giây không có OSD thì chuyển OFFLINE
+setInterval(() => {
+ if (window.gDroneIsOnline && window.gLastOsdAt && (Date.now() - window.gLastOsdAt > 15000)) {
+  setDroneOnlineState(false, gSelectedDroneSn);
+ }
+}, 4000);
+
+// Khởi tạo ban đầu: Kiểm tra trạng thái máy bay ngay từ Database
+async function checkInitialDroneStatus(){
+ try {
+  const res = await fetch('/api/monitoring/devices');
+  const d = await res.json();
+  const list = d.data || [];
+  const target = list.find(x => x.device_sn === gSelectedDroneSn) || list[0];
+  if(target && target.status === 'ONLINE' && target.last_seen && (Date.now() - new Date(target.last_seen).getTime() < 30000)){
+   window.gLastOsdAt = new Date(target.last_seen).getTime();
+   setDroneOnlineState(true, target.device_sn, target);
+  } else {
+   setDroneOnlineState(false, target ? target.device_sn : gSelectedDroneSn, target);
+  }
+ } catch(e){
+  setDroneOnlineState(false, gSelectedDroneSn);
+ }
+}
+checkInitialDroneStatus();
 
 /* ===================================================================
    BỘ LẬP TRÌNH ĐƯỜNG BAY KMZ CHUẨN DJI ENTERPRISE (MISSION PLANNER)

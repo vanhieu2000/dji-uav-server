@@ -310,6 +310,18 @@ function setupMqtt() {
         timestamp: new Date().toLocaleTimeString()
       });
     });
+
+    broker.on('clientDisconnect', (client) => {
+      console.log(`[MQTT Broker] Remote/UAV ngắt kết nối: ClientID = ${client.id}`);
+    });
+
+    broker.on('clientError', (client, err) => {
+      console.warn(`[MQTT Broker] Client lỗi (${client?.id}):`, err?.message || err);
+    });
+
+    broker.on('connectionError', (client, err) => {
+      console.warn(`[MQTT Broker] Connection lỗi (${client?.id}):`, err?.message || err);
+    });
   }
 }
 
@@ -762,7 +774,7 @@ mediaUploadRouter.setOnIngested((media) => {
 app.get('/api/pilot/tickets', async (req, res) => {
   try {
     const all = await listActiveTickets();
-    const tickets = req.user.role==='ADMIN'?all:all.filter(t=>req.user.plant_ids.includes(t.plant_id)&&req.user.unit_id!=null&&t.unit_id===req.user.unit_id);
+    const tickets = (!req.user || req.user.role === 'ADMIN') ? all : all.filter(t => (req.user.plant_ids || []).includes(t.plant_id) && req.user.unit_id != null && t.unit_id === req.user.unit_id);
     res.json({
       code: 0,
       data: tickets.map(t => ({
@@ -793,16 +805,19 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
     if(auth.user.must_change_password)return res.status(428).json({code:428,message:'Đổi mật khẩu trên Web trước khi kết nối Pilot'});
     const actor=await userForToken(auth.token);
     if(!actor)return res.status(401).json({code:401,message:'Phiên không hợp lệ'});
+    if (!ticketId || String(ticketId).trim() === '') {
+      return res.status(400).json({ code: 400, message: 'Vui lòng chọn phiếu kiểm tra để kết nối phiên bay.' });
+    }
     try{await require('./src/services/authorization').ticket(actor,Number(ticketId));}catch(e){return res.status(403).json({code:403,message:'Không có quyền với phiếu này'});}
     ticket = await findTicketById(ticketId);
+    if (!ticket) {
+      return res.status(400).json({ code: 400, message: 'Vui lòng chọn phiếu kiểm tra hợp lệ.' });
+    }
+    if (!['PENDING', 'ASSIGNED', 'EXECUTING'].includes(ticket.status)) {
+      return res.status(409).json({ code: 409, message: `Phiếu ${ticket.ticket_code} đã ${ticket.status === 'COMPLETED' ? 'hoàn thành' : 'hủy'}, chọn phiếu khác.` });
+    }
   } catch (err) {
     return sendDbError(res, err);
-  }
-  if (!ticket) {
-    return res.status(400).json({ code: 400, message: 'Vui lòng chọn phiếu kiểm tra hợp lệ.' });
-  }
-  if (!['PENDING', 'ASSIGNED', 'EXECUTING'].includes(ticket.status)) {
-    return res.status(409).json({ code: 409, message: `Phiếu ${ticket.ticket_code} đã ${ticket.status === 'COMPLETED' ? 'hoàn thành' : 'hủy'}, chọn phiếu khác.` });
   }
 
   // Ghi phiên đăng nhập: ảnh tự tải lên sau đó được gắn vào phiếu này
@@ -817,8 +832,8 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
     const sn = v => (typeof v === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(v) ? v : null);
     sessionId = await mediaIngest.startPilotSession({ user: auth.user, ticketId: ticket.ticket_id, rcSn: sn(rcSn), aircraftSn: sn(aircraftSn) });
     const streamDevice = sn(aircraftSn) || sn(rcSn);
-    if (streamDevice) liveStream = await monitoring.ensureStream(ticket.ticket_id, streamDevice);
-    ticketRouteList = await require('./src/services/ticketRoutes').routesOfTicket(ticket.ticket_id);
+    if (streamDevice && ticket.ticket_id) liveStream = await monitoring.ensureStream(ticket.ticket_id, streamDevice);
+    ticketRouteList = ticket.ticket_id ? await require('./src/services/ticketRoutes').routesOfTicket(ticket.ticket_id) : [];
     uploadNamespace = (await query('SELECT upload_namespace FROM pilot_sessions WHERE session_id=?',[sessionId]))[0].upload_namespace;
     pilotToken=await issuePilotToken(auth.user,sessionId,systemConfig.workspace_id);
     const pilotUser=await userForToken(pilotToken);
