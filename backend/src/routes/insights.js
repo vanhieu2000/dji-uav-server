@@ -59,14 +59,36 @@ router.patch('/alerts/:id',authenticateToken,asyncHandler(async(req,res)=>{
     });onChanged({type:'alert_status',data:{alert_id:id,status}});ok(res,{alert_id:id,status});
 }));
 router.get('/alerts/:id/history',asyncHandler(async(req,res)=>{ok(res,await query('SELECT * FROM alert_changes WHERE alert_id=? ORDER BY change_id',[v.parseId(req.params.id,'cảnh báo')]));}));
+function reportDays(req){
+    return req.query.days==='all'?null:(v.optionalInt(req.query.days,'số ngày',{min:1,max:3660})||30);
+}
+router.get('/alert-report',asyncHandler(async(req,res)=>{
+    const days=reportDays(req),page=v.optionalInt(req.query.page,'trang',{min:1,max:100000})||1;
+    const pageSize=v.optionalInt(req.query.page_size,'kích thước trang',{min:1,max:100})||20;
+    const where=[],params=[];
+    if(days){where.push('a.created_at>=DATE_SUB(NOW(),INTERVAL ? DAY)');params.push(days);}
+    if(req.query.status){where.push('a.status=?');params.push(v.oneOf(req.query.status,['UNREAD','ACKNOWLEDGED','RESOLVED','DISMISSED'],'trạng thái'));}
+    if(req.query.level){where.push('a.alert_level=?');params.push(v.oneOf(req.query.level,['INFO','WARNING','CRITICAL'],'mức cảnh báo'));}
+    const q=v.optionalString(req.query.q,'từ khóa',150);
+    if(q){where.push('(LOCATE(?,a.title)>0 OR LOCATE(?,a.message)>0 OR LOCATE(?,t.ticket_code)>0)');params.push(q,q,q);}
+    const joins='FROM defect_alerts a LEFT JOIN inspection_tickets t ON a.ticket_id=t.ticket_id';
+    const clause=where.length?'WHERE '+where.join(' AND '):'';
+    const [count]=await query(`SELECT COUNT(*) AS total ${joins} ${clause}`,params);
+    const items=await query(`SELECT a.alert_id,a.ticket_id,a.title,a.message,a.alert_level,a.status,a.created_at,t.ticket_code,d.defect_code,d.max_temperature,m.file_url
+        ${joins} LEFT JOIN ai_defect_detections d ON a.detection_id=d.detection_id LEFT JOIN media_files m ON d.media_id=m.media_id
+        ${clause} ORDER BY a.created_at DESC,a.alert_id DESC LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`,params);
+    ok(res,{items,total:Number(count.total),page,page_size:pageSize,days});
+}));
 router.get('/charts',asyncHandler(async(req,res)=>{
-    const days=v.optionalInt(req.query.days,'số ngày',{min:1,max:3660})||30;
-    const [tickets,defects,areas,temperatures]=await Promise.all([
-        query(`SELECT DATE_FORMAT(created_at,'%Y-%m-%d') AS day,COUNT(*) AS total FROM inspection_tickets WHERE created_at>=DATE_SUB(NOW(),INTERVAL ${days} DAY) GROUP BY day ORDER BY day`),
-        query(`SELECT COALESCE(defect_code,defect_type) AS code,COUNT(*) AS total FROM ai_defect_detections WHERE detected_at>=DATE_SUB(NOW(),INTERVAL ${days} DAY) GROUP BY code ORDER BY total DESC`),
+    const days=reportDays(req),since=column=>days?`${column}>=DATE_SUB(NOW(),INTERVAL ${days} DAY)`:'1=1';
+    const [tickets,defects,areas,temperatures,statuses,levels]=await Promise.all([
+        query(`SELECT DATE_FORMAT(created_at,'%Y-%m-%d') AS day,COUNT(*) AS total,SUM(status='COMPLETED') AS completed FROM inspection_tickets WHERE ${since('created_at')} GROUP BY day ORDER BY day`),
+        query(`SELECT COALESCE(defect_code,defect_type) AS code,COUNT(*) AS total FROM ai_defect_detections WHERE ${since('detected_at')} GROUP BY code ORDER BY total DESC`),
         query(`SELECT a.area_id,a.area_name,COUNT(DISTINCT d.panel_id) AS total FROM ai_defect_detections d JOIN solar_panels p ON d.panel_id=p.panel_id JOIN solar_strings s ON p.string_id=s.string_id JOIN solar_areas a ON s.area_id=a.area_id
-            WHERE d.detected_at>=DATE_SUB(NOW(),INTERVAL ${days} DAY) GROUP BY a.area_id ORDER BY total DESC`),
-        query(`SELECT DATE_FORMAT(captured_at,'%Y-%m-%d') AS day,MAX(max_temp_c) AS max_temp_c FROM temperature_history WHERE valid=1 AND captured_at>=DATE_SUB(NOW(),INTERVAL ${days} DAY) GROUP BY day ORDER BY day`)
-    ]);ok(res,{days,tickets,defects,areas,temperatures});
+            WHERE ${since('d.detected_at')} GROUP BY a.area_id ORDER BY total DESC`),
+        query(`SELECT DATE_FORMAT(captured_at,'%Y-%m-%d') AS day,MAX(max_temp_c) AS max_temp_c FROM temperature_history WHERE valid=1 AND ${since('captured_at')} GROUP BY day ORDER BY day`),
+        query(`SELECT status,COUNT(*) AS total FROM inspection_tickets WHERE ${since('created_at')} GROUP BY status`),
+        query(`SELECT alert_level AS level,COUNT(*) AS total FROM defect_alerts WHERE ${since('created_at')} GROUP BY alert_level`)
+    ]);ok(res,{days,tickets,defects,areas,temperatures,statuses,levels});
 }));
 module.exports=router;

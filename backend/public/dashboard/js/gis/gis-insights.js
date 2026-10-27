@@ -19,14 +19,13 @@
   async function refreshAlerts(){
     try{
       const r=await GIS.api('GET','/api/insights/alerts');
-      const list=document.getElementById('dashboard-alerts-list');
-      if(list)list.innerHTML=r.data.filter(a=>a.status==='UNREAD').slice(0,8).map(a=>`<div class="item"><div><b>${esc(a.title)}</b><div>${esc(a.message)}</div><small>${esc(new Date(a.created_at).toLocaleString('vi-VN'))}</small></div></div>`).join('')||'<div class="gis-empty">Không có cảnh báo chưa xem.</div>';
       if(root&&root.isConnected&&root.querySelector('#insight-alerts')){
         root.querySelector('#insight-alerts').innerHTML=r.data.map(a=>`<div class="card" style="padding:12px;margin:8px 0"><b>${esc(a.title)}</b> · ${esc(STATUS[a.status]||a.status)}<p>${esc(a.message)}</p><div class="actions"><button class="btn sm" data-alert="${a.alert_id}" data-status="ACKNOWLEDGED">Đã tiếp nhận</button><button class="btn sm" data-alert="${a.alert_id}" data-status="RESOLVED">Đã xử lý</button><button class="btn sm" data-alert="${a.alert_id}" data-status="DISMISSED">Loại cảnh báo</button><button class="btn sm" data-history="${a.alert_id}">Lịch sử</button></div><div id="alert-history-${a.alert_id}"></div></div>`).join('')||'<div class="gis-empty">Chưa có cảnh báo.</div>';
       }
     }catch(e){/* không thay lỗi mạng bằng dữ liệu mẫu */}
   }
   async function reports(){
+    if(GIS.Reporting)return GIS.Reporting.reports();
     const box=document.getElementById('insights-reports-root');if(!box)return;
     const token=++reportRequest;
     const r=await GIS.run(()=>GIS.api('GET','/api/insights/charts?days='+days));if(!r||token!==reportRequest)return;
@@ -52,6 +51,6 @@
     GIS.run(async()=>{const r=await GIS.api('GET','/api/tickets');root.querySelector('#insight-ticket').innerHTML='<option value="">Tất cả phiếu</option>'+r.data.map(t=>`<option value="${t.ticket_id}">${esc(t.ticket_code)}</option>`).join('');});
     refreshAlerts();
   }};
-  GIS.on('runtime',msg=>{if(['vision_result','alert_status'].includes(msg.type)){refreshAlerts();reports();}});
+  GIS.on('runtime',msg=>{if(['vision_result','alert_status'].includes(msg.type)){refreshAlerts();if(GIS.Reporting)GIS.Reporting.overview();if(document.getElementById('view-reports').classList.contains('active'))reports();}});
   document.addEventListener('DOMContentLoaded',()=>{refreshAlerts();reports();});
 })();

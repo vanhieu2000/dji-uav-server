@@ -22,12 +22,18 @@
  if(resetToken){history.replaceState(null,'',location.pathname);form('reset');return;}
  api('me').then(user=>{window.UAV_USER=user;if(user.must_change_password)return form('change',user);if(user.role!=='ADMIN'&&!location.pathname.startsWith('/m')){location.replace('/m/');return;}overlay.remove();
  if(document.getElementById('account-name')){document.getElementById('account-name').textContent=user.full_name||user.username;document.getElementById('account-email').textContent=user.email||user.role;document.getElementById('account-avatar').textContent=(user.full_name||user.username||'?').slice(0,2).toUpperCase();}
+ const profile=document.getElementById('account-profile');
+ if(profile){
+  for(const [label,value] of [['Tài khoản',user.username],['Họ tên',user.full_name],['Email',user.email],['Vai trò',user.role]]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value||'Chưa cập nhật';profile.append(dt,dd);}
+  document.getElementById('account-admin-link').hidden=user.role!=='ADMIN';
+  const f=document.getElementById('account-password-form');f.onsubmit=async e=>{e.preventDefault();const status=document.getElementById('account-password-status'),button=f.querySelector('button');status.textContent='';if(f.new_password.value!==f.confirm_password.value){status.textContent='Mật khẩu nhập lại chưa khớp.';return;}const bytes=new TextEncoder().encode(f.new_password.value).length;if(bytes<12||bytes>72){status.textContent='Mật khẩu mới phải từ 12 đến 72 byte.';return;}button.disabled=true;try{await api('change-password',{old_password:f.old_password.value,new_password:f.new_password.value});location.reload();}catch(err){status.textContent=err.message;button.disabled=false;}};
+ }
  const tools=document.createElement('div');tools.id='account-tools';const who=document.createElement('span');who.textContent=user.full_name||user.username;if(!document.getElementById('account-sidebar'))tools.append(who);
  const secondary=document.createElement('div');secondary.className='account-secondary';
- if(user.role==='ADMIN'){const a=document.createElement('a');a.href='/dashboard/accounts.html';a.textContent='Quản trị';secondary.append(a);}
+ if(!document.getElementById('account-profile')&&user.role==='ADMIN'){const a=document.createElement('a');a.href='/dashboard/accounts.html';a.textContent='Quản trị';secondary.append(a);}
  const pass=document.createElement('button');pass.textContent='Đổi mật khẩu';pass.onclick=()=>{document.body.append(overlay);form('change',user);};secondary.append(pass);
  const out=document.createElement('button');out.className='account-logout';out.title='Đăng xuất';out.setAttribute('aria-label','Đăng xuất');out.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 4H4v16h5M14 8l4 4-4 4M8 12h10"/></svg><span>Đăng xuất</span>';
  out.onclick=async()=>{out.disabled=true;try{await api('logout',{});location.reload();}catch(err){out.disabled=false;out.title=err.message;const status=document.createElement('p');status.setAttribute('role','alert');status.textContent=err.message;tools.append(status);}};
- tools.append(out,secondary);(document.getElementById('account-sidebar')||document.querySelector('header')||document.body).append(tools);
+ tools.append(out);if(!document.getElementById('account-profile'))tools.append(secondary);(document.getElementById('account-sidebar')||document.querySelector('header')||document.body).append(tools);
  }).catch(()=>form('login'));
 })();

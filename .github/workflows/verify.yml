@@ -59,6 +59,7 @@ jobs:
           npm run test:browser
           npm run test:mobile
           npm run test:auth
+          npm run test:workspace
         working-directory: backend
         env:
           BROWSER_ENGINE: ${{ matrix.engine }}

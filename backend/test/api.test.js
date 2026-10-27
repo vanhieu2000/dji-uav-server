@@ -936,6 +936,23 @@ test('API tài sản & bản đồ', async (t) => {
         const changes=await api('GET',`/api/insights/alerts/${early.alert_id}/history`);assert.equal(changes.body.data[0].to_status,'RESOLVED');
         const charts=await api('GET','/api/insights/charts?days=365');assert.equal(charts.status,200);assert.ok(charts.body.data.temperatures.some(p=>p.max_temp_c>=80));
         assert.equal((await api('GET','/api/insights/charts?days=-1')).status,400);
+        const allCharts=await api('GET','/api/insights/charts?days=all');
+        assert.equal(allCharts.status,200);assert.equal(allCharts.body.data.days,null);
+        assert.ok(Array.isArray(allCharts.body.data.statuses));assert.ok(Array.isArray(allCharts.body.data.levels));
+        const marker='REPORT-PAGING-FIXTURE';
+        for(let i=0;i<6;i++)await db.query("INSERT INTO defect_alerts (title,message,alert_level,status,created_at) VALUES (?,?,'WARNING','UNREAD',NOW())",[marker+' '+i,'Literal search % _ fixture']);
+        const report=await api('GET','/api/insights/alert-report?days=all&page_size=2&q='+marker);
+        const recent=await api('GET','/api/insights/alert-report?days=7&status=UNREAD&level=WARNING&q='+marker);assert.equal(recent.status,200);assert.equal(recent.body.data.total,6);
+        assert.equal(report.status,200);assert.equal(report.body.data.total,6);assert.equal(report.body.data.items.length,2);
+        const page2=await api('GET','/api/insights/alert-report?days=all&page_size=2&page=2&q='+marker);
+        assert.ok(page2.body.data.items.every(x=>!report.body.data.items.some(y=>y.alert_id===x.alert_id)));
+        assert.ok(report.body.data.items[1].alert_id>page2.body.data.items[0].alert_id);
+        assert.equal((await api('GET','/api/insights/alert-report?days=all&q='+marker+'&level=CRITICAL')).body.data.total,0);
+        assert.equal((await api('GET','/api/insights/alert-report?days=all&q='+encodeURIComponent("' OR 1=1 --"))).body.data.total,0);
+        assert.equal((await api('GET','/api/insights/alert-report?page_size=101')).status,400);
+        assert.equal((await api('GET','/api/insights/alert-report?status=BOGUS')).status,400);
+        await db.query('DELETE FROM defect_alerts WHERE LOCATE(?,title)>0',[marker]);
+
         // Replacement invalidates superseded measurements rather than leaving a stale max.
         await jobs.acceptResult({contract_version:'2.0',job_id:lastJob.job_id,media_id:lastJob.media_id,input_sha256:lastJob.input_sha256,result_version:2,model_version:'fixture-model',status:'SUCCEEDED',detections:[]});
         const revised=await api('GET',`/api/insights/temperature?asset_type=CONTACT&asset_id=${cid}`);

@@ -53,6 +53,13 @@
     box.innerHTML = rows.length ? rows.map(d => `<button class="btn sm ${d.device_sn === selected ? 'primary' : ''}" data-sn="${esc(d.device_sn)}">
       ${esc(d.device_sn)} · ${esc(d.status || 'ONLINE')} · ${d.battery == null ? '–' : esc(d.battery) + '%'}</button>`).join(' ')
       : '<span class="faint">Chưa có UAV kết nối trong phạm vi đã chọn.</span>';
+    const current=devices.get(selected),online=current&&visible(current)&&current.status!=='OFFLINE';
+    const state=document.getElementById('kpi-drone-st'),badge=document.getElementById('dash-drone-badge');
+    if(state)state.textContent=online?'ĐANG KẾT NỐI':current?'NGẮT KẾT NỐI':rows.length?'CHƯA CHỌN UAV':'CHƯA KẾT NỐI';
+    if(badge){badge.className='tag '+(online?'ok':'off');badge.textContent=(current?current.device_sn:'UAV')+' · '+(online?'ONLINE':'OFFLINE');badge.title=badge.textContent;}
+    const reading=(key,suffix,decimals)=>online&&finite(current[key])?(decimals==null?Number(current[key]):Number(current[key]).toFixed(decimals))+suffix:'—';
+    for(const [id,key,suffix,digits] of [['hud-alt-dash','alt',' m',1],['hud-spd-dash','speed',' m/s',1],['hud-bat-dash','battery','%',0],['hud-th-dash','thermal_max',' °C',1]]){const el=document.getElementById(id);if(el)el.textContent=reading(key,suffix,digits);}
+    const sub=document.getElementById('kpi-drone-sub');if(sub)sub.textContent=current?current.device_sn:'Chọn UAV để xem thông số hiện tại';
     const n = document.getElementById('uav-photo-count');
     if (n) n.textContent = `${photos.size} ảnh nhận được${ticketId ? ' của phiếu đang chọn' : ''}`;
   }
@@ -159,7 +166,7 @@
         const s = streams.find(x => x.streamPath === e.target.value);
         if (!s || s.status !== 'STREAMING') { GIS.toast('Kênh chưa có publisher. Bật live trên Pilot 2 trước.'); return; }
         currentPath = s.streamPath;
-        if (typeof window.switchView === 'function') window.switchView('control-manual');
+        if (typeof window.switchView === 'function') window.switchView('dashboard');
         if (typeof window.startFlvLivePlayer === 'function') window.startFlvLivePlayer(currentPath, s.flv_url);
       });
       GIS.api('GET', '/api/tickets').then(r => {

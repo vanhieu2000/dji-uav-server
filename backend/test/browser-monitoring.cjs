@@ -14,7 +14,8 @@ const path=require('path');const req=require('module').createRequire(path.resolv
    let data=[];
    if(u.pathname==='/api/workspace/context')data={plants:[]};
    if(u.pathname==='/api/auth/me')data={user_id:1,role:'ADMIN',username:'fixture-admin'};
-   if(u.pathname==='/api/insights/charts')data={tickets:[],defects:[],areas:[],temperatures:[]};
+   if(u.pathname==='/api/insights/charts')data={tickets:[],defects:[],areas:[],temperatures:[],statuses:[],levels:[]};
+   if(u.pathname==='/api/insights/alert-report')data={items:[],total:0,page:1,page_size:20};
    if(u.pathname==='/api/health')data={db:{connected:true}};
    if(u.pathname==='/api/tickets')data=[{ticket_id:1,ticket_code:'TEST-1',ticket_name:'Phiếu thử'}];
    if(u.pathname==='/api/monitoring/photos')data={items:[],next_id:0,has_more:false};
