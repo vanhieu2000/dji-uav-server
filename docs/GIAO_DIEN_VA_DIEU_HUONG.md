@@ -22,3 +22,9 @@ Danh sách sự cố nhanh lấy tối đa 5 cảnh báo mới nhất theo thờ
 Live trên Tổng quan dùng cùng một video/player với buồng lái; chuyển màn hình không tạo player trùng. Chọn phiếu, chọn kênh đang phát trên Pilot 2. Không có publisher sẽ hiện trạng thái chờ, không hiển thị dữ liệu bay hay hình ảnh giả.
 
 Sau khi cập nhật mã có thay đổi backend: đóng cửa sổ server cũ, chạy lại CHAY_LOCAL.bat, rồi Ctrl+F5 trình duyệt. Tài khoản và dữ liệu MySQL được giữ nguyên.
+
+## Bố cục các màn nghiệp vụ
+
+Các màn dùng chung nhãn ở trên ô nhập, khối bộ lọc, bảng danh sách và các khối nhập liệu có viền. Nhiệm vụ và cảnh báo có lọc từ khóa/trạng thái và phân trang 15 dòng. Những bảng lịch sử/danh sách đã tải có ô Tìm trong danh sách và phân trang 20 dòng; chức năng này lọc trên dữ liệu hiện có, kết hợp với bộ lọc máy chủ của từng màn. Cảnh báo quản lý tối đa 500 mục gần nhất; muốn tra toàn bộ dùng Báo cáo.
+
+Tại các màn nhập ảnh/Excel/ZIP, bấm Chọn tệp hoặc Chọn thư mục ảnh. Vùng bên dưới liệt kê tên/dung lượng và xem trước ảnh đọc được trong trình duyệt. Chọn tệp chỉ chuẩn bị dữ liệu trên máy; nút Nhập/Tải lên riêng mới gửi tệp đến server. Preview giới hạn 4 ảnh trên màn hình nhỏ hoặc 12 ảnh trên desktop; toàn bộ tệp được giữ nguyên để xử lý. File không phải ảnh vẫn có danh sách tên/dung lượng; module Excel có bước kiểm tra nội dung riêng.

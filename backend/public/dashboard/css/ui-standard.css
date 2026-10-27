@@ -1,0 +1,59 @@
+/* Operational pages share a single control and section vocabulary. */
+#view-assets .card,#view-admin .card{padding:24px!important}
+#view-assets h2,#view-admin h2{font-size:17px;margin-bottom:8px}
+#view-assets h2+p{font-size:13px;color:var(--ink2,#4a5d63);max-width:1000px;margin:0 0 22px;line-height:1.7}
+.ui-section{border:1px solid var(--line,#dbe2e0);border-radius:12px;background:var(--surface,#fff);padding:20px;margin:20px 0;min-width:0}
+.ui-section>h3{font-size:14px;margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid var(--line,#dbe2e0)}
+.ui-section:has(>#task-detail:empty),.ui-section:has(>#gis-mi-result:empty){display:none}
+.ui-form{display:grid;gap:18px;min-width:0}
+.ui-form>.grid{gap:20px 24px}
+.ui-form label:not(:has(input[type=checkbox])){display:flex;flex-direction:column;align-items:stretch;gap:8px;font-size:12px;font-weight:600;min-width:0;color:var(--ink2,#4a5d63)}
+.ui-form label:has(input[type=checkbox]){display:flex;align-items:center;gap:9px;font-size:12px;font-weight:500}
+.ui-form input[type=checkbox]{width:17px;height:17px;accent-color:var(--brand,#0d6e6e);flex:none}
+#view-assets .input,#view-admin .input{height:40px;min-width:0;width:100%;padding:8px 12px;font-size:13px;line-height:1.5;border-radius:8px}
+#view-assets select[multiple],#view-admin select[multiple]{height:130px;padding:8px}
+#view-assets textarea.input{height:auto;min-height:90px}
+#view-assets .btn,#view-admin .btn{min-height:36px;height:auto;border-radius:7px;padding:8px 13px;font-size:12px;line-height:1.5}
+#view-assets .btn.primary,#view-admin .btn.primary{font-weight:600}
+.ui-toolbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin:16px 0}
+.ui-toolbar>.field{flex:1 1 200px;min-width:0!important;max-width:500px}
+.ui-toolbar>.input{flex:1 1 180px;width:auto!important;max-width:350px}
+.ui-toolbar>.btn{flex:none}
+.ui-toolbar .field label{font-size:12px;color:var(--ink2,#4a5d63);margin-bottom:6px}
+.ui-form>.btn{justify-self:start;margin:0!important}
+.ui-table-scroll{max-width:100%;overflow-x:auto}
+.ui-table{font-size:12px;min-width:620px}
+.ui-table th{font-size:11px;text-transform:none;padding:12px;background:var(--surface2,#f5f7f6)}
+.ui-table td{padding:12px;overflow-wrap:anywhere}
+.ui-table td .actions{margin:0}
+.ui-table .ui-row-title{font-weight:600;max-width:400px;overflow-wrap:anywhere}
+.ui-table tbody tr:hover{background:var(--surface2,#f5f7f6)}
+.ui-native-file{position:absolute!important;width:1px!important;height:1px!important;opacity:0;overflow:hidden;clip-path:inset(50%);pointer-events:none}
+.ui-file-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:10px 0}
+.ui-file-toolbar .muted{font-size:12px;font-weight:400}
+.ui-file-preview{border:1px dashed #a8c9c0;border-radius:10px;background:var(--surface2,#f5f7f6);padding:16px;min-width:0;max-height:450px;overflow:auto;margin-bottom:14px}
+.ui-file-preview .ui-table{min-width:0;table-layout:fixed}
+.ui-file-preview .ui-table th:first-child{width:75%}
+.ui-preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:12px;margin-bottom:14px}
+.ui-preview-grid:empty{display:none}
+.ui-preview-grid figure{margin:0;min-width:0;border:1px solid var(--line,#dbe2e0);border-radius:8px;background:var(--surface,#fff);padding:6px}
+.ui-preview-grid img{width:100%;height:100px;object-fit:contain;border-radius:4px}
+.ui-preview-grid figcaption{font-size:10px;overflow-wrap:anywhere;margin-top:5px}
+.ui-filterbar{display:flex;gap:12px;flex-wrap:wrap;align-items:end;padding:14px;background:var(--surface2,#f5f7f6);border:1px solid var(--line,#dbe2e0);border-radius:9px;margin-bottom:16px}
+.ui-filterbar label{display:grid;gap:6px;font-size:12px;min-width:150px;flex:1}
+.ui-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12px;margin-top:14px}
+#view-assets details{border:1px solid var(--line,#dbe2e0);border-radius:10px;padding:14px;margin:16px 0}
+#view-assets summary{font-weight:600;font-size:12px;cursor:pointer;min-height:24px}
+#task-scope{display:flex;flex-wrap:wrap;gap:8px}
+#task-detail h4{margin:20px 0 10px}
+@media(max-width:900px){#view-assets .card,#view-admin .card{padding:16px!important}.ui-section{padding:16px}.ui-form>.grid{grid-template-columns:1fr}.ui-toolbar>.input,.ui-toolbar>.field{max-width:100%;flex:1 1 200px}#view-assets .input,#view-admin .input{font-size:16px;min-height:44px}#view-assets .btn,#view-admin .btn{min-height:44px}.ui-file-preview{padding:10px}.ui-filterbar label{min-width:100%}}
+.ui-table tr[hidden]{display:none}
+.rtc-admin .ui-form{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));align-items:end}
+#view-assets .field:has(.ui-file-preview){flex:1 1 350px;max-width:none}
+#view-assets .gis-import>section.card>.gis-row{padding:16px;border:1px solid var(--line,#dbe2e0);border-radius:10px;background:var(--surface2,#f5f7f6)}
+#view-assets .gis-import>section.card>.gis-row:has(input[type=file]){background:var(--surface,#fff);align-items:stretch}
+.ui-section dl.kv{display:grid;grid-template-columns:minmax(100px,1fr) minmax(0,2fr);gap:12px;margin:0}
+.ui-section dl.kv dt{font-size:12px;color:var(--ink2,#4a5d63)}.ui-section dl.kv dd{margin:0;font-size:13px;font-weight:600;overflow-wrap:anywhere}
+
+#view-assets .ui-table details{border:0;padding:0;margin:6px 0}
+#view-assets .ui-table details summary{font-size:11px;font-weight:500}
