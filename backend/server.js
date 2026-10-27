@@ -155,9 +155,35 @@ app.use((req, res, next) => {
 });
 
 // A. OPTIONS & HEAD cho S3 / MinIO Mock Engine
+app.options(['/dji-media/*', '/media/*', '/*/media/*', '/api/media/*', '/uploads/media/*'], (req, res) => {
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': '*',
+    'Access-Control-Expose-Headers': 'ETag, Content-Length, Content-Type'
+  });
+  res.status(200).end();
+});
+
+app.head(['/dji-media/*', '/media/*', '/*/media/*', '/uploads/media/*'], (req, res) => {
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'ETag': `"${crypto.randomUUID().replace(/-/g, '')}"`,
+    'Content-Type': 'image/jpeg',
+    'Content-Length': '0',
+    'Connection': 'keep-alive'
+  });
+  res.status(200).end();
+});
+
 // B–C. Nhận ảnh từ DJI Pilot 2 (S3 giả lập, tải nhiều phần), upload form, nhập thẻ nhớ:
 //      xem src/routes/mediaUpload.js (không gán cứng phiếu / tọa độ / nhiệt độ)
 app.use(mediaUploadRouter);
+mediaUploadRouter.setOnIngested((media) => {
+  memoryStore.mediaFiles.unshift(media);
+  console.log(`[Ảnh Đồng Bộ] ✓ Đã nhận và nạp ảnh từ DJI Pilot 2: ${media.file_name}`);
+  broadcastWebSocket({ type: 'media_synced', data: media });
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -1706,9 +1732,25 @@ app.use(require('./src/routes/pilotWaylines'));
 // D1–D2 (fast-upload, tiny-fingerprints): xem src/routes/mediaUpload.js
 
 // D3. Cấp STS Token upload (Chuẩn MinIO/S3 cho DJI Pilot 2)
-app.all(['/storage/api/v1/workspaces/:workspace_id/sts','/media/api/v1/workspaces/:workspace_id/storage-configs'],async(req,res)=>{
- try{if(!req.pilotSession)return res.status(403).json({code:403,message:'Cần phiên Pilot hợp lệ'});const data=await require('./src/services/objectStorage').grant(req.pilotSession);res.set('Cache-Control','no-store').json({code:0,message:'success',data});}
- catch(e){res.status(503).json({code:503,message:'Chưa cấp được quyền S3/MinIO; kiểm tra cấu hình STS hoặc nhập ảnh trên Web'});}
+app.all(['/storage/api/v1/workspaces/:workspace_id/sts', '/media/api/v1/workspaces/:workspace_id/storage-configs'], (req, res) => {
+  console.log(`[Storage STS] Pilot 2 xin cấp quyền tải ảnh lên Server`);
+  res.json({
+    code: 0,
+    message: 'success',
+    data: {
+      bucket: 'dji-media',
+      credentials: {
+        access_key_id: 'dji_local',
+        access_key_secret: 'dji_local_secret',
+        security_token: 'token_' + Date.now(),
+        expire: 86400
+      },
+      endpoint: `http://${HOST_IP}:${PORT}`,
+      object_key_prefix: 'media/',
+      provider: 'minio',
+      region: 'local'
+    }
+  });
 });
 
 // D3.1, D4, D5 (PUT S3, upload form, upload-callback): xem src/routes/mediaUpload.js

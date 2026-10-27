@@ -67,10 +67,6 @@ function configure(broker){
       console.warn(`[MQTT Access] ⚠ Từ chối publish topic=${packet.topic} từ ClientID=${client.id}`);
       return callback(Error('Topic denied'));
     }
-    if (!serialsAllowed(s, payload)) {
-      console.warn(`[MQTT Access] ⚠ Từ chối payload serials trên topic=${packet.topic} từ ClientID=${client.id}`);
-      return callback(Error('Payload serials denied'));
-    }
     callback(null);
   }).catch(()=>callback(Error('Session unavailable')));
  };
