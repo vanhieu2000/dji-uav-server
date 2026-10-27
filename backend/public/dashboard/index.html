@@ -1238,9 +1238,9 @@ let gLastOsdAt = 0;
 // native: mức zoom sâu nhất nguồn ảnh có; phóng to hơn thì Leaflet phóng ảnh lên thay vì báo "không có dữ liệu"
 const BASEMAPS = {
   google_hybrid: { name: 'Google Vệ Tinh', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attr: 'Google Maps Satellite', native: 20 },
+  satellite: { name: 'Google Vệ Tinh', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attr: 'Google Maps Satellite', native: 20 },
   google_roadmap: { name: 'Google Đường Bộ', url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', attr: 'Google Maps Roadmap', native: 20 },
   google_terrain: { name: 'Google Địa Hình', url: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', attr: 'Google Terrain', native: 20 },
-  satellite: { name: 'Esri Vệ Tinh', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: 'Esri World Imagery', native: 18 },
   streets: { name: 'OpenStreetMap', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: 'OpenStreetMap', native: 19 },
   dark: { name: 'Tối Kỹ Thuật', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attr: 'CartoDB Dark', native: 20 },
   offline: { name: 'Ngoại Tuyến', url: '/tiles/{z}/{x}/{y}.png', attr: 'Offline Local Tile Server', native: 19 }
