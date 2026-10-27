@@ -448,3 +448,18 @@ test('NMS v4: trạng thái reconnect và publisher đã được chấp nhận 
  test('log MQTT không lộ STS/token/mật khẩu',()=>{
  const {redact}=require('../src/middleware/transportSecurity');assert.deepEqual(redact({data:{credentials:{access_key_secret:'SECRET'},token:'SECRET',temperature:34}}),{data:{credentials:'[redacted]',token:'[redacted]',temperature:34}});
  });
+
+test('Vietnamese text: reverse lossless latin1/CP1252 and preserve clean text',()=>{
+ const {repair,score}=require('../src/services/vietnameseText'),iconv=require('iconv-lite');
+ const expected='Nhà máy điện Mặt Trời Lộc Ninh 1';
+ for(const encoding of ['latin1','win1252']){const source=encoding==='win1252'?'Nhà máy điện Lộc Ninh 1':expected;const bad=iconv.decode(Buffer.from(source),encoding);assert.equal(repair(bad).after,source);assert.equal(score(repair(bad).after),0);}
+ assert.equal(repair(iconv.decode(Buffer.from(expected),'win1252')),null); // undefined CP1252 byte already replaced by U+FFFD
+ const mixed='NhÃ  MÃ¡y Ä\u0090iá»‡n Máº·t Trá»\u009di Lá»™c Ninh 1';assert.equal(repair(mixed).after,'Nhà Máy Điện Mặt Trời Lộc Ninh 1');
+ for(const text of ['ĐÃ KẾT NỐI','Tiếng Việt: Ắ Ằ Ẳ Ẵ Ặ Ấ Ế Ồ Ớ Ừ Ỹ đ','Café — Nguyễn Văn Đức','ASCII 123','https://example.com/a'])assert.equal(repair(text),null);
+ assert.equal(repair('Mất dữ liệu �'),null);assert.ok(score('Mất dữ liệu �'));
+});
+
+test('bundled Vietnamese fonts contain all Vietnamese letters and keep upstream checksums',()=>{
+ const fontkit=require('fontkit'),crypto=require('crypto'),root=path.resolve(__dirname,'../public/dashboard/assets/fonts'),manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.json')));
+ for(const [file,hash]of Object.entries(manifest.sha256)){const bytes=fs.readFileSync(path.join(root,file));assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),hash);const font=fontkit.create(bytes);for(const c of 'ăâđêôơưĂÂĐÊÔƠƯàáảãạèéẻẽẹìíỉĩịòóỏõọùúủũụỳýỷỹỵ'+Array.from({length:90},(_,i)=>String.fromCodePoint(0x1ea0+i)).join(''))assert.ok(font.hasGlyphForCodePoint(c.codePointAt(0)),file+' missing '+c);}
+});

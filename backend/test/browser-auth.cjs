@@ -20,7 +20,7 @@ const engines=require('playwright-core'),engineName=process.env.BROWSER_ENGINE||
   });
   await page.route('https://**',r=>r.abort());
   for(const width of [1440,768,390,320]){
-   await page.emulateMedia({colorScheme:width===1440?'light':'dark'});await page.setViewportSize({width,height:844});await page.goto(base+'/dashboard/');await page.waitForSelector('#auth-username');
+   await page.emulateMedia({colorScheme:width===1440?'light':'dark'});await page.setViewportSize({width,height:844});await page.goto(base+'/dashboard/');await page.waitForSelector('#auth-username');await page.evaluate(()=>document.fonts.ready);assert.match(await page.locator('#auth-username').evaluate(e=>getComputedStyle(e).fontFamily),/Be Vietnam Pro/);assert.ok(await page.evaluate(async()=>(await document.fonts.load('600 16px "Be Vietnam Pro"','Tiếng Việt ĐẶNG')).length>0));
    assert.equal(await page.locator('#account-overlay .auth-logo').evaluate(i=>i.complete&&i.naturalWidth>0),true);
    const layout=await page.evaluate(()=>{const p=document.querySelector('#account-overlay'),f=p.querySelector('form').getBoundingClientRect(),i=p.querySelector('input').getBoundingClientRect();return {overflow:p.scrollWidth>p.clientWidth,inside:f.left>=0&&f.right<=innerWidth,input:i.width,bg:getComputedStyle(p).backgroundColor,fg:getComputedStyle(p.querySelector('input')).color};});
    assert.equal(layout.overflow,false);assert.equal(layout.inside,true);assert.ok(layout.input>200);assert.equal(layout.bg,'rgb(237, 245, 243)');assert.equal(layout.fg,'rgb(21, 59, 61)');

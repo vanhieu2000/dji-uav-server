@@ -113,6 +113,7 @@ async function runMigrations(config, options = {}) {
         port: config.port,
         user: config.user,
         password: config.password,
+        charset: 'utf8mb4',
         database: config.database
     });
     const applied = [];

@@ -3,7 +3,7 @@ const fs=require('fs'),path=require('path'),mysql=require('mysql2/promise');
 const {runMigrations}=require('../src/db/migrate');
 async function setupLocal(config,{log=console.log}={}){
  const name=config.database;if(typeof name!=='string'||!/^[A-Za-z0-9_]{1,64}$/.test(name))throw Error('MYSQL_DATABASE chỉ gồm chữ, số, dấu gạch dưới (1–64 ký tự)');
- const conn=await mysql.createConnection({host:config.host,port:config.port,user:config.user,password:config.password,multipleStatements:true});
+ const conn=await mysql.createConnection({host:config.host,port:config.port,user:config.user,password:config.password,charset:'utf8mb4',multipleStatements:true});
  const lockName='uav-setup:'+require('crypto').createHash('sha256').update(name).digest('hex').slice(0,48);
  let initialized=false;
  try{

@@ -4,7 +4,7 @@
    Hỗ trợ 100% Responsive: PC (4K/FHD), iPad/Tablet, Mobile
    =================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+@import url('./fonts.css');
 
 :root {
   /* Bảng màu Dark Cyberpunk Industrial */
@@ -36,7 +36,7 @@
   --text-highlight: #00f2fe;
 
   /* Fonts */
-  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-ui: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
   /* Spacings & Radius */

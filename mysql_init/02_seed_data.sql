@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 -- ==========================================================
 -- Dữ Liệu Khởi Tạo Ban Đầu (Seed Data)
 -- Database: dji_uav_management

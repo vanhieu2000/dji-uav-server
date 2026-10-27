@@ -959,6 +959,24 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal(revised.body.data.samples.length,1);assert.equal(revised.body.data.trend.last_temp_c,60);
     });
 
+    await t.test('sửa mã hóa tiếng Việt: backup, bảo toàn chuỗi đúng và rollback khi dữ liệu đổi',async()=>{
+        const {audit,apply}=require('../scripts/repair-vietnamese');const conn=await db.getPool().getConnection();
+        const dir=fs.mkdtempSync(path.join(require('os').tmpdir(),'uav-encoding-'));
+        const clean='Nhà máy điện Mặt Trời',bad=Buffer.from(clean).toString('latin1');
+        try{
+            const a=await db.query('INSERT INTO plants (plant_code,plant_name) VALUES (?,?)',['ENCODING-A',bad]);
+            const b=await db.query('INSERT INTO plants (plant_code,plant_name) VALUES (?,?)',['ENCODING-B',bad]);
+            const report=await audit(conn,h.TEST_DB);report.changes=report.changes.filter(c=>c.table==='plants'&&[a.insertId,b.insertId].includes(c.id));assert.equal(report.changes.length,2);
+            await db.query('UPDATE plants SET plant_name=? WHERE plant_id=?',[clean,b.insertId]);
+            await assert.rejects(apply(conn,report,path.join(dir,'conflict.json')),/giao dịch/);
+            assert.equal((await db.query('SELECT plant_name FROM plants WHERE plant_id=?',[a.insertId]))[0].plant_name,bad);
+            const fresh=await audit(conn,h.TEST_DB);fresh.changes=fresh.changes.filter(c=>c.table==='plants'&&c.id===a.insertId);
+            const backup=path.join(dir,'backup.json');assert.equal(await apply(conn,fresh,backup),1);assert.equal(JSON.parse(fs.readFileSync(backup)).changes[0].before,bad);
+            assert.equal((await db.query('SELECT plant_name FROM plants WHERE plant_id=?',[a.insertId]))[0].plant_name,clean);
+            await assert.rejects(apply(conn,fresh,backup),/EEXIST/);
+        }finally{conn.release();fs.rmSync(dir,{recursive:true,force:true});}
+    });
+
     await t.test('mất CSDL: API trả 503, không trả dữ liệu mẫu', async () => {
         await db.closePool();
         const r = await api('GET', '/api/solar/areas');
