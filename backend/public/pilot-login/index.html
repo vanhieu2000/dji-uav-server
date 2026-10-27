@@ -12,8 +12,8 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
     body {
-      background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
-      color: #c9d1d9;
+      background: #edf5f3;
+      color: #244d4e;
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -21,11 +21,11 @@
       padding: 16px;
     }
     .card {
-      background: rgba(22, 27, 34, 0.85);
+      background: #fff;
       backdrop-filter: blur(12px);
-      border: 1px solid rgba(48, 54, 61, 0.8);
+      border: 1px solid #c1d8d2;
       border-radius: 16px;
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 12px 32px rgba(13, 70, 60, 0.12);
       width: 100%;
       max-width: 460px;
       padding: 28px 24px;
@@ -36,7 +36,7 @@
     }
     .badge {
       display: inline-block;
-      background: #238636;
+      background: #0d6e6e;
       color: #ffffff;
       font-size: 11px;
       font-weight: 700;
@@ -47,14 +47,14 @@
       margin-bottom: 8px;
     }
     h2 {
-      color: #f0f6fc;
+      color: #173b3e;
       font-size: 20px;
       font-weight: 600;
       margin-bottom: 6px;
     }
     .subtitle {
       font-size: 13px;
-      color: #8b949e;
+      color: #526b6c;
     }
     .form-group {
       margin-bottom: 16px;
@@ -63,28 +63,28 @@
       display: block;
       font-size: 12px;
       font-weight: 600;
-      color: #8b949e;
+      color: #526b6c;
       margin-bottom: 6px;
       text-transform: uppercase;
       letter-spacing: 0.3px;
     }
     input, select {
       width: 100%;
-      background: #0d1117;
-      border: 1px solid #30363d;
+      background: #ffffff;
+      border: 1px solid #b5cfca;
       border-radius: 8px;
-      color: #f0f6fc;
+      color: #173b3e;
       padding: 12px 14px;
       font-size: 14px;
       outline: none;
       transition: border-color 0.2s;
     }
     input:focus, select:focus {
-      border-color: #58a6ff;
+      border-color: #0b6262;
     }
     .btn {
       width: 100%;
-      background: #1f6feb;
+      background: #0d6e6e;
       color: #ffffff;
       border: none;
       border-radius: 8px;
@@ -96,7 +96,7 @@
       margin-top: 10px;
     }
     .btn:hover {
-      background: #388bfd;
+      background: #095656;
     }
     .btn:active {
       transform: scale(0.98);
@@ -108,30 +108,30 @@
       font-size: 13px;
       background: rgba(56, 139, 253, 0.1);
       border: 1px solid rgba(56, 139, 253, 0.3);
-      color: #58a6ff;
+      color: #0b6262;
       display: none;
     }
     .status-box.success {
       background: rgba(35, 134, 54, 0.15);
       border-color: rgba(35, 134, 54, 0.4);
-      color: #3fb950;
+      color: #246244;
       display: block;
     }
     .status-box.error {
       background: rgba(248, 81, 73, 0.15);
       border-color: rgba(248, 81, 73, 0.4);
-      color: #f85149;
+      color: #a62e38;
       display: block;
     }
     .log-container {
       margin-top: 16px;
-      background: #090d13;
-      border: 1px solid #21262d;
+      background: #f0f6f4;
+      border: 1px solid #c1d8d2;
       border-radius: 6px;
       padding: 10px;
       font-family: Consolas, monospace;
       font-size: 11px;
-      color: #8b949e;
+      color: #526b6c;
       max-height: 120px;
       overflow-y: auto;
     }
@@ -139,14 +139,15 @@
       text-align: center;
       margin-top: 18px;
       font-size: 11px;
-      color: #6e7681;
+      color: #526b6c;
     }
   </style>
+<link rel="icon" type="image/x-icon" href="/dashboard/assets/rtc-logo.ico"><link rel="apple-touch-icon" href="/dashboard/assets/rtc-logo.png"><link rel="stylesheet" href="/dashboard/css/rtc-brand.css">
 </head>
 <body>
 
   <div class="card">
-    <div class="header">
+    <div class="header"><img class="rtc-logo" style="width:64px;height:64px;margin:0 auto 16px" src="/dashboard/assets/rtc-logo.png" alt="RTC">
       <div class="badge">DJI Cloud API Platform</div>
       <h2>Trung Tâm Giám Sát UAV M3T</h2>
       <div class="subtitle">Đồng bộ Đường bay • Ảnh chụp • Livestream • Vị trí</div>
@@ -174,17 +175,17 @@
     </form>
 
     <!-- THẺ TRẠNG THÁI KẾT NỐI THÀNH CÔNG (CHẠY NGẦM KHÔNG HỦY PHIÊN) -->
-    <div id="connectedCard" style="display:none; background: rgba(35, 134, 54, 0.15); border: 1px solid #238636; border-radius: 12px; padding: 18px; margin-top: 16px; text-align: center;">
+    <div id="connectedCard" style="display:none; background: rgba(35, 134, 54, 0.15); border: 1px solid #0d6e6e; border-radius: 12px; padding: 18px; margin-top: 16px; text-align: center;">
       <div style="font-size: 32px; margin-bottom: 8px;">🟢</div>
-      <h3 style="color: #3fb950; margin-bottom: 6px;">ĐÃ KẾT NỐI CLOUD SERVER THÀNH CÔNG!</h3>
-      <p style="font-size: 13px; color: #c9d1d9; margin-bottom: 12px;">Hệ thống đang hoạt động ngầm và đồng bộ dữ liệu thời gian thực.</p>
-      <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; font-size: 12px; text-align: left; line-height: 1.6; color: #8b949e;">
-        • <b>Tay cầm:</b> DJI RC (<span id="rcSnText" style="color:#58a6ff;">5YSZM3K0031EYQ</span>)<br>
-        • <b>Dự án:</b> <span id="wsText" style="color:#f0f6fc;">Mavic 3T Solar Farm</span><br>
-        • <b>Giao thức:</b> MQTT tcp://10.20.28.50:1883 (<span style="color:#3fb950;">ONLINE</span>)<br>
+      <h3 style="color: #246244; margin-bottom: 6px;">ĐÃ KẾT NỐI CLOUD SERVER THÀNH CÔNG!</h3>
+      <p style="font-size: 13px; color: #244d4e; margin-bottom: 12px;">Hệ thống đang hoạt động ngầm và đồng bộ dữ liệu thời gian thực.</p>
+      <div style="background: #edf6f3; padding: 10px; border-radius: 8px; font-size: 12px; text-align: left; line-height: 1.6; color: #526b6c;">
+        • <b>Tay cầm:</b> DJI RC (<span id="rcSnText" style="color:#0b6262;">5YSZM3K0031EYQ</span>)<br>
+        • <b>Dự án:</b> <span id="wsText" style="color:#173b3e;">Mavic 3T Solar Farm</span><br>
+        • <b>Giao thức:</b> MQTT tcp://10.20.28.50:1883 (<span style="color:#246244;">ONLINE</span>)<br>
         • <b>Máy bay:</b> Sẵn sàng nhận lệnh & truyền OSD
       </div>
-      <div style="margin-top: 14px; padding: 10px; background: rgba(56, 139, 253, 0.15); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 8px; font-size: 12px; color: #58a6ff;">
+      <div style="margin-top: 14px; padding: 10px; background: rgba(56, 139, 253, 0.15); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 8px; font-size: 12px; color: #0b6262;">
         👉 <b>Bấm nút mũi tên quay lại &lt; ở góc trên bên trái</b> để ra màn hình chính DJI Pilot 2 và bấm <b>Enter Camera View</b> để bay!
       </div>
     </div>
@@ -255,7 +256,7 @@
     // Kiểm tra và nhận diện DJI JSBridge an toàn
     const isDjiBridge = typeof window !== 'undefined' && !!(window.djiBridge);
     if (isDjiBridge) {
-      addLog("<span style='color:#3fb950;'>✓ Đã nhận diện DJI Pilot 2 Native Bridge</span>");
+      addLog("<span style='color:#246244;'>✓ Đã nhận diện DJI Pilot 2 Native Bridge</span>");
       try {
         window.djiBridge.onBackClick = function() {
           addLog("Phi công bấm nút quay lại < để ra màn hình chính Pilot 2");
@@ -272,7 +273,7 @@
     // Đăng ký callback toàn cục theo chuẩn Thinklabs / DJI Cloud API
     let bridgeVerified=false;
     window.connectCallback = function(t) {
-      addLog("<span style='color:#3fb950; font-weight:bold;'>✓ [DJI Pilot 2] MQTT Bắt tay thành công (Connect Callback): " + JSON.stringify(t) + "</span>");
+      addLog("<span style='color:#246244; font-weight:bold;'>✓ [DJI Pilot 2] MQTT Bắt tay thành công (Connect Callback): " + JSON.stringify(t) + "</span>");
       let value=t;try{if(typeof t==='string')value=JSON.parse(t);}catch(e){}
       if(bridgeVerified && (value===true || value===0 || value?.code===0 || value?.connected===true)) showConnectedSuccess();
       else addLog("Chưa có callback kết nối hợp lệ; cần kiểm tra Pilot 2.");
@@ -290,7 +291,7 @@
       document.getElementById('loginForm').style.display = 'none';
       document.getElementById('statusBox').style.display = 'none';
       document.getElementById('connectedCard').style.display = 'block';
-      addLog("<span style='color:#3fb950;'>✓ HỆ THỐNG ĐÃ SẴN SÀNG! Đang chuyển dữ liệu Mavic 3T về máy tính.</span>");
+      addLog("<span style='color:#246244;'>✓ HỆ THỐNG ĐÃ SẴN SÀNG! Đang chuyển dữ liệu Mavic 3T về máy tính.</span>");
     }
 
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -458,7 +459,7 @@
           }
 
           connectBtn.innerText = "ĐÃ GỬI LỆNH KẾT NỐI";
-          connectBtn.style.background = "#238636";
+          connectBtn.style.background = "#0d6e6e";
 
           if(!window.djiBridge){statusBox.textContent='Đăng nhập thành công. Trình duyệt này không có DJI Bridge nên chưa kết nối UAV.';connectBtn.disabled=false;}
           else addLog('Đang chờ callback MQTT thật từ Pilot 2.');

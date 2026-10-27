@@ -2,6 +2,7 @@ const engines=require('playwright-core'),engineName=process.env.BROWSER_ENGINE||
 const path=require('path');const req=require('module').createRequire(path.resolve(__dirname,'../package.json'));
 (async()=>{
  const app=req('express')();app.use(req('express').static(path.resolve(__dirname,'../public/dashboard')));
+ app.use('/dashboard',req('express').static(path.resolve(__dirname,'../public/dashboard')));
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.on('listening',r));const base='http://127.0.0.1:'+server.address().port;
  const browser=await engine.launch({...(engineName==='chromium'?{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']}:{}),headless:true});
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));const commands=[],externalLibraries=[];

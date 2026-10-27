@@ -58,6 +58,7 @@ jobs:
           export CHROMIUM_PATH="$(node -e "console.log(require('playwright-core').chromium.executablePath())")"
           npm run test:browser
           npm run test:mobile
+          npm run test:auth
         working-directory: backend
         env:
           BROWSER_ENGINE: ${{ matrix.engine }}

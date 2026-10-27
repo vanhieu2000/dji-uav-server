@@ -12,7 +12,8 @@
     "test:mobile": "node test/browser-mobile.cjs",
     "setup:local": "node scripts/setup-local.js",
     "vendor:sync": "node scripts/vendor-ui.js",
-    "local": "node scripts/start-local.js"
+    "local": "node scripts/start-local.js",
+    "test:auth": "node test/browser-auth.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",
