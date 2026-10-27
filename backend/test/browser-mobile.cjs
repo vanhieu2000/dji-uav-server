@@ -16,18 +16,23 @@ const engines=require('playwright-core'),engineName=process.env.BROWSER_ENGINE||
   if(p==='/api/workspace/tasks/1/photos'){uploads++;if(fail)return route.abort('internetdisconnected');data={items:[{name:'test.jpg',status:'created'}]};}
   return route.fulfill({json:{code:0,data}});
  });
- await page.goto(base+'/m/');await page.waitForSelector('.leaflet-container');await page.waitForSelector('#account-tools');
+ await page.goto(base+'/m/');await page.waitForSelector('.leaflet-container');await page.waitForSelector('#account-tools',{state:'attached'});
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
  await page.click('#gps');await page.fill('#search','P-1');await page.click('[data-asset="PANEL:1"]');await page.waitForFunction(()=>document.querySelector('#navigation').textContent.includes('±'));
  await page.click('[data-tab=tasks]');await page.click('[data-task="1"]');await page.waitForSelector('#photos');
  fail=true;await page.setInputFiles('#photos [name=files]',{name:'test.jpg',mimeType:'image/jpeg',buffer:Buffer.from([255,216,255,217])});await page.click('#photos button');
  await page.waitForFunction(async()=>(await PhotoQueue.list()).some(x=>x.attempts===1));
- await page.reload();await page.waitForSelector('#account-tools');await page.waitForFunction(async()=>(await PhotoQueue.list()).some(x=>x.attempts>=2));
+ await page.reload();await page.waitForSelector('#account-tools',{state:'attached'});await page.waitForFunction(async()=>(await PhotoQueue.list()).some(x=>x.attempts>=2));
  assert.equal((await page.evaluate(()=>PhotoQueue.list())).length,1);
  await page.waitForFunction(()=>!PhotoQueue.running);
  await page.evaluate(()=>PhotoQueue.add({owner:999,ticket_id:999,name:'other-user.jpg',file:new Blob(['private'])}));
  fail=false;await page.click('[data-tab=queue]');await page.click('#sync');await page.waitForFunction(async()=>{const items=await PhotoQueue.list();return items.length===1&&items[0].owner===999;});
  const finalItems=await page.evaluate(async()=>{await new Promise(r=>setTimeout(r,100));return (await PhotoQueue.list()).map(x=>({owner:x.owner,error:x.last_error,attempts:x.attempts}));});assert.deepEqual(finalItems.map(x=>x.owner),[999],JSON.stringify(finalItems));
+ for(const [width,height] of [[320,740],[390,844],[768,1024],[844,390],[390,430]]){
+  await page.setViewportSize({width,height});
+  for(const tab of ['map','tasks','stats','queue']){await page.click('[data-tab='+tab+']');assert.equal(await page.locator('nav [aria-current=page]').getAttribute('data-tab'),tab);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const r=await page.locator('nav').boundingBox();assert.ok(r.y+r.height<=height+1);}
+ }
+ if(process.env.MOBILE_SCREENSHOT){await page.setViewportSize({width:390,height:844});await page.click('[data-tab=map]');await page.screenshot({path:process.env.MOBILE_SCREENSHOT});}
  assert.ok(uploads>=3);assert.deepEqual(errors,[]);
  console.log('PASS '+engineName+' mobile 390px: map + GPS/distance, task photos, persisted failed upload retry, owner-isolated queue; no overflow/page errors');
  }finally{await browser.close();server.close();}

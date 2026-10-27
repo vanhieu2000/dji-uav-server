@@ -49,6 +49,16 @@ const engines=require('playwright-core'),engineName=process.env.BROWSER_ENGINE||
   await page.evaluate(()=>switchView('account'));await page.waitForSelector('#account-profile dd');assert.ok((await page.locator('#account-profile').innerText()).includes('fixture@example.com'));await page.fill('#account-password-form [name=old_password]','old-password');await page.fill('#account-password-form [name=new_password]','new-password-123');await page.fill('#account-password-form [name=confirm_password]','different-password');await page.click('#account-password-form button');assert.match(await page.locator('#account-password-status').innerText(),/chưa khớp/);assert.deepEqual(commands,['/api/vision/rules/PANEL']);
   await page.fill('#account-password-form [name=confirm_password]','new-password-123');await page.click('#account-password-form button');await page.waitForSelector('#account-overlay [name=username]');assert.deepEqual(commands,['/api/vision/rules/PANEL','/api/auth/change-password']);loggedIn=true;
   await page.goto(base+'/dashboard/?relogin=1#flight-history');await page.waitForFunction(()=>document.querySelector('.nav-btn.on')?.dataset.target==='flight-history');assert.match(await page.locator('#module-page-title').innerText(),/Lịch sử/);assert.deepEqual(errors,[]);
+  for(const [width,height] of [[320,740],[390,844],[768,1024],[1024,768],[844,390],[390,430]]){
+   await page.setViewportSize({width,height});
+   for(const route of ['dashboard','reports','account','admin','missions','assets','flight-plans','flight-history','media-import','photo-coverage','vision','vision-datasets','alerts','map-solar','map-substation','control-manual']){
+    await page.evaluate(v=>switchView(v),route);await page.waitForTimeout(100);
+    const b=await page.evaluate(()=>{const p=document.querySelector('.page-view.active');return {overflow:p.scrollWidth-p.clientWidth,height:p.clientHeight};});
+    assert.ok(b.overflow<=2&&b.height>100,JSON.stringify({width,height,route,b}));
+   }
+  }
+  await page.setViewportSize({width:390,height:844});await page.locator('#btn-toggle-sidebar').click();assert.equal(await page.locator('#btn-toggle-sidebar').getAttribute('aria-expanded'),'true');await page.keyboard.press('Escape');assert.equal(await page.locator('aside').isVisible(),false);await page.locator('#btn-toggle-sidebar').click();await page.mouse.click(380,120);assert.equal(await page.locator('aside').isVisible(),false);
+  assert.deepEqual(errors,[]);
   console.log('PASS workspace: bounded live at 4 widths, one video follows view, 5 latest incidents, real SVG charts, paginated/filtered table, escaped titles, tree routes/deep link, settings groups and account validation.');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -34,6 +34,6 @@
  const pass=document.createElement('button');pass.textContent='Đổi mật khẩu';pass.onclick=()=>{document.body.append(overlay);form('change',user);};secondary.append(pass);
  const out=document.createElement('button');out.className='account-logout';out.title='Đăng xuất';out.setAttribute('aria-label','Đăng xuất');out.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 4H4v16h5M14 8l4 4-4 4M8 12h10"/></svg><span>Đăng xuất</span>';
  out.onclick=async()=>{out.disabled=true;try{await api('logout',{});location.reload();}catch(err){out.disabled=false;out.title=err.message;const status=document.createElement('p');status.setAttribute('role','alert');status.textContent=err.message;tools.append(status);}};
- tools.append(out);if(!document.getElementById('account-profile'))tools.append(secondary);(document.getElementById('account-sidebar')||document.querySelector('header')||document.body).append(tools);
+ tools.append(out);if(!document.getElementById('account-profile'))tools.append(secondary);(document.getElementById('account-sidebar')||document.getElementById('mobile-account-slot')||document.querySelector('header')||document.body).append(tools);
  }).catch(()=>form('login'));
 })();

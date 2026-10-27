@@ -19,6 +19,12 @@
   if(video.parentElement!==target){const playing=!video.paused&&!video.ended;target.append(video);if(playing)video.play().catch(()=>{});}
  };
  document.addEventListener('DOMContentLoaded',()=>{
+  const shell=document.getElementById('app'),menu=document.getElementById('btn-toggle-sidebar');
+  document.querySelector('aside').id='app-sidebar';menu.setAttribute('aria-controls','app-sidebar');
+  const syncMenu=()=>menu.setAttribute('aria-expanded',String(matchMedia('(max-width:900px)').matches?shell.classList.contains('sidebar-mobile-open'):!shell.classList.contains('sidebar-collapsed')));
+  new MutationObserver(syncMenu).observe(shell,{attributes:true,attributeFilter:['class']});syncMenu();
+  shell.addEventListener('click',e=>{if(e.target===shell)shell.classList.remove('sidebar-mobile-open');});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&shell.classList.contains('sidebar-mobile-open')){shell.classList.remove('sidebar-mobile-open');menu.focus();}});
   const primary=document.querySelector('.overview-primary'),secondary=document.querySelector('.overview-secondary');
   const [live,stats]=[...primary.children],[issues,area]=[...secondary.children];
   const left=document.createElement('div'),right=document.createElement('div');left.className=right.className='overview-column';
