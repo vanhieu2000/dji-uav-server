@@ -401,10 +401,39 @@ const flightTracker = createTracker({
   }
 });
 const gatewayOfAircraft = {}; // SN máy bay -> SN tay điều khiển (từ gói topo)
-const FLIGHT_SWEEP_MS = 5000;
+const FLIGHT_SWEEP_MS = 3000;
 const MEDIA_ATTACH_MS = 60000;
 setInterval(() => {
-  if (isDbConnected()) flightTracker.sweep().catch(err => console.warn('[Chuyến bay] sweep:', err.message));
+  if (isDbConnected()) {
+    flightTracker.sweep().catch(err => console.warn('[Chuyến bay] sweep:', err.message));
+  }
+  // Watchdog kiểm tra cả memoryStore để kịp thời báo OFFLINE tới WebSocket
+  const now = Date.now();
+  for (const [sn, dev] of Object.entries(memoryStore.devices)) {
+    if (dev.status !== 'OFFLINE' && dev.last_seen && (now - new Date(dev.last_seen).getTime() > 8000)) {
+      dev.status = 'OFFLINE';
+      if (isDbConnected()) {
+        query("UPDATE uav_devices SET status = 'OFFLINE' WHERE device_sn = ?", [sn]).catch(() => {});
+      }
+      broadcastWebSocket({
+        type: 'device_status',
+        device_sn: sn,
+        status: 'OFFLINE'
+      });
+      console.log(`[Watchdog] Drone ${sn} không gửi tin quá 8s -> Đã chuyển OFFLINE`);
+    }
+  }
+  for (const [sn, gw] of Object.entries(memoryStore.gateways)) {
+    if (gw.status !== 'OFFLINE' && gw.last_seen && (now - new Date(gw.last_seen).getTime() > 8000)) {
+      gw.status = 'OFFLINE';
+      broadcastWebSocket({
+        type: 'rc_status',
+        gateway_sn: sn,
+        status: 'OFFLINE'
+      });
+      console.log(`[Watchdog] Tay Cầm RC ${sn} không gửi tin quá 8s -> Đã chuyển OFFLINE`);
+    }
+  }
 }, FLIGHT_SWEEP_MS).unref();
 setInterval(() => {
   if (isDbConnected() && dbInitDone) flightTracker.attachMedia().catch(err => console.warn('[Chuyến bay] gắn ảnh:', err.message));
@@ -1734,6 +1763,8 @@ async function initDatabase() {
 
     const dangling = await flightTracker.closeDangling();
     if (dangling) console.log(`[Chuyến bay] Đóng ${dangling} chuyến còn mở từ lần chạy trước.`);
+    // Vừa khởi động: chưa nhận OSD nào nên mọi máy đều OFFLINE (tránh kẹt ONLINE ảo từ lần chạy trước)
+    await query("UPDATE uav_devices SET status = 'OFFLINE' WHERE status <> 'OFFLINE'");
     // Làm sạch ảnh nhận bằng code cũ (giá trị gán cứng) – chỉ chạm các dòng chưa có sha256
     const imported = await routeLibrary.importDiskKmz();
     if (imported) console.log(`[Đường bay] Đã đưa ${imported} file KMZ cũ trong uploads/waylines vào thư viện.`);

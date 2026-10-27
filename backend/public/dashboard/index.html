@@ -3414,29 +3414,55 @@ function setupRealtimeTelemetry(){
     renderMediaGrid();
    }
 
-   // 3. Telemetry OSD từ UAV hoặc Gateway
-   if(msg.type === 'osd' && msg.data){
-    const sn = msg.device_sn || msg.sn;
-    if(!gSelectedDroneSn && sn) gSelectedDroneSn = sn;
-    if(!gSelectedDroneSn || sn === gSelectedDroneSn){
-     window.gLastOsdAt = Date.now();
-     setDroneOnlineState(true, sn, msg.data);
+    // 3. Telemetry OSD từ UAV
+    if(msg.type === 'osd' && msg.data){
+     const sn = msg.device_sn || msg.sn;
+     if(!gSelectedDroneSn && sn) gSelectedDroneSn = sn;
+     if(!gSelectedDroneSn || sn === gSelectedDroneSn){
+      window.gLastOsdAt = Date.now();
+      setDroneOnlineState(true, sn, msg.data);
+     }
     }
-   }
 
-   // 3.1 Nhận sự kiện thay đổi trạng thái thiết bị từ Server (ONLINE / OFFLINE)
-   if(msg.type === 'device_status' || msg.type === 'device_offline' || msg.type === 'device_online'){
-    const sn = msg.device_sn || msg.sn;
-    const isOnline = msg.status === 'ONLINE' || msg.type === 'device_online';
-    if(!isOnline){
-     setDroneOnlineState(false, sn);
-    } else {
-     setDroneOnlineState(true, sn, msg.data);
+    // 3.0 Telemetry OSD từ Tay Cầm RC (Pilot 2 Gateway)
+    if(msg.type === 'rc_osd' && msg.data){
+     window.gLastRcOsdAt = Date.now();
+     window.gLastRcOsd = { ...(window.gLastRcOsd || {}), ...msg.data };
+     updateRcDisplay(window.gLastRcOsd);
     }
-   }
-  }catch(e){}
- };
- wsRealtime.onclose = () => { setTimeout(setupRealtimeTelemetry, 3000); };
+    if(msg.type === 'rc_status'){
+     if(msg.status === 'OFFLINE'){
+      if(window.gLastRcOsd) window.gLastRcOsd.status = 'OFFLINE';
+      updateRcDisplay({ status: 'OFFLINE' });
+     }
+    }
+
+    // 3.1 Nhận sự kiện thay đổi trạng thái thiết bị từ Server (ONLINE / OFFLINE)
+    if(msg.type === 'device_status' || msg.type === 'device_offline' || msg.type === 'device_online'){
+     const sn = msg.device_sn || msg.sn;
+     const isOnline = msg.status === 'ONLINE' || msg.type === 'device_online';
+     if(!isOnline){
+      setDroneOnlineState(false, sn);
+     } else {
+      setDroneOnlineState(true, sn, msg.data);
+     }
+    }
+   }catch(e){}
+  };
+  wsRealtime.onclose = () => { setTimeout(setupRealtimeTelemetry, 3000); };
+}
+
+let subDroneMarker = null;
+
+function updateRcDisplay(rc){
+ window.gRcState = rc;
+ const rcBat = rc && rc.battery != null ? rc.battery + '%' : '--%';
+ const rcOnline = rc && rc.status !== 'OFFLINE';
+ const rcText = document.getElementById('tab-btn-rc');
+ if(rcText){
+  rcText.innerText = `Sóng RC: ${rcOnline ? 'ONLINE (' + rcBat + ')' : 'OFFLINE'}`;
+  rcText.style.color = rcOnline ? '#34d399' : '#94a3b8';
+ }
 }
 
 function setDroneOnlineState(isOnline, sn, d){
@@ -3474,7 +3500,11 @@ function setDroneOnlineState(isOnline, sn, d){
   const elBatDash = document.getElementById('hud-bat-dash'); if(elBatDash) elBatDash.innerText = '—';
   const elThDash = document.getElementById('hud-th-dash'); if(elThDash) elThDash.innerText = '—';
   const manStatText = document.getElementById('manual-status-text');
-  if(manStatText) manStatText.innerText = 'Chưa kết nối';
+  if(manStatText) manStatText.innerText = 'Mavic 3T: OFFLINE';
+
+  if(droneMarker) droneMarker.setStyle({ color: '#94a3b8', fillColor: '#94a3b8' });
+  if(manualDroneMarker) manualDroneMarker.setStyle({ color: '#94a3b8', fillColor: '#94a3b8' });
+  if(subDroneMarker) subDroneMarker.setStyle({ color: '#94a3b8', fillColor: '#94a3b8' });
   return;
  }
 
@@ -3516,14 +3546,14 @@ function setDroneOnlineState(isOnline, sn, d){
  const manStatText = document.getElementById('manual-status-text');
  if(manStatText) manStatText.innerText = `Mavic 3T (${bat})`;
 
- // Cập nhật vị trí Marker trên bản đồ Solar và Manual
+ // Cập nhật vị trí Marker trên cả 3 bản đồ
  if(merged.lat && merged.lng){
   if(gMap){
    if(!droneMarker){
     droneMarker = L.circleMarker([merged.lat, merged.lng], { radius: 9, weight: 3, color: '#0284c7', fillColor: '#22c55e', fillOpacity: 0.9 }).addTo(gMap);
     droneMarker.bindPopup(`<b>Mavic 3T</b><br>${sn || 'UAV'}`);
    } else {
-    droneMarker.setLatLng([merged.lat, merged.lng]);
+    droneMarker.setLatLng([merged.lat, merged.lng]).setStyle({ color: '#0284c7', fillColor: '#22c55e' });
    }
   }
   if(gMapManual){
@@ -3531,7 +3561,15 @@ function setDroneOnlineState(isOnline, sn, d){
     manualDroneMarker = L.circleMarker([merged.lat, merged.lng], { radius: 9, weight: 3, color: '#0284c7', fillColor: '#22c55e', fillOpacity: 0.9 }).addTo(gMapManual);
     manualDroneMarker.bindPopup(`<b>Mavic 3T</b><br>${sn || 'UAV'}`);
    } else {
-    manualDroneMarker.setLatLng([merged.lat, merged.lng]);
+    manualDroneMarker.setLatLng([merged.lat, merged.lng]).setStyle({ color: '#0284c7', fillColor: '#22c55e' });
+   }
+  }
+  if(gMapSub){
+   if(!subDroneMarker){
+    subDroneMarker = L.circleMarker([merged.lat, merged.lng], { radius: 9, weight: 3, color: '#0284c7', fillColor: '#22c55e', fillOpacity: 0.9 }).addTo(gMapSub);
+    subDroneMarker.bindPopup(`<b>Mavic 3T</b><br>${sn || 'UAV'}`);
+   } else {
+    subDroneMarker.setLatLng([merged.lat, merged.lng]).setStyle({ color: '#0284c7', fillColor: '#22c55e' });
    }
   }
   if(gAutoFollow){
@@ -3539,6 +3577,8 @@ function setDroneOnlineState(isOnline, sn, d){
     gMap.panTo([merged.lat, merged.lng], { animate: true, duration: 0.5 });
    } else if(gMapManual && gCurrentView === 'control-manual'){
     gMapManual.panTo([merged.lat, merged.lng], { animate: true, duration: 0.5 });
+   } else if(gMapSub && gCurrentView === 'map-substation'){
+    gMapSub.panTo([merged.lat, merged.lng], { animate: true, duration: 0.5 });
    }
   }
  }
@@ -3548,12 +3588,12 @@ function refreshAllOsdDisplays(){
  setDroneOnlineState(Boolean(window.gDroneIsOnline), gSelectedDroneSn, window.gLastOsd);
 }
 
-// Watchdog: Nếu 15 giây không có OSD thì chuyển OFFLINE
+// Watchdog Frontend: Nếu quá 8 giây không có OSD thì chuyển OFFLINE dứt khoát
 setInterval(() => {
- if (window.gDroneIsOnline && window.gLastOsdAt && (Date.now() - window.gLastOsdAt > 15000)) {
+ if (window.gDroneIsOnline && window.gLastOsdAt && (Date.now() - window.gLastOsdAt > 8000)) {
   setDroneOnlineState(false, gSelectedDroneSn);
  }
-}, 4000);
+}, 2000);
 
 // Khởi tạo ban đầu: Kiểm tra trạng thái máy bay ngay từ Database
 async function checkInitialDroneStatus(){
@@ -3562,7 +3602,7 @@ async function checkInitialDroneStatus(){
   const d = await res.json();
   const list = d.data || [];
   const target = list.find(x => x.device_sn === gSelectedDroneSn) || list[0];
-  if(target && target.status === 'ONLINE' && target.last_seen && (Date.now() - new Date(target.last_seen).getTime() < 30000)){
+  if(target && target.status === 'ONLINE' && target.last_seen && (Date.now() - new Date(target.last_seen).getTime() < 8000)){
    window.gLastOsdAt = new Date(target.last_seen).getTime();
    setDroneOnlineState(true, target.device_sn, target);
   } else {
