@@ -1297,7 +1297,7 @@ function switchView(viewName){
   else {btn.classList.remove('on');btn.removeAttribute('aria-current');}
  });
 
- requestAnimationFrame(()=>{window.fitCompactNavigation?.();const active=document.querySelector('.nav-btn.on'),nav=document.querySelector('aside>.nav');if(active&&nav&&nav.getClientRects().length){const r=active.getBoundingClientRect(),n=nav.getBoundingClientRect();if(r.bottom>n.bottom)nav.scrollTop+=r.bottom-n.bottom+12;else if(r.top<n.top)nav.scrollTop-=n.top-r.top+12;}});
+ requestAnimationFrame(()=>{window.fitCompactNavigation?.();window.GIS?.Compact?.normalize();const active=document.querySelector('.nav-btn.on'),nav=document.querySelector('aside>.nav');if(active&&nav&&nav.getClientRects().length){const r=active.getBoundingClientRect(),n=nav.getBoundingClientRect();if(r.bottom>n.bottom)nav.scrollTop+=r.bottom-n.bottom+12;else if(r.top<n.top)nav.scrollTop-=n.top-r.top+12;}});
 
  // Ẩn tất cả view, chỉ hiện view được chọn
  document.querySelectorAll('.page-view').forEach(v=>{

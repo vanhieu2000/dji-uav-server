@@ -108,3 +108,9 @@ aside .nav-btn,aside .nav-tree>summary{min-width:0;max-width:100%;overflow:hidde
 #gis-fh-list table{min-width:0;table-layout:fixed;width:100%}
 .fh-device code{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:1100px){#gis-fp-routes>.tbl-wrap .btn,#gis-fh-list table .btn{font-size:11px;padding:4px 5px;min-height:30px;margin:1px}#gis-fh-list table th:nth-child(n+3):not(:last-child),#gis-fh-list table td:nth-child(n+3):not(:last-child){display:none}#gis-fh-list table th:first-child{width:40%}#gis-fh-list table th:nth-child(2){width:35%}#gis-fh-list table th:last-child{width:25%}}
+@media(max-height:500px){#view-dashboard.page-view.view-scrollable{padding-bottom:0}}
+.compact-dialog .gis-fp-form>p,.compact-dialog .gis-fp-form>.field:has(#gis-fp-name){grid-column:1/-1}
+.gis-tab-pane[data-pane=flights]:not([hidden]){grid-template-rows:auto minmax(130px,1fr) var(--fp-list-height,320px)}
+.gis-tab-pane[data-pane=history]:not([hidden]){grid-template-rows:auto minmax(130px,1fr) var(--fh-list-height,320px)}
+@media(max-height:650px){.gis-tab-pane[data-pane=flights]:not([hidden]){grid-template-rows:auto minmax(110px,1fr) min(var(--fp-list-height,320px),230px)}.gis-tab-pane[data-pane=history]:not([hidden]){grid-template-rows:auto minmax(110px,1fr) min(var(--fh-list-height,320px),230px)}}
+@media(max-height:500px){.gis-tab-pane[data-pane=flights]:not([hidden]){grid-template-rows:auto minmax(70px,1fr) min(var(--fp-list-height,320px),154px)}.gis-tab-pane[data-pane=history]:not([hidden]){grid-template-rows:auto minmax(70px,1fr) min(var(--fh-list-height,320px),154px)}}

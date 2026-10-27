@@ -129,6 +129,7 @@
   async function loadRoutes() {
     const res = await GIS.run(() => GIS.api('GET', '/api/flight-plans'));
     st.routes = res ? res.data : [];
+    st.root.style.setProperty('--fp-list-height',st.routes.length?(Math.min(3,st.routes.length)*50+170)+'px':'110px');
     st.root.querySelector('#gis-fp-routes').innerHTML = st.routes.length ? `<div class="tbl-wrap"><table>
       <thead><tr><th>Tên</th><th class="fp-metric">Kiểu</th><th class="fp-secondary">Hồ sơ</th><th class="fp-metric">Ảnh</th><th class="fp-metric">Thời gian</th><th class="fp-secondary">Phiếu</th><th></th></tr></thead>
       <tbody>${st.routes.map(r => `<tr data-id="${r.route_id}">
@@ -207,7 +208,7 @@
         const form=root.querySelector('.gis-fp-form'),map=root.querySelector('.gis-fp'),toolbar=document.createElement('div');toolbar.className='fp-toolbar';
         const config=document.createElement('button');config.type='button';config.className='btn';config.textContent='Cấu hình đường bay';config.onclick=()=>GIS.Compact.reveal(form,'Cấu hình đường bay');
         const params=document.createElement('button');params.type='button';params.className='btn';params.textContent='Thông số';params.id='gis-fp-info';params.disabled=true;params.onclick=()=>GIS.Compact.reveal(root.querySelector('#gis-fp-stats'),'Thông số đường bay');
-        toolbar.append(config,root.querySelector('#gis-fp-preview'),root.querySelector('#gis-fp-create'),params);root.prepend(toolbar);GIS.Compact.mount(form,'Cấu hình đường bay');form.previousElementSibling.remove();
+        toolbar.append(config,root.querySelector('#gis-fp-preview'),root.querySelector('#gis-fp-create'),params);root.prepend(toolbar);form.querySelectorAll('.gis-row').forEach(row=>{if(!row.childElementCount)row.remove();});GIS.Compact.mount(form,'Cấu hình đường bay');form.previousElementSibling.remove();
         root.querySelectorAll('[name="fp-kind"]').forEach(r => r.addEventListener('change', () => {
           renderForm();
           st.root.querySelector('#gis-fp-create').disabled = true;

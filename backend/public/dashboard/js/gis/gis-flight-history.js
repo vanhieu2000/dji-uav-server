@@ -33,6 +33,7 @@
     add('device_sn', '#gis-fh-sn'); add('ticket_id', '#gis-fh-ticket'); add('from', '#gis-fh-from'); add('to', '#gis-fh-to');
     const res = await GIS.run(() => GIS.api('GET', `/api/flights?${qs}`));
     const rows = res ? res.data : [];
+    st.root.style.setProperty('--fh-list-height',rows.length?(Math.min(3,rows.length)*50+170)+'px':'110px');
     f.querySelector('#gis-fh-list').innerHTML = rows.length ? `<div class="tbl-wrap"><table>
       <thead><tr><th>Bắt đầu</th><th>Máy bay</th><th>Phiếu</th><th class="num">Thời gian</th><th class="num">Ảnh</th><th>Kết thúc</th><th></th></tr></thead>
       <tbody>${rows.map(r => `<tr data-id="${r.flight_session_id}" class="gis-fh-row">

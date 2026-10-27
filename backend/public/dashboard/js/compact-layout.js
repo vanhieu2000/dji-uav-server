@@ -23,7 +23,7 @@
  function group(pane,id,nodes,title){if(pane.querySelector('#'+id)||!nodes[0])return;const box=document.createElement('section');box.id=id;box.className='ui-section';nodes[0].before(box);nodes.filter(Boolean).forEach(n=>box.append(n));mount(box,title);}
  function normalize(){
   document.querySelectorAll('.gis-tab-pane').forEach(pane=>{
-   for(const [id,title,label]of [['task-form','Thông tin & phân công','Tạo / sửa nhiệm vụ'],['task-detail','Tiến độ nhiệm vụ','Xem tiến độ'],['gis-fp-stats','Thông số đường bay','Xem thông số']]){const e=pane.querySelector('#'+id);if(e){const target=e.parentElement.classList.contains('ui-section')?e.parentElement:e,entry=entries.get(target);if(entry&&id==='task-detail')entry.slot.hidden=!e.childElementCount;if(id!=='task-detail'||e.childElementCount)mount(target,title,label);}}
+   for(const [id,title,label]of [['task-form','Thông tin & phân công','Tạo / sửa nhiệm vụ'],['task-detail','Tiến độ nhiệm vụ','Xem tiến độ'],['gis-fp-stats','Thông số đường bay','Xem thông số']]){const e=pane.querySelector('#'+id);if(e){const target=e.parentElement.classList.contains('ui-section')?e.parentElement:e,entry=entries.get(target);if(entry&&['task-detail','gis-fp-stats'].includes(id))entry.slot.hidden=!e.childElementCount;if(!['task-detail','gis-fp-stats'].includes(id)||e.childElementCount)mount(target,title,label);}}
    if(pane.dataset.pane==='history'&&!pane.dataset.compactHistory){
     const grid=pane.querySelector('.gis-fp'),card=pane.querySelector('.gis-fp-form'),filter=pane.querySelector('#gis-fh-filter');
     if(grid&&card&&filter){pane.dataset.compactHistory='1';pane.prepend(filter);grid.after(card);card.classList.add('compact-history-list');}
