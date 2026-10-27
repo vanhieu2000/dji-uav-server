@@ -232,7 +232,6 @@
   /* ---------------- Gắn vào bản đồ ---------------- */
 
   GIS.attachMap = function (map, options = {}) {
-    if (GIS.LiveMonitor) GIS.LiveMonitor.addMap(map);
     const kind = options.kind || 'solar';
     const visible = new Set(options.visible || DEFAULT_VISIBLE[kind] || DEFAULT_VISIBLE.solar);
     const groups = {};
@@ -251,6 +250,8 @@
     });
 
     const layerControl = L.control.layers(null, overlays, { position: 'topright', collapsed: true }).addTo(map);
+    map.uavLayerControl = layerControl;
+    if (GIS.LiveMonitor) GIS.LiveMonitor.addMap(map);
     createSearchControl(ctl).addTo(map);
 
     const hintEl = L.DomUtil.create('div', 'gis-map-hint', map.getContainer());

@@ -114,7 +114,9 @@
       if (maps.has(map)) return;
       const uavs = L.layerGroup().addTo(map), images = L.layerGroup().addTo(map);
       maps.set(map, { uavs, images, devices: new Map() });
-      L.control.layers(null, { 'UAV trực tiếp': uavs, 'Ảnh đã nhận': images }, { collapsed: true }).addTo(map);
+      const control = map.uavLayerControl || (map.uavLayerControl = L.control.layers(null, {}, { collapsed: true }).addTo(map));
+      control.addOverlay(uavs, 'UAV trực tiếp');
+      control.addOverlay(images, 'Ảnh đã nhận');
       draw();
     },
     onEvent(msg) {

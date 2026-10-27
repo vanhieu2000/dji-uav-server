@@ -383,3 +383,6 @@ Bản clone local cuối cùng đã qua Chromium với API thật: login/change-
 
 ### Launcher một nút – 27/10/2026
 CHAY_LOCAL.bat + PowerShell wizard + Node launcher: nhập MySQL một lần ngoài git, dependency theo lockfile, init/migrate an toàn, chỉ tạo admin chưa có, chờ health rồi mở browser, giữ nguyên tài khoản/dữ liệu và tái dùng server khi bấm lại. 79 test đạt; wizard PowerShell7 đã test bằng stub, chưa thao tác GUI Windows thật.
+
+### Rà soát giao diện – 27/10/2026
+Bỏ HUD số đo trùng ở bản đồ pin; định vị overlay theo khung bản đồ, gộp lớp UAV/ảnh và lớp tài sản vào một bộ chọn. Tài khoản, đổi mật khẩu, quản trị và nút đăng xuất nhỏ nằm trong sidebar; sidebar thu gọn vẫn giữ nút đăng xuất, màn hình nhỏ có menu mở được và bản đồ mặc định đóng panel chi tiết. Sidebar cuộn menu riêng để giữ tài khoản ở chân; bỏ số liệu mẫu ban đầu khi chưa tải dữ liệu. Browser regression kiểm tra 1440/1024/768/390px, hai bản đồ, các mục chính, sidebar, realtime và mobile; 79/79 test backend đạt. Chưa kiểm chứng điều khiển UAV vật lý.

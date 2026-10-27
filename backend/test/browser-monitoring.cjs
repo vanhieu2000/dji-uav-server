@@ -18,6 +18,7 @@ const path=require('path');const req=require('module').createRequire(path.resolv
    if(u.pathname==='/api/tickets')data=[{ticket_id:1,ticket_code:'TEST-1',ticket_name:'Phiếu thử'}];
    if(u.pathname==='/api/monitoring/photos')data={items:[],next_id:0,has_more:false};
    if(u.pathname==='/api/monitoring/devices')data=[{device_sn:'UAV-A',lat:10,lng:106,battery:0,status:'ONLINE',last_seen:new Date().toISOString()},{device_sn:'UAV-B',lat:10.001,lng:106.001,battery:50,status:'ONLINE',last_seen:new Date().toISOString()}];
+   if(u.pathname==='/api/assets/tree')data={plant:{plant_id:1,plant_code:'TEST',plant_name:'Fixture'},areas:[],substations:[]};
    if(u.pathname==='/api/assets/features')data={};
    if(u.pathname==='/api/reports/overview')data={completed_tickets:0,total_tickets:1,total_defects_found:0,overheated_disconnectors:0,max_disconnector_temperature:null};
    return route.fulfill({json:{code:0,data}});
@@ -33,11 +34,29 @@ const path=require('path');const req=require('module').createRequire(path.resolv
   await page.evaluate(()=>GIS.LiveMonitor.onEvent({type:'device_status',device_sn:'UAV-B',status:'OFFLINE'}));
   assert.match(await page.locator('#uav-live-devices').innerText(),/UAV-B · OFFLINE/);
   assert.match(await page.locator('#uav-live-devices').innerText(),/UAV-A · ONLINE · 0%/);
+  assert.equal(await page.locator('#account-sidebar #account-tools').count(),1);
+  assert.equal(await page.locator('.thermal-hud-meter').count(),0);
+  for(const width of [1440,1024,768,390]){
+   await page.setViewportSize({width,height:900});
+   for(const view of ['map-solar','map-substation']){
+    await page.evaluate(v=>switchView(v),view);await page.waitForTimeout(350);
+    const b=await page.evaluate(()=>{const v=document.querySelector('.page-view.active'),m=v.querySelector('.mapbox').getBoundingClientRect(),o=v.querySelector('.map-osd-topbar').getBoundingClientRect(),t=v.querySelector('.map-left-toolbar').getBoundingClientRect();return {mw:m.width,mh:m.height,mx:m.x,mr:m.right,mb:m.bottom,ox:o.x,or:o.right,ob:o.bottom,ty:t.y,overflow:document.documentElement.scrollWidth>innerWidth};});
+    assert.ok(b.mw>200&&b.mh>300,JSON.stringify({width,view,b}));
+    assert.ok(b.ox>=b.mx&&b.or<=b.mr+1&&b.ob<=b.mb,JSON.stringify({width,view,b}));
+    assert.ok(b.ty>=b.ob,JSON.stringify({width,view,b}));assert.equal(b.overflow,false);
+   }
+   if(width<900){await page.locator('#btn-toggle-sidebar').click();assert.ok(await page.locator('#account-sidebar .account-logout').isVisible());await page.locator('aside [data-target="map-solar"]').click();assert.equal(await page.locator('aside').isVisible(),false);}
+  }
+  await page.setViewportSize({width:1440,height:900});await page.evaluate(()=>switchView('map-solar'));
+  await page.locator('#btn-toggle-sidebar').click();assert.ok(await page.locator('#account-sidebar .account-logout').isVisible());await page.locator('#btn-toggle-sidebar').click();
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('#real-gis-map .leaflet-control-layers').count(),1);
   if(process.env.BROWSER_SCREENSHOT) await page.screenshot({path:process.env.BROWSER_SCREENSHOT,fullPage:false});
   await page.evaluate(()=>{triggerPhoto();startSimulatedMissionFlight();toggleSimulated3Cams();GIS.Tasks.render(document.getElementById('gis-assets-root'));});
   await page.waitForSelector('#task-form',{state:'attached'});
   await page.evaluate(()=>GIS.Insights.reports());
   await page.waitForSelector('#insights-reports-root .gis-empty',{state:'attached'});
+  for(const view of ['dashboard','tickets-solar','tickets-dcl','control-manual','uav','reports','assets','admin']){await page.evaluate(v=>switchView(v),view);await page.waitForTimeout(150);assert.equal(await page.locator('.page-view.active').count(),1);}
   assert.deepEqual(commands,[]);assert.deepEqual(errors,[]);assert.deepEqual(externalLibraries,[]);assert.ok(await page.evaluate(()=>!!(window.L?.PM&&window.flvjs&&window.XLSX?.utils)));
   await page.goto(base+'/accounts.html');await page.waitForSelector('#permission-checks input');assert.equal(await page.locator('#permission-checks input').count(),6);assert.equal(await page.locator('#message').innerText(),'');assert.deepEqual(errors,[]);
   console.log('PASS '+engineName+': dashboard boots, two UAV markers, zero battery, offline event, realtime photo; task UI mounts, legacy simulation sends no commands; no page errors');
