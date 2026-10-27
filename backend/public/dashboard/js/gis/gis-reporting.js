@@ -45,7 +45,7 @@
  let days='30',page=1,q='',status='',level='',reportRequest=0,tableRequest=0,focusTable=false;
  async function table(box,request){
   const id=++tableRequest,el=box.querySelector('#report-issue-table');el.innerHTML=empty('Đang tải bảng sự cố…');
-  const params=new URLSearchParams({days,page:String(page),page_size:'20',q,status,level});
+  const params=new URLSearchParams({days,page:String(page),page_size:String(innerHeight<550?1:5),q,status,level});
   try{
    const r=await GIS.api('GET','/api/insights/alert-report?'+params);if(id!==tableRequest||request!==reportRequest)return;const d=r.data;
    const image=url=>{try{const u=new URL(url,location.origin);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password?`<a href="${esc(u.href)}" target="_blank" rel="noopener noreferrer">Xem ảnh</a>`:'';}catch{return '';}};

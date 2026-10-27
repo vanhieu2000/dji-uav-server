@@ -28,3 +28,9 @@ Sau khi cập nhật mã có thay đổi backend: đóng cửa sổ server cũ, 
 Các màn dùng chung nhãn ở trên ô nhập, khối bộ lọc, bảng danh sách và các khối nhập liệu có viền. Nhiệm vụ và cảnh báo có lọc từ khóa/trạng thái và phân trang 15 dòng. Những bảng lịch sử/danh sách đã tải có ô Tìm trong danh sách và phân trang 20 dòng; chức năng này lọc trên dữ liệu hiện có, kết hợp với bộ lọc máy chủ của từng màn. Cảnh báo quản lý tối đa 500 mục gần nhất; muốn tra toàn bộ dùng Báo cáo.
 
 Tại các màn nhập ảnh/Excel/ZIP, bấm Chọn tệp hoặc Chọn thư mục ảnh. Vùng bên dưới liệt kê tên/dung lượng và xem trước ảnh đọc được trong trình duyệt. Chọn tệp chỉ chuẩn bị dữ liệu trên máy; nút Nhập/Tải lên riêng mới gửi tệp đến server. Preview giới hạn 4 ảnh trên màn hình nhỏ hoặc 12 ảnh trên desktop; toàn bộ tệp được giữ nguyên để xử lý. File không phải ảnh vẫn có danh sách tên/dung lượng; module Excel có bước kiểm tra nội dung riêng.
+
+## Chế độ xem gọn
+
+Tên màn hình nằm ở thanh trên; bỏ tiêu đề lớn lặp. Trang Lập đường bay luôn dành chỗ cho cả bản đồ và bảng tuyến. Bấm Cấu hình đường bay để nhập tham số; đóng view giữ nguyên bản nháp, sau đó Xem trước/Tạo KMZ bằng toolbar. Thông số và Chi tiết đường bay mở view riêng, chứa cả hồ sơ, gán phiếu, tải KMZ và xóa. Trên màn hình nhỏ, bảng chỉ giữ các cột chính; bấm Chi tiết để xem đủ.
+
+Sidebar mở từng nhóm. Nếu màn hình thấp không đủ chỗ, bấm nhóm sẽ mở danh mục chức năng trong popup thay vì cuộn sidebar. Các phần dài dùng nút Mở view/Xem chi tiết; chỉ nội dung popup được phép cuộn khi cần. Dialog hỗ trợ Đóng, Escape và chạm nền ngoài. Bản đồ trong view lịch sử là chính bản đồ đang dùng, được trả lại vị trí cũ khi đóng.

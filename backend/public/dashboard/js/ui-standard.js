@@ -23,6 +23,7 @@
   });
  }
  function tableTools(t){
+  if(t.dataset.noPaging)return;
   if(t.closest('#task-list,#insight-alerts,#report-issue-table,.ui-file-preview,.leaflet-pane,.leaflet-control'))return;
   let st=tables.get(t);
   const rows=[...t.querySelectorAll('tbody>tr')].filter(r=>r.querySelector('td')&&!r.querySelector('td[colspan]'));
@@ -31,10 +32,11 @@
    const tools=document.createElement('div');tools.className='ui-filterbar';const label=document.createElement('label');label.textContent='Tìm trong danh sách';const search=document.createElement('input');search.type='search';search.className='input';search.placeholder='Nhập từ khóa…';label.append(search);tools.append(label);
    const footer=document.createElement('div');footer.className='ui-pagination';const count=document.createElement('span'),actions=document.createElement('div'),prev=document.createElement('button'),next=document.createElement('button');prev.type=next.type='button';prev.className=next.className='btn sm';prev.textContent='Trước';next.textContent='Sau';actions.append(prev,next);footer.append(count,actions);t.parentElement.before(tools);t.parentElement.after(footer);
    st={rows:[],page:1,search,tools,footer,count,prev,next};tables.set(t,st);
-   st.draw=()=>{const q=search.value.trim().toLocaleLowerCase('vi'),matches=st.rows.filter(r=>!q||r.textContent.toLocaleLowerCase('vi').includes(q)),pages=Math.max(1,Math.ceil(matches.length/20));st.page=Math.min(st.page,pages);const shown=new Set(matches.slice((st.page-1)*20,st.page*20));st.rows.forEach(r=>r.hidden=!shown.has(r));count.textContent=matches.length+' dòng · Trang '+st.page+'/'+pages;prev.disabled=st.page===1;next.disabled=st.page===pages;};search.oninput=()=>{st.page=1;st.draw();};prev.onclick=()=>{st.page--;st.draw();};next.onclick=()=>{st.page++;st.draw();};
+   st.draw=()=>{const size=t.closest('#gis-fp-routes,#gis-fh-list')?(innerHeight<500?1:innerHeight<650?2:3):(innerHeight<550?3:6),q=search.value.trim().toLocaleLowerCase('vi'),matches=st.rows.filter(r=>!q||r.textContent.toLocaleLowerCase('vi').includes(q)),pages=Math.max(1,Math.ceil(matches.length/size));st.page=Math.min(st.page,pages);const shown=new Set(matches.slice((st.page-1)*size,st.page*size));st.rows.forEach(r=>r.hidden=!shown.has(r));count.textContent=matches.length+' dòng · Trang '+st.page+'/'+pages;prev.disabled=st.page===1;next.disabled=st.page===pages;};search.oninput=()=>{st.page=1;st.draw();};prev.onclick=()=>{st.page--;st.draw();};next.onclick=()=>{st.page++;st.draw();};
   }
   st.rows=rows;st.draw();t.dataset.uiReady='true';
  }
+ window.addEventListener('resize',()=>tables.forEach(st=>st.draw()));
  const blocks={'task-list':'Danh sách nhiệm vụ','task-form':'Thông tin & phân công','task-detail':'Tiến độ & dữ liệu nhiệm vụ','task-team':'Tổ công tác','task-scope':'Phạm vi đã chọn','gis-mi-result':'Kết quả nhập ảnh','gis-ds-preview':'Xem trước bộ ảnh xuất','insight-trend':'Biểu đồ & lịch sử nhiệt','insight-dcl-table':'Danh sách DCL đã kiểm tra','insight-alerts':'Danh sách cảnh báo'};
  function normalize(){
   document.querySelectorAll('#view-assets,#view-admin,.rtc-admin').forEach(root=>{
@@ -53,6 +55,7 @@
    root.querySelectorAll('table').forEach(t=>{t.classList.add('ui-table');if(!t.parentElement.matches('.tbl-wrap,.scroll,.ui-table-scroll')){const w=document.createElement('div');w.className='ui-table-scroll';t.before(w);w.append(t);}tableTools(t);});
   });
   const hints={'gis-ds-preview':'Chọn bộ lọc và bấm Xem trước để kiểm tra bộ ảnh trước khi xuất.','insight-trend':'Tìm và chọn thiết bị, sau đó bấm Xem lịch sử.','insight-dcl-table':'Chọn phiếu và bấm Tải danh sách để xem các lần kiểm tra.'};Object.entries(hints).forEach(([id,text])=>{const el=document.getElementById(id);if(el&&!el.childNodes.length){const p=document.createElement('p');p.className='gis-empty';p.textContent=text;el.append(p);}});
+  GIS.Compact?.normalize();
   for(const [table,state]of tables)if(!table.isConnected){state.tools.remove();state.footer.remove();tables.delete(table);}
   for(const [input,state]of previews)if(!input.isConnected){state.urls.forEach(URL.revokeObjectURL);previews.delete(input);}
  }

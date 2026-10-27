@@ -38,7 +38,7 @@
         ${plantReady ? `<option value="plant:${plant.plant_id}">Toàn nhà máy ${esc(plant.plant_code)} (theo ranh giới nhà máy – dùng cho quét bản đồ 2D)</option>` : ''}
         ${areas.map(a => `<option value="${a.area_id}" ${a.has_polygon ? '' : 'disabled'} ${a === ready[0] ? 'selected' : ''}>${esc(a.area_code)} – ${esc(a.area_name)}${a.has_polygon ? '' : ' (chưa vẽ ranh giới)'}</option>`).join('')}
       </select></div>
-      ${ready.length || plantReady ? '' : '<div class="gis-warn">Tuyến quét lưới cần ranh giới khu hoặc nhà máy. Vào tab <b>Cây tài sản & bản đồ</b> → chọn khu → <b>Vẽ ranh giới</b> → Lưu.</div>'}`;
+      ${ready.length || plantReady ? '' : '<div class="gis-warn">Tuyến quét lưới cần ranh giới khu hoặc nhà máy. Vào <b>Nhà máy & thiết bị kiểm tra</b> → chọn khu → <b>Vẽ ranh giới</b> → Lưu.</div>'}`;
     } else {
       box.innerHTML = `<div class="field"><span class="gis-field-label">Tài sản (dùng các điểm chụp ảnh đã khai báo)</span><div class="gis-tgt-list">${targetList()}</div></div>`;
     }
@@ -78,6 +78,7 @@
   }
 
   function renderStats(plan) {
+    const info=st.root.querySelector('#gis-fp-info');if(info)info.disabled=false;
     const s = plan.stats;
     const geo = plan.geometry || {};
     st.root.querySelector('#gis-fp-stats').innerHTML = `
@@ -106,7 +107,7 @@
   async function preview() {
     const body = readBody();
     const problem = checkBody(body);
-    if (problem) { GIS.toast(problem, 'error'); return; }
+    if (problem) { GIS.Compact.reveal(st.root.querySelector('.gis-fp-form'),'Cấu hình đường bay');GIS.toast(problem, 'error'); return; }
     const res = await GIS.run(() => GIS.api('POST', '/api/flight-plans/preview', body));
     if (!res) return;
     st.lastPreview = res.data;
@@ -118,7 +119,7 @@
   async function create() {
     const body = readBody();
     const problem = checkBody(body) || (!body.route_name ? 'Nhập tên đường bay' : null);
-    if (problem) { GIS.toast(problem, 'error'); return; }
+    if (problem) { GIS.Compact.reveal(st.root.querySelector('.gis-fp-form'),'Cấu hình đường bay');GIS.toast(problem, 'error'); return; }
     const res = await GIS.run(() => GIS.api('POST', '/api/flight-plans', body));
     if (!res) return;
     GIS.toast(res.message);
@@ -129,16 +130,16 @@
     const res = await GIS.run(() => GIS.api('GET', '/api/flight-plans'));
     st.routes = res ? res.data : [];
     st.root.querySelector('#gis-fp-routes').innerHTML = st.routes.length ? `<div class="tbl-wrap"><table>
-      <thead><tr><th>Tên</th><th>Kiểu</th><th>Hồ sơ</th><th>Ảnh</th><th>Thời gian</th><th>Phiếu (Pilot 2 thấy tuyến khi chọn phiếu)</th><th></th></tr></thead>
+      <thead><tr><th>Tên</th><th class="fp-metric">Kiểu</th><th class="fp-secondary">Hồ sơ</th><th class="fp-metric">Ảnh</th><th class="fp-metric">Thời gian</th><th class="fp-secondary">Phiếu</th><th></th></tr></thead>
       <tbody>${st.routes.map(r => `<tr data-id="${r.route_id}">
-        <td><b>${esc(r.route_name)}</b><div class="faint">${esc(r.target_area || '')} · ${esc(new Date(r.created_at).toLocaleString('vi-VN'))}</div></td>
-        <td>${r.route_kind === 'GRID' ? 'Quét lưới' : r.route_kind === 'POINTS' ? 'Điểm' : 'Vẽ tay'}</td>
-        <td>${esc(r.profile_name || '')}</td>
-        <td class="num">${esc(r.photo_count ?? '')}</td>
-        <td class="num">${r.duration_s ? fmtTime(r.duration_s) : ''}</td>
-        <td><div class="gis-row gis-tk-chips">${(r.tickets || []).map(t => `<span class="gis-chip gis-tk-chip">${esc(t.ticket_code)} <button type="button" data-act="untk" data-tk="${t.ticket_id}" aria-label="Bỏ gán phiếu">×</button></span>`).join('')}
+        <td><b title="${esc(r.route_name)}">${esc(r.route_name)}</b><div class="faint">${esc(r.target_area || '')} · ${esc(new Date(r.created_at).toLocaleString('vi-VN'))}</div></td>
+        <td class="fp-metric">${r.route_kind === 'GRID' ? 'Quét lưới' : r.route_kind === 'POINTS' ? 'Điểm' : 'Vẽ tay'}</td>
+        <td class="fp-secondary">${esc(r.profile_name || '')}</td>
+        <td class="num fp-metric">${esc(r.photo_count ?? '')}</td>
+        <td class="num fp-metric">${r.duration_s ? fmtTime(r.duration_s) : ''}</td>
+        <td class="fp-secondary"><div class="gis-row gis-tk-chips">${(r.tickets || []).map(t => `<span class="gis-chip gis-tk-chip">${esc(t.ticket_code)} <button type="button" data-act="untk" data-tk="${t.ticket_id}" aria-label="Bỏ gán phiếu">×</button></span>`).join('')}
           <select class="input gis-tk-add" aria-label="Gán vào phiếu"><option value="">+ gán phiếu</option>${st.tickets.filter(t => !(r.tickets || []).some(x => x.ticket_id === t.ticket_id)).map(t => `<option value="${t.ticket_id}">${esc(t.ticket_code)}</option>`).join('')}</select></div></td>
-        <td class="gis-row"><button class="btn sm" data-act="show">Xem</button><a class="btn sm" href="${esc(r.kmz_url)}" download>KMZ</a><button class="btn sm danger" data-act="del">Xóa</button></td>
+        <td class="gis-row"><button class="btn sm" data-act="show">Xem</button><button class="btn sm" type="button" data-act="details">Chi tiết</button><a class="btn sm fp-secondary-action" href="${esc(r.kmz_url)}" download>KMZ</a><button class="btn sm danger fp-secondary-action" data-act="del">Xóa</button></td>
       </tr>`).join('')}</tbody></table></div>` : '<div class="gis-empty">Chưa có đường bay nào.</div>';
   }
 
@@ -147,6 +148,10 @@
     const act = e.target.closest('[data-act]');
     if (!row || !act) return;
     const id = Number(row.dataset.id);
+    if(act.dataset.act==='details'){
+      const detail=document.createElement('div');detail.className='fp-record-detail';detail.dataset.compactInline='1';const table=document.createElement('table');table.dataset.noPaging='1';const body=document.createElement('tbody');
+      ['Đường bay','Kiểu','Hồ sơ chụp','Số ảnh','Thời gian','Gán vào phiếu','Thao tác'].forEach((label,i)=>{const tr=document.createElement('tr');tr.dataset.id=String(id);const th=document.createElement('th'),td=document.createElement('td');th.textContent=label;const cloned=row.cells[i].cloneNode(true);while(cloned.firstChild)td.append(cloned.firstChild);td.querySelector('[data-act=details]')?.remove();tr.append(th,td);body.append(tr);});table.append(body);detail.append(table);st.root.querySelector('#gis-fp-routes').append(detail);GIS.Compact.reveal(detail,'Chi tiết đường bay');detail.closest('dialog').addEventListener('close',()=>detail.remove(),{once:true});return;
+    }
     if (act.dataset.act === 'show') {
       const res = await GIS.run(() => GIS.api('GET', `/api/flight-plans/${id}`));
       if (res && res.data.plan) { drawPlan(res.data.plan); renderStats(res.data.plan); }
@@ -199,6 +204,10 @@
             <section class="gis-fp-mapbox"><div id="gis-fp-map"></div></section>
           </div>
           <section class="card flat gis-fp-list"><h3 class="gis-fp-list-title">Đường bay đã tạo</h3><div id="gis-fp-routes"></div></section>`;
+        const form=root.querySelector('.gis-fp-form'),map=root.querySelector('.gis-fp'),toolbar=document.createElement('div');toolbar.className='fp-toolbar';
+        const config=document.createElement('button');config.type='button';config.className='btn';config.textContent='Cấu hình đường bay';config.onclick=()=>GIS.Compact.reveal(form,'Cấu hình đường bay');
+        const params=document.createElement('button');params.type='button';params.className='btn';params.textContent='Thông số';params.id='gis-fp-info';params.disabled=true;params.onclick=()=>GIS.Compact.reveal(root.querySelector('#gis-fp-stats'),'Thông số đường bay');
+        toolbar.append(config,root.querySelector('#gis-fp-preview'),root.querySelector('#gis-fp-create'),params);root.prepend(toolbar);GIS.Compact.mount(form,'Cấu hình đường bay');form.previousElementSibling.remove();
         root.querySelectorAll('[name="fp-kind"]').forEach(r => r.addEventListener('change', () => {
           renderForm();
           st.root.querySelector('#gis-fp-create').disabled = true;

@@ -34,14 +34,15 @@
     const res = await GIS.run(() => GIS.api('GET', `/api/flights?${qs}`));
     const rows = res ? res.data : [];
     f.querySelector('#gis-fh-list').innerHTML = rows.length ? `<div class="tbl-wrap"><table>
-      <thead><tr><th>Bắt đầu</th><th>Máy bay</th><th>Phiếu</th><th class="num">Thời gian</th><th class="num">Ảnh</th><th>Kết thúc</th></tr></thead>
+      <thead><tr><th>Bắt đầu</th><th>Máy bay</th><th>Phiếu</th><th class="num">Thời gian</th><th class="num">Ảnh</th><th>Kết thúc</th><th></th></tr></thead>
       <tbody>${rows.map(r => `<tr data-id="${r.flight_session_id}" class="gis-fh-row">
         <td>${esc(dt(r.started_at))}</td>
-        <td><code>${esc(r.device_sn)}</code></td>
+        <td class="fh-device" title="${esc(r.device_sn)}"><code>${esc(r.device_sn)}</code></td>
         <td>${r.ticket_code ? esc(r.ticket_code) : '<span class="faint">–</span>'}</td>
         <td class="num">${r.ended_at ? esc(dur(r.duration_s)) : '<span class="tag ok">Đang bay</span>'}</td>
         <td class="num">${esc(r.photo_count)}</td>
         <td>${r.end_reason ? `<span class="tag ${r.end_reason === 'LANDED' ? 'ok' : 'warn'}">${esc(REASON[r.end_reason] || r.end_reason)}</span>` : ''}</td>
+        <td><button type="button" class="btn sm">Chi tiết</button></td>
       </tr>`).join('')}</tbody></table></div>`
       : '<div class="gis-empty">Chưa có chuyến bay nào. Chuyến bay được ghi tự động khi máy bay cất cánh trong lúc kết nối với server.</div>';
   }
@@ -152,6 +153,7 @@
     st.root.querySelectorAll('.gis-fh-row').forEach(r => r.classList.toggle('on', Number(r.dataset.id) === id));
     drawFlight(res.data);
     renderDetail(res.data);
+    GIS.Compact?.reveal(st.root.querySelector('#gis-fh-detail'),'Chi tiết chuyến bay');
   }
 
   GIS.FlightHistory = {
