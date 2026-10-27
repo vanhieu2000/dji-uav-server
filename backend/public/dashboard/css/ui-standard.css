@@ -57,3 +57,12 @@
 
 #view-assets .ui-table details{border:0;padding:0;margin:6px 0}
 #view-assets .ui-table details summary{font-size:11px;font-weight:500}
+#view-container [hidden]{display:none!important}
+#view-assets .input,#view-admin .input{font-weight:400}
+#view-assets input[type=checkbox],#view-admin input[type=checkbox]{accent-color:var(--brand,#0d6e6e);width:17px;height:17px}
+#view-assets .btn:disabled,#view-admin .btn:disabled{opacity:.5;cursor:not-allowed}
+@media(min-width:1400px){.ui-form>.grid.g-2{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.ui-toolbar{padding:14px;border:1px solid var(--line,#dbe2e0);border-radius:10px;background:var(--surface2,#f5f7f6)}
+.ui-table .ui-toolbar{padding:0;border:0;background:transparent;margin:0}
+.ui-toolbar .btn{white-space:normal;text-align:center;justify-content:center}
+@media(min-width:901px){.card:has(>#task-new){position:relative}.card>#task-new{position:absolute;right:24px;top:20px}.card:has(>#task-new)>h2,.card:has(>#task-new)>p{padding-right:160px}}

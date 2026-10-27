@@ -30,6 +30,7 @@
   }
 
   function onPick(e) {
+    for(const id of ['gis-mi-dir','gis-mi-files']){const other=st.root.querySelector('#'+id);if(other!==e.target&&other.files.length){other.value='';other.dispatchEvent(new Event('uav:file-reset'));}}
     st.files = [...e.target.files].filter(f => /\.jpe?g$/i.test(f.name));
     const total = st.files.reduce((s, f) => s + f.size, 0);
     st.root.querySelector('#gis-mi-info').textContent =
@@ -64,6 +65,7 @@
     if (!ticketId) { GIS.toast('Chọn phiếu kiểm tra', 'error'); return; }
     if (!st.files.length || st.busy) return;
     st.busy = true;
+    st.root.querySelectorAll('input[type=file],.ui-file-toolbar button,#gis-mi-ticket,#gis-mi-route').forEach(el=>el.disabled=true);
     st.results = [];
     const btn = st.root.querySelector('#gis-mi-start');
     const bar = st.root.querySelector('#gis-mi-progress');
@@ -90,6 +92,7 @@
       GIS.toast(`Xong: ${st.results.filter(x => x.status === 'created').length} ảnh mới`);
     } finally {
       st.busy = false;
+      st.root.querySelectorAll('input[type=file],.ui-file-toolbar button,#gis-mi-ticket,#gis-mi-route').forEach(el=>el.disabled=false);
       btn.disabled = false;
       btn.textContent = '⬆️ Nhập ảnh';
       bar.hidden = true;

@@ -10,6 +10,7 @@
   input.classList.add('ui-native-file');input.after(toolbar);toolbar.append(button,count);
   const box=document.createElement('div');box.className='ui-file-preview';box.innerHTML='<p class="gis-empty">Tệp đã chọn và ảnh xem trước sẽ hiển thị tại đây.</p>';toolbar.after(box);
   const state={urls:[],box};previews.set(input,state);
+  input.addEventListener('uav:file-reset',()=>{state.urls.forEach(URL.revokeObjectURL);state.urls=[];count.textContent='Chưa chọn tệp';box.innerHTML='<p class="gis-empty">Tệp đã chọn và ảnh xem trước sẽ hiển thị tại đây.</p>';});
   input.addEventListener('change',()=>{
    state.urls.forEach(URL.revokeObjectURL);state.urls=[];
    const selected=[...input.files];count.textContent=selected.length+' tệp · '+(selected.reduce((s,f)=>s+f.size,0)/1048576).toFixed(1)+' MB';
@@ -32,7 +33,7 @@
    st={rows:[],page:1,search,tools,footer,count,prev,next};tables.set(t,st);
    st.draw=()=>{const q=search.value.trim().toLocaleLowerCase('vi'),matches=st.rows.filter(r=>!q||r.textContent.toLocaleLowerCase('vi').includes(q)),pages=Math.max(1,Math.ceil(matches.length/20));st.page=Math.min(st.page,pages);const shown=new Set(matches.slice((st.page-1)*20,st.page*20));st.rows.forEach(r=>r.hidden=!shown.has(r));count.textContent=matches.length+' dòng · Trang '+st.page+'/'+pages;prev.disabled=st.page===1;next.disabled=st.page===pages;};search.oninput=()=>{st.page=1;st.draw();};prev.onclick=()=>{st.page--;st.draw();};next.onclick=()=>{st.page++;st.draw();};
   }
-  st.rows=rows;st.draw();
+  st.rows=rows;st.draw();t.dataset.uiReady='true';
  }
  const blocks={'task-list':'Danh sách nhiệm vụ','task-form':'Thông tin & phân công','task-detail':'Tiến độ & dữ liệu nhiệm vụ','task-team':'Tổ công tác','task-scope':'Phạm vi đã chọn','gis-mi-result':'Kết quả nhập ảnh','gis-ds-preview':'Xem trước bộ ảnh xuất','insight-trend':'Biểu đồ & lịch sử nhiệt','insight-dcl-table':'Danh sách DCL đã kiểm tra','insight-alerts':'Danh sách cảnh báo'};
  function normalize(){
