@@ -142,3 +142,5 @@
  #account-profile{grid-template-columns:85px minmax(0,1fr)}
 }
 @media(max-height:500px) and (max-width:900px){.live-pip-window{height:155px;max-height:calc(100% - 100px)}.map-left-toolbar{top:90px}.map-osd-topbar{font-size:10px}.top{height:46px!important}}
+/* Keep map/live overlay z-indexes beneath the mobile navigation drawer. */
+.main{isolation:isolate}

@@ -57,7 +57,7 @@ const engines=require('playwright-core'),engineName=process.env.BROWSER_ENGINE||
     assert.ok(b.overflow<=2&&b.height>100,JSON.stringify({width,height,route,b}));
    }
   }
-  await page.setViewportSize({width:390,height:844});await page.locator('#btn-toggle-sidebar').click();assert.equal(await page.locator('#btn-toggle-sidebar').getAttribute('aria-expanded'),'true');await page.keyboard.press('Escape');assert.equal(await page.locator('aside').isVisible(),false);await page.locator('#btn-toggle-sidebar').click();await page.mouse.click(380,120);assert.equal(await page.locator('aside').isVisible(),false);
+  await page.setViewportSize({width:390,height:844});await page.locator('#btn-toggle-sidebar').click();assert.equal(await page.locator('#btn-toggle-sidebar').getAttribute('aria-expanded'),'true');assert.ok(await page.evaluate(()=>document.querySelector('aside').contains(document.elementFromPoint(120,600))));await page.keyboard.press('Escape');assert.equal(await page.locator('aside').isVisible(),false);await page.locator('#btn-toggle-sidebar').click();await page.mouse.click(380,120);assert.equal(await page.locator('aside').isVisible(),false);
   assert.deepEqual(errors,[]);
   console.log('PASS workspace: bounded live at 4 widths, one video follows view, 5 latest incidents, real SVG charts, paginated/filtered table, escaped titles, tree routes/deep link, settings groups and account validation.');
  }finally{await browser.close();server.close();}
