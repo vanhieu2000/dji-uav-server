@@ -170,7 +170,8 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:9px;font-weight:600;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 
 /* THANH ICON DỌC BÊN TRÁI BẢN ĐỒ (VERTICAL ICON TOOLBAR) */
-.map-left-toolbar{position:absolute;top:14px;left:14px;z-index:500;display:flex;flex-direction:column;gap:6px;background:rgba(9,15,24,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(56,189,248,0.25);border-radius:12px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,0.6)}
+.map-left-toolbar{position:absolute;top:68px;left:14px;z-index:500;display:flex;flex-direction:column;gap:4px;width:48px;box-sizing:border-box;background:rgba(9,15,24,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(56,189,248,0.25);border-radius:12px;padding:5px;box-shadow:0 8px 32px rgba(0,0,0,0.6);overflow:hidden!important;overflow-x:hidden!important;overflow-y:hidden!important;scrollbar-width:none!important}
+.map-left-toolbar::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
 .map-icon-btn{width:36px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.06);color:#fff;display:grid;place-items:center;font-size:16px;cursor:pointer;transition:all .18s ease;position:relative}
 .map-icon-btn:hover{background:var(--brand);border-color:var(--brand);transform:scale(1.08)}
 .map-icon-btn.active{background:var(--brand);border-color:#38bdf8;box-shadow:0 0 10px rgba(56,189,248,0.5)}
@@ -289,11 +290,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
 #view-container{height:auto}
 .mapbox{position:relative;min-width:0;min-height:0;overflow:hidden}
 .map-osd-topbar{left:12px;right:12px;transform:none;max-width:none;border-radius:10px;flex-wrap:wrap;white-space:normal;gap:6px 10px;padding:8px 12px}
-.mapbox .leaflet-top.leaflet-right{top:100px}
-.mapbox .gis-search{width:min(260px,calc(100vw - 180px))}
-.map-left-toolbar{top:100px;max-height:calc(100% - 120px);overflow-y:auto}
-.side-detail-panel{min-width:0;width:100%}
-.panel-collapsed>.side-detail-panel{visibility:hidden;pointer-events:none;padding:0;border:0}
+.map-left-toolbar{top:68px;width:48px;box-sizing:border-box;max-height:none;overflow:hidden!important;overflow-x:hidden!important;overflow-y:hidden!important;scrollbar-width:none!important;gap:4px;padding:5px}
 aside{overflow:hidden}
 aside>.brand,aside>.side-foot{flex-shrink:0}
 aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
@@ -816,8 +813,8 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
               <div id="manual-live-placeholder" style="text-align:center;padding:10px;z-index:1">
                 <div style="font-size:22px">📡</div>
                 <div style="font-size:11px;color:#fff;font-weight:600;margin-top:2px">Chờ luồng video Wide...</div>
-                <div class="muted" style="font-size:9.5px">rtmp://10.20.28.50:1935/live/m3t_wide</div>
-                <button class="btn sm primary" style="margin-top:6px;font-size:10.5px;padding:2px 10px;font-weight:700" onclick="manualStartLive()">▶️ BẬT LIVE STREAM</button>
+                <div class="muted" id="pip-rtmp-hint-wide" style="font-size:9.5px">rtmp://HOST_IP:1935/live/m3t_wide</div>
+                <button class="btn sm primary" style="margin-top:6px;font-size:10.5px;padding:3px 12px;font-weight:700" onclick="manualStartLive()">▶️ BẬT LIVE STREAM</button>
               </div>
             </div>
 
@@ -829,7 +826,8 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
               <div id="thermal-live-placeholder" style="text-align:center;padding:10px;z-index:1">
                 <div style="font-size:22px">🌡️</div>
                 <div style="font-size:11px;color:#fff;font-weight:600;margin-top:2px">Chờ luồng camera Nhiệt...</div>
-                <div class="muted" style="font-size:9.5px">rtmp://10.20.28.50:1935/live/m3t_thermal</div>
+                <div class="muted" id="pip-rtmp-hint-thermal" style="font-size:9.5px">rtmp://HOST_IP:1935/live/m3t_thermal</div>
+                <button class="btn sm" style="margin-top:6px;font-size:10.5px;padding:3px 12px;background:#cf2f5e;color:#fff" onclick="manualStartLive('thermal')">▶️ BẬT CAMERA NHIỆT</button>
               </div>
             </div>
 
@@ -841,7 +839,8 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
               <div id="zoom-live-placeholder" style="text-align:center;padding:10px;z-index:1">
                 <div style="font-size:22px">🔍</div>
                 <div style="font-size:11px;color:#fff;font-weight:600;margin-top:2px">Chờ luồng camera Zoom...</div>
-                <div class="muted" style="font-size:9.5px">rtmp://10.20.28.50:1935/live/m3t_zoom</div>
+                <div class="muted" id="pip-rtmp-hint-zoom" style="font-size:9.5px">rtmp://HOST_IP:1935/live/m3t_zoom</div>
+                <button class="btn sm" style="margin-top:6px;font-size:10.5px;padding:3px 12px;background:#7c3aed;color:#fff" onclick="manualStartLive('zoom')">▶️ BẬT CAMERA ZOOM</button>
               </div>
             </div>
           </div>
@@ -2469,8 +2468,32 @@ async function manualSendRth(){
   }
 }
 
-async function manualStartLive(){
-  startFlvLivePlayer();
+async function manualStartLive(videoType){
+  const vType = videoType || 'wide';
+  toast(`Đang yêu cầu kích hoạt Live Stream ${vType.toUpperCase()} tới Flycam...`);
+  try {
+    const res = await fetch('/api/control/live', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'start',
+        video_type: vType,
+        device_sn: gSelectedDroneSn || '1581F5FJC243K00DNRRT'
+      })
+    });
+    const d = await res.json();
+    if (res.ok && d.code === 0) {
+      toast('✓ Đã gửi lệnh mở luồng trực tiếp! Đang đón nhận video...');
+      const streamPath = d.channel ? `/live/${d.channel}` : (d.data && d.data.streamPath) || '/live/m3t_live';
+      setTimeout(() => startFlvLivePlayer(streamPath), 1000);
+    } else {
+      toast('⚠ ' + (d.message || 'Không thể gửi lệnh mở live stream'));
+      startFlvLivePlayer();
+    }
+  } catch (err) {
+    console.warn('Lỗi gọi API live:', err);
+    startFlvLivePlayer();
+  }
 }
 function stopFlvLivePlayer(){
   if(gFlvPlayer){ try { gFlvPlayer.destroy(); } catch(e){} gFlvPlayer = null; }
@@ -2507,9 +2530,21 @@ function startFlvLivePlayer(streamPath, playbackUrl){
     gFlvPlayer = null;
   }
 
-  streamPath = streamPath || (window.GIS && GIS.LiveMonitor && GIS.LiveMonitor.streamPath());
-  if (!/^\/live\/ticket_\d+_[a-f0-9]{16}$/.test(streamPath || '')) { toast('Chọn phiếu và kênh đang phát trong Giám sát UAV.'); return; }
-  const flvUrl = playbackUrl || (window.GIS && GIS.LiveMonitor && GIS.LiveMonitor.playbackUrl()) || `${location.protocol}//${location.hostname}:8000${streamPath}.flv`;
+  // Tự động tìm kênh phát phù hợp nhất
+  if (!streamPath) {
+    if (window.GIS && GIS.LiveMonitor && typeof GIS.LiveMonitor.streamPath === 'function') {
+      streamPath = GIS.LiveMonitor.streamPath();
+    }
+    if (!streamPath) {
+      const ticketSelect = document.getElementById('uav-live-ticket');
+      const ticketId = ticketSelect ? ticketSelect.value : null;
+      streamPath = ticketId ? `/live/ticket_${ticketId}_live` : '/live/m3t_live';
+    }
+  }
+
+  const flvUrl = playbackUrl || (window.GIS && GIS.LiveMonitor && typeof GIS.LiveMonitor.playbackUrl === 'function' && GIS.LiveMonitor.playbackUrl()) || `${location.protocol}//${location.hostname}:8000${streamPath}.flv`;
+  console.log('[FLV Player] Khởi tạo luồng phát:', flvUrl);
+
   try{
     gFlvPlayer = flvjs.createPlayer({
       type: 'flv',
@@ -2527,7 +2562,8 @@ function startFlvLivePlayer(streamPath, playbackUrl){
     gFlvPlayer.load();
 
     videoEl.style.display = 'block';
-    document.getElementById('dashboard-live-placeholder').hidden=true;
+    const dashPh = document.getElementById('dashboard-live-placeholder');
+    if (dashPh) dashPh.hidden = true;
     if(placeholderEl) placeholderEl.style.display = 'none';
     if(badgeEl){
       badgeEl.innerText = '● LIVE MAVIC 3T';
@@ -2547,7 +2583,12 @@ function startFlvLivePlayer(streamPath, playbackUrl){
     gFlvPlayer.on(flvjs.Events.ERROR, (errType, errDetail)=>{
       console.warn('[FLV Player Error]', errType, errDetail);
       videoEl.style.display='none';
-      const waiting=document.getElementById('dashboard-live-placeholder');if(waiting){waiting.hidden=false;waiting.querySelector('b').textContent='Đang chờ luồng trực tiếp';waiting.querySelector('p').textContent='Kênh bị gián đoạn. Chọn lại kênh khi Pilot 2 đang phát.';}
+      const waiting=document.getElementById('dashboard-live-placeholder');
+      if(waiting){
+        waiting.hidden=false;
+        waiting.querySelector('b').textContent='Đang chờ luồng trực tiếp';
+        waiting.querySelector('p').textContent='Đang chờ Drone đẩy tín hiệu RTMP lên cổng 1935...';
+      }
       if(badgeEl){
         badgeEl.innerText = 'CHỜ LUỒNG RTMP';
         badgeEl.style.background = 'rgba(0,0,0,0.65)';
@@ -3297,11 +3338,12 @@ function setupRealtimeTelemetry(){
    // 1.1 Luồng Live Stream video từ Mavic 3T
    if(msg.type === 'stream_started'){
     toast('✓ Đã nhận luồng phát trực tiếp từ Mavic 3T! Đang hiển thị...');
-    // Kênh được chọn theo phiếu trong Giám sát UAV, không tự mở kênh của UAV khác.
+    const path = msg.stream_path || msg.streamPath || (msg.channel ? `/live/${msg.channel}` : '/live/m3t_live');
+    startFlvLivePlayer(path);
    }
    if(msg.type === 'stream_stopped'){
-    toast('Luồng phát trực tiếp từ Mavic 3T đã tạm dừng');
-    // Module LiveMonitor chỉ dừng player khi đúng kênh đang xem.
+    toast('Luồng phát trực tiếp từ Mavic 3T đã kết thúc');
+    stopFlvLivePlayer();
    }
 
    // 2. Ảnh chụp đồng bộ mới từ Mavic 3T

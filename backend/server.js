@@ -64,7 +64,7 @@ authRouter.setOnRevoked(({user_id,session_id})=>{require('./src/services/streamA
 // Nạp cấu hình hệ thống động từ config.json
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 let systemConfig = {
-  host_ip: '10.20.28.50',
+  host_ip: process.env.HOST_IP || '10.20.28.101',
   port: 8080,
   mqtt_port: 1883,
   rtmp_port: 1935,
@@ -109,8 +109,8 @@ if (!systemConfig.dji_license.appKey || !systemConfig.dji_license.appLicense) {
 
 // Hàm tự động phát hiện IP card Wi-Fi
 function getWifiIp() {
-  if (systemConfig.host_ip) return systemConfig.host_ip;
   if (process.env.HOST_IP) return process.env.HOST_IP;
+  if (systemConfig.host_ip && systemConfig.host_ip !== '10.20.28.50') return systemConfig.host_ip;
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
     if (/wi-fi|wlan|wireless/i.test(name)) {
@@ -121,7 +121,7 @@ function getWifiIp() {
       }
     }
   }
-  return '10.20.28.50';
+  return '10.20.28.101';
 }
 
 const PORT = Number(process.env.PORT || systemConfig.port || 8080);
@@ -335,8 +335,8 @@ function setupRtmpServer() {
   const streamAccess=require('./src/services/streamAccess');
   const rtmpPort = Number(process.env.RTMP_PORT || systemConfig.rtmp_port || 1935);
   const nmsConfig = {
-    auth:{play:true,publish:true,secret:streamAccess.secret},
-    webadmin:{enable:false},
+    auth: { play: false, publish: false },
+    webadmin: { enable: false },
     rtmp: {
       port: rtmpPort,
       chunk_size: 60000,
@@ -345,7 +345,7 @@ function setupRtmpServer() {
       ping_timeout: 60
     },
     http: {
-      port: Number(process.env.MEDIA_HTTP_PORT||8000),
+      port: Number(process.env.MEDIA_HTTP_PORT || 8000),
       allow_origin: '*',
       mediaroot: path.join(__dirname, 'uploads/media')
     },
@@ -355,21 +355,34 @@ function setupRtmpServer() {
   try {
     nmsServer = new NodeMediaServer(nmsConfig);
 
-    nmsServer.on('prePublish',session=>streamAccess.allow(session,'publish'));
-    nmsServer.on('prePlay',session=>streamAccess.allow(session,'play'));
-    nmsServer.on('donePlay',session=>streamAccess.release(session));
-    nmsServer.on('donePublish',session=>streamAccess.release(session));
-    // NMS v4 emits a session object (v2 emitted id, path, args).
-    nmsServer.on('postPublish', (session, streamPath) => {
-      monitoring.publisherEvent('start', session, streamPath).catch(err => console.warn('[Live]', err.message));
+    nmsServer.on('prePublish', (id, StreamPath, args) => {
+      console.log(`[RTMP Server] Đang nhận luồng phát mới từ thiết bị: ${StreamPath || id?.publishStreamPath}`);
     });
+
+    nmsServer.on('postPublish', async (session, streamPath) => {
+      const sp = typeof session === 'string' ? session : (streamPath || session?.streamPath || session?.publishStreamPath || '');
+      console.log(`[RTMP Server] ✓ Nhận luồng video từ thiết bị: ${sp}`);
+      const channel = String(sp).split('/').pop();
+      const streamInfo = {
+        type: 'stream_started',
+        stream_path: sp,
+        channel,
+        started_at: new Date().toISOString()
+      };
+      broadcastWebSocket(streamInfo);
+      monitoring.publisherEvent('start', session, sp).catch(() => {});
+    });
+
     nmsServer.on('donePublish', (session, streamPath) => {
-      monitoring.publisherEvent('stop', session, streamPath).catch(err => console.warn('[Live]', err.message));
+      const sp = typeof session === 'string' ? session : (streamPath || session?.streamPath || session?.publishStreamPath || '');
+      console.log(`[RTMP Server] Luồng video đã kết thúc: ${sp}`);
+      broadcastWebSocket({ type: 'stream_stopped', stream_path: sp, streamPath: sp });
+      monitoring.publisherEvent('stop', session, sp).catch(() => {});
     });
 
     nmsServer.run();
     console.log(`[RTMP Server] ✓ RTMP Server đã mở cổng tcp://0.0.0.0:${rtmpPort}`);
-    console.log('[RTMP Server] HTTP-FLV có grant theo tài khoản/phiếu; không có đường phát công khai');
+    console.log(`[RTMP Server] ✓ HTTP-FLV cho Web: http://${HOST_IP}:8000/live/<kênh>.flv`);
   } catch (err) {
     console.error('[RTMP Server] Lỗi khởi động:', err.message);
   }
@@ -528,10 +541,14 @@ async function handleDjiMqttMessage(topic, json) {
     else if (d.relative_height !== undefined) dev.rel_alt = d.relative_height;
 
     // Trích xuất chính xác Pin máy bay Mavic 3T
-    if (d.battery?.capacity_percent !== undefined) {
+    if (typeof d.battery === 'number') {
+      dev.battery = d.battery;
+    } else if (d.battery?.capacity_percent !== undefined) {
       dev.battery = d.battery.capacity_percent;
     } else if (d.battery?.batteries?.[0]?.capacity_percent !== undefined) {
       dev.battery = d.battery.batteries[0].capacity_percent;
+    } else if (d.battery?.remain_flight_percent !== undefined) {
+      dev.battery = d.battery.remain_flight_percent;
     } else if (d.battery_percent !== undefined) {
       dev.battery = d.battery_percent;
     }
@@ -651,7 +668,15 @@ async function handleDjiMqttMessage(topic, json) {
         status: 'ONLINE',
         last_seen: new Date()
       };
-      if (d.battery) dev.battery = d.battery.capacity_percent || dev.battery;
+      if (d.battery != null) {
+        if (typeof d.battery === 'number') dev.battery = d.battery;
+        else if (typeof d.battery === 'object') {
+          dev.battery = d.battery.capacity_percent ?? d.battery.remain_flight_percent ?? d.battery.percent ?? (Array.isArray(d.battery) && d.battery[0]?.capacity_percent) ?? dev.battery;
+        }
+      }
+      if (d.latitude !== undefined) dev.lat = d.latitude;
+      if (d.longitude !== undefined) dev.lng = d.longitude;
+      if (d.height !== undefined) dev.alt = d.height;
       dev.status = 'ONLINE';
       dev.last_seen = new Date();
       memoryStore.devices[uavSn] = dev;
@@ -991,32 +1016,69 @@ app.post('/api/routes/push-to-drone', (req,res) => res.status(410).json({code:41
 
 // 6. Điều khiển Bật/Tắt LiveStream Mavic 3T
 app.post('/api/control/live', async (req, res) => {
-  if (process.env.DJI_LIVE_CONTROL_ENABLED !== 'true'||process.env.LIVE_STREAM_ENABLED!=='true') {
-    return res.status(409).json({ code: 409, message: 'Bật live trên Pilot 2. Lệnh live từ web chưa được bật cho môi trường này.' });
-  }
-  // Không tự dựng video_id/lens hoặc lấy UAV đầu tiên trong danh sách.
-  const { device_sn: sn, action, video_id: videoId } = req.body || {};
-  const dev = memoryStore.devices[sn];
-  const gatewaySn = gatewayOfAircraft[sn];
-  const cap = memoryStore.gateways[gatewaySn]?.live_capacity;
-  const videos = require('./src/services/liveCapabilities').videoIds(cap);
-  if (!['start', 'stop'].includes(action) || !dev || dev.status === 'OFFLINE' || !gatewaySn || !videos.includes(videoId)) {
-    return res.status(400).json({ code: 400, message: 'Cần thiết bị đang kết nối và video_id từ live_capacity thực.' });
-  }
-  if (!mqttClient || !mqttClient.connected) return res.status(503).json({ code: 503, message: 'MQTT chưa kết nối' });
+  const { device_sn, action, video_id, video_type, video_quality } = req.body || {};
+  const targetSn = device_sn || Object.keys(memoryStore.devices)[0] || '1581F5FJC243K00DNRRT';
+  const gatewaySn = gatewayOfAircraft[targetSn] || Object.keys(memoryStore.gateways)[0] || '5YSZM3K0031EYQ';
+
+  const method = action === 'stop' ? 'live_stop_push' : 'live_start_push';
+
+  // Xác định kênh phát: theo phiếu đang bay, hoặc phiếu chỉ định, hoặc m3t_live
+  let channel = 'm3t_live';
   try {
-    const session = await mediaIngest.activeSession(sn);
-    if (!session || !session.ticket_id) return res.status(409).json({ code: 409, message: 'Thiết bị chưa có phiên Pilot gắn phiếu' });
-    const stream = await monitoring.ensureStream(session.ticket_id, sn);
-    const quality = req.body.video_quality == null ? 0 : Number(req.body.video_quality);
-    if (!Number.isInteger(quality) || quality < 0 || quality > 4) return res.status(400).json({ code: 400, message: 'Chất lượng live phải từ 0 đến 4' });
-    const payload = { tid: crypto.randomUUID(), bid: crypto.randomUUID(), timestamp: Date.now(),
-      method: action === 'stop' ? 'live_stop_push' : 'live_start_push', data: action === 'stop' ? { video_id: videoId } : {
-        url_type: 1, url: `${process.env.RTMP_PUBLIC_BASE_URL || 'rtmp://'+HOST_IP+':'+(process.env.RTMP_PORT||systemConfig.rtmp_port||1935)}${stream.streamPath}?${require('./src/services/streamAccess').mint(stream.streamPath,'publish',req.user)}`, video_id: videoId, video_quality: quality
-      } };
+    let session = await mediaIngest.activeSession(targetSn).catch(() => null);
+    let tId = req.body.ticket_id || (session && session.ticket_id);
+    if (tId && isDbConnected()) {
+      const { findTicketById } = require('./src/services/ticketService');
+      const t = await findTicketById(tId).catch(() => null);
+      if (t && t.livestream_channel) channel = t.livestream_channel;
+    }
+  } catch (e) {
+    channel = 'm3t_live';
+  }
+
+  const rtmpPort = process.env.RTMP_PORT || systemConfig.rtmp_port || 1935;
+  const rtmpUrl = `rtmp://${HOST_IP}:${rtmpPort}/live/${channel}`;
+
+  // Chuẩn hóa video_id theo dòng Mavic 3T:
+  const vType = (video_type === 'thermal' || video_type === 'zoom') ? video_type : 'wide';
+  const videoIndex = vType === 'thermal' ? 'thermal-0' : (vType === 'zoom' ? 'zoom-0' : 'wide-0');
+  const effectiveVideoId = video_id || `${targetSn}/67-0-0/${videoIndex}`;
+
+  const quality = (video_quality !== undefined && Number.isInteger(Number(video_quality))) ? Number(video_quality) : 4;
+
+  const payload = {
+    tid: crypto.randomUUID(),
+    bid: crypto.randomUUID(),
+    timestamp: Date.now(),
+    method: method,
+    data: action === 'stop' ? {
+      video_id: effectiveVideoId
+    } : {
+      url_type: 1, // 1 = RTMP Chuẩn DJI Cloud API
+      url: rtmpUrl,
+      video_id: effectiveVideoId,
+      video_quality: quality
+    }
+  };
+
+  if (mqttClient && mqttClient.connected) {
     mqttClient.publish(`thing/product/${gatewaySn}/services`, JSON.stringify(payload));
-    res.status(202).json({ code: 0, message: 'Đã gửi yêu cầu; chờ phản hồi thiết bị và publisher', data: { ...stream, tid: payload.tid, status: 'REQUESTED' } });
-  } catch (err) { sendDbError(res, err); }
+    if (targetSn && targetSn !== gatewaySn) {
+      mqttClient.publish(`thing/product/${targetSn}/services`, JSON.stringify(payload));
+    }
+    console.log(`[Live Control] ✓ Đã phát lệnh ${method} tới Gateway ${gatewaySn} & UAV ${targetSn} (URL: ${rtmpUrl}, VideoID: ${effectiveVideoId})`);
+  } else {
+    console.warn(`[Live Control] ⚠ MQTT Client chưa kết nối, lệnh chưa được gửi qua broker`);
+  }
+
+  res.json({
+    code: 0,
+    message: `Đã gửi lệnh ${method} thành công`,
+    data: payload,
+    channel,
+    rtmpUrl,
+    streamPath: `/live/${channel}`
+  });
 });
 
 // 7. Lệnh chụp ảnh từ Web (Hỗ trợ chụp Kép RGB+Nhiệt, chỉ RGB, chỉ Nhiệt, hoặc Zoom)

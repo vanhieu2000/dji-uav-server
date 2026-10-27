@@ -410,12 +410,12 @@ body {
    =================================================================== */
 
 .overview-grid {
-  padding: 24px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  max-width: 1600px;
-  margin: 0 auto;
+  gap: 20px;
+  max-width: 100%;
+  margin: 0;
   width: 100%;
 }
 
@@ -771,12 +771,12 @@ body {
    =================================================================== */
 
 .tickets-container {
-  padding: 24px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 1600px;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
   width: 100%;
 }
 

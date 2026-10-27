@@ -23,20 +23,20 @@
 .overview-live-card .card-head p,.overview-secondary .card-head p{font-size:12px;margin-top:5px}
 .overview-live-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin-bottom:12px}
 .overview-live-filters select{min-width:0;text-overflow:ellipsis}
-.overview-live-stage{position:relative;width:100%;aspect-ratio:16/9;max-height:340px;background:#10282e;border-radius:10px;overflow:hidden;display:grid;place-items:center;color:#daeae8}
-#dashboard-live-placeholder{text-align:center;padding:16px;font-size:12px;max-width:100%}
+.overview-live-stage{position:relative;width:100%;aspect-ratio:16/9;max-height:480px;background:#10282e;border-radius:10px;overflow:hidden;display:grid;place-items:center;color:#daeae8}
+#dashboard-live-placeholder{text-align:center;padding:20px;font-size:13px;max-width:100%}
 #dashboard-live-placeholder[hidden]{display:none}
-#dashboard-live-placeholder b{display:block;font-size:15px;color:#fff;margin:8px 0}
+#dashboard-live-placeholder b{display:block;font-size:16px;color:#fff;margin:8px 0}
 #dashboard-live-placeholder p{color:#bbcfcd}
 .live-empty-icon{display:inline-grid;place-items:center;width:46px;height:46px;border:1px solid #65918c;border-radius:50%;font-size:24px;color:#b7e0d8}
 .overview-live-stage video{position:absolute;inset:0;width:100%!important;height:100%!important;object-fit:contain!important;z-index:2}
 .overview-telemetry{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:10px;margin:10px 0;font-size:11px;color:var(--ink2)}
 .overview-telemetry b{display:block;color:var(--ink);font-size:14px;font-variant-numeric:tabular-nums}
-#uav-live-devices{display:flex;gap:6px;flex-wrap:wrap;max-height:76px;overflow:auto}
-#uav-live-devices button{white-space:normal;overflow-wrap:anywhere;height:auto;min-height:26px;text-align:left}
+#uav-live-devices{display:flex;gap:8px;flex-wrap:wrap;max-height:none;overflow:visible;margin:6px 0}
+#uav-live-devices button{white-space:normal;overflow-wrap:anywhere;height:auto;min-height:28px;text-align:left;padding:4px 10px}
 .overview-live-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0;font-size:12px}
 .overview-hms{border-top:1px solid var(--line);padding-top:10px;font-size:12px}
-#uav-hms-list{max-height:140px;overflow:auto;padding-top:8px}
+#uav-hms-list{max-height:none;overflow:visible;padding-top:8px}
 .overview-statistics .card-head{align-items:center}
 .overview-statistics select{width:100px}
 .overview-detail{margin-top:16px}
