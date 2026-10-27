@@ -736,15 +736,9 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
           </div>
         </div>
 
-        <div class="tabs settings-tabs" role="tablist" aria-label="Cài đặt chung"><button class="on" data-settings="system" role="tab" aria-selected="true">Hệ thống</button><button data-settings="profiles" role="tab" aria-selected="false">Hồ sơ chụp</button><button data-settings="import" role="tab" aria-selected="false">Nhập danh mục Excel</button><button data-settings="basemaps" role="tab" aria-selected="false">Bản đồ nền</button></div><div id="settings-module-root" hidden></div>
+        <div class="tabs settings-tabs" role="tablist" aria-label="Cài đặt chung"><button class="on" data-settings="system" role="tab" aria-selected="true">Ngưỡng cảnh báo</button><button data-settings="profiles" role="tab" aria-selected="false">Hồ sơ chụp</button><button data-settings="import" role="tab" aria-selected="false">Nhập danh mục Excel</button><button data-settings="basemaps" role="tab" aria-selected="false">Bản đồ nền</button></div><div id="settings-module-root" hidden></div>
         <section class="card" id="settings-system-pane" style="max-width:800px">
-          <div class="form-grid">
-            <div class="field"><label>Ngưỡng cảnh báo nhiệt độ Pin (°C)</label><input id="cfg-temp-pin" class="input" type="number" value="65"></div>
-            <div class="field"><label>Ngưỡng cảnh báo nhiệt độ Dao cách ly (°C)</label><input id="cfg-temp-dcl" class="input" type="number" value="75"></div>
-            <div class="field"><label>Cổng MQTT Broker</label><input id="cfg-mqtt-port" class="input" value="1883"></div>
-            <div class="field"><label>API AI Vision Team</label><input id="cfg-ai-endpoint" class="input" value="http://ai_service:5000/api/v1/detect"></div>
-          </div>
-          <button class="btn primary" style="margin-top:16px;" onclick="saveSystemSettings()">Cập nhật thông số</button>
+          <div id="settings-alert-rules"></div>
         </section>
       </section>
 
@@ -1299,6 +1293,8 @@ function switchView(viewName){
   else {btn.classList.remove('on');btn.removeAttribute('aria-current');}
  });
 
+ requestAnimationFrame(()=>{const active=document.querySelector('.nav-btn.on'),nav=document.querySelector('aside>.nav');if(active&&nav&&nav.getClientRects().length){const r=active.getBoundingClientRect(),n=nav.getBoundingClientRect();if(r.bottom>n.bottom)nav.scrollTop+=r.bottom-n.bottom+12;else if(r.top<n.top)nav.scrollTop-=n.top-r.top+12;}});
+
  // Ẩn tất cả view, chỉ hiện view được chọn
  document.querySelectorAll('.page-view').forEach(v=>{
   if(v.id === 'view-' + viewName) v.classList.add('active');
@@ -1337,6 +1333,8 @@ function switchView(viewName){
   loadUavDevices();
  } else if(viewName === 'reports'){
   setTimeout(renderReportsSvgCharts, 50);
+ } else if(viewName === 'admin'){
+  GIS.Vision.renderRules(document.getElementById('settings-alert-rules'));
  } else if(viewName === 'assets'){
   document.getElementById('module-page-title').textContent=module?.title || 'Nhà máy & thiết bị kiểm tra';
   document.getElementById('module-page-description').textContent=module?.description || 'Quản lý nhà máy, khu pin, tấm pin, trạm biến áp, dao cách ly và mối nối được kiểm tra.';
@@ -1852,11 +1850,7 @@ async function saveDclToDatabase(){
 /* ===================================================================
    CHỨC NĂNG THẬT 5: LƯU CẤU HÌNH HỆ THỐNG
    =================================================================== */
-function saveSystemSettings(){
- const pTemp = document.getElementById('cfg-temp-pin').value;
- const dTemp = document.getElementById('cfg-temp-dcl').value;
- toast(`✓ Đã lưu: Ngưỡng pin ${pTemp}°C | Ngưỡng DCL ${dTemp}°C`);
-}
+
 
 /* ===================================================================
    CHỨC NĂNG THẬT 6: XUẤT FILE BÁO CÁO CSV THẬT VỀ MÁY TÍNH

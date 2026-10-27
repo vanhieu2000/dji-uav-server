@@ -31,22 +31,25 @@
       GIS.toast('Đã xác nhận tài sản');details(id);GIS.emit('assets-changed');
     });}));
   }
-  async function loadRules(){
-    const r=await GIS.run(()=>GIS.api('GET','/api/vision/rules'));if(!r)return;
+  async function loadRules(target=root){
+    const r=await GIS.run(()=>GIS.api('GET','/api/vision/rules'));if(!r){target.querySelector('[data-vision-rules]').textContent='Không tải được ngưỡng cảnh báo. Vui lòng thử làm mới.';return;}
     const labels={PANEL:'Tấm pin',DISCONNECTOR:'Dao cách ly',CONTACT:'Mối nối',OTHER:'Khác'};
-    root.querySelector('#vision-rules').innerHTML=Object.entries(labels).map(([type,label])=>{
+    target.querySelector('[data-vision-rules]').innerHTML=Object.entries(labels).map(([type,label])=>{
       const rule=r.data.find(x=>x.asset_type===type)||{};
       return `<form data-rule="${type}" class="actions" style="margin:8px 0;flex-wrap:wrap"><b>${label}</b><label>Nhiệt độ °C <input type="number" step="any" name="max_temp_c" value="${rule.max_temp_c??''}" placeholder="Không dùng"></label><label>ΔT °C <input type="number" step="any" name="delta_t_c" value="${rule.delta_t_c??''}" placeholder="Không dùng"></label><label>Tin cậy tối thiểu <input type="number" min="0" max="1" step="0.01" name="min_confidence" value="${rule.min_confidence??0.8}" required></label><label>Cảnh báo sớm trong số ngày <input type="number" name="trend_horizon_days" min="0.1" step="any" value="${rule.trend_horizon_days??''}"></label><label><input type="checkbox" name="enabled" ${rule.enabled?'checked':''}> Bật</label><button class="btn sm">Lưu</button></form>`;
     }).join('');
-    root.querySelectorAll('[data-rule]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();GIS.run(async()=>{
+    target.querySelectorAll('[data-rule]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();GIS.run(async()=>{
       const n=k=>f.elements[k].value===''?null:Number(f.elements[k].value);
       await GIS.api('PUT','/api/vision/rules/'+f.dataset.rule,{max_temp_c:n('max_temp_c'),delta_t_c:n('delta_t_c'),min_confidence:n('min_confidence'),trend_horizon_days:n('trend_horizon_days'),enabled:f.elements.enabled.checked});
       GIS.toast('Đã lưu ngưỡng cảnh báo');
     });}));
   }
-  GIS.Vision={render(el){
+  GIS.Vision={renderRules(el){
+    el.innerHTML='<div class="card-head"><h2>Ngưỡng cảnh báo chung</h2><div class="r"><button class="btn sm" type="button" data-reload-rules>Làm mới</button></div></div><p class="muted">Áp dụng cho các đối tượng chưa có ngưỡng riêng. Bật quy tắc để sử dụng; lưu từng nhóm độc lập.</p><div data-vision-rules>Đang tải…</div>';
+    el.querySelector('[data-reload-rules]').onclick=()=>loadRules(el);return loadRules(el);
+  },render(el){
     root=el;
-    root.innerHTML=`<div class="card" style="padding:16px"><h2>Xử lý ảnh với Vision</h2><p>Job lưu bền vững; gửi lại không sinh lỗi trùng. Dịch vụ và mô hình do đội Vision cung cấp.</p><div class="actions"><select id="vision-media"><option value="">Chọn ảnh gốc</option></select><button class="btn primary" id="vision-enqueue">Đưa vào hàng đợi</button><button class="btn" id="vision-refresh">Làm mới</button></div><div id="vision-jobs"></div><div id="vision-detail"></div><details><summary>Ngưỡng cảnh báo (cần đăng nhập quản trị)</summary><p>Chưa có quy tắc bật thì không tự dùng ngưỡng nhiệt mặc định. WARNING: phát hiện đạt confidence; CRITICAL: vượt ngưỡng nhiệt/ΔT đã cấu hình.</p><div id="vision-rules"></div></details></div>`;
+    root.innerHTML=`<div class="card" style="padding:16px"><h2>Xử lý ảnh với Vision</h2><p>Job lưu bền vững; gửi lại không sinh lỗi trùng. Dịch vụ và mô hình do đội Vision cung cấp.</p><div class="actions"><select id="vision-media"><option value="">Chọn ảnh gốc</option></select><button class="btn primary" id="vision-enqueue">Đưa vào hàng đợi</button><button class="btn" id="vision-refresh">Làm mới</button></div><div id="vision-jobs"></div><div id="vision-detail"></div><details><summary>Ngưỡng cảnh báo (cần đăng nhập quản trị)</summary><p>Chưa có quy tắc bật thì không tự dùng ngưỡng nhiệt mặc định. WARNING: phát hiện đạt confidence; CRITICAL: vượt ngưỡng nhiệt/ΔT đã cấu hình.</p><div data-vision-rules></div></details></div>`;
     root.querySelector('#vision-refresh').onclick=refresh;
     root.querySelector('#vision-enqueue').onclick=()=>GIS.run(async()=>{const id=Number(root.querySelector('#vision-media').value);if(!id)throw new Error('Chọn ảnh trước');await GIS.api('POST','/api/vision/jobs',{media_id:id});await refresh();});
     root.querySelector('#vision-jobs').onclick=e=>{const b=e.target.closest('[data-job]');if(b)details(b.dataset.job);};

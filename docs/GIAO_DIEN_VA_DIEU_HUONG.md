@@ -13,7 +13,7 @@ Sidebar được chia thành các nhóm có thể mở/đóng. Mục đang xem t
 
 “Nhà máy & thiết bị kiểm tra” là danh mục những đối tượng UAV cần kiểm tra: nhà máy, khu pin, chuỗi pin, tấm pin, trạm biến áp, ngăn lộ, dao cách ly và mối nối. Tại đây có thể sửa thông tin, vị trí, ranh giới và điểm chụp trên bản đồ. Các chức năng xử lý ảnh/đường bay/nhiệm vụ đã có mục riêng, không còn nằm lẫn trong trang này.
 
-Cài đặt chung có các tab Hệ thống, Hồ sơ chụp, Nhập danh mục Excel và Bản đồ nền. Cài đặt tài khoản chứa thông tin tài khoản, đổi mật khẩu và đường dẫn Quản trị người dùng & phân quyền (ADMIN).
+Cài đặt chung có các tab Ngưỡng cảnh báo, Hồ sơ chụp, Nhập danh mục Excel và Bản đồ nền. Cài đặt tài khoản chứa thông tin tài khoản, đổi mật khẩu và đường dẫn Quản trị người dùng & phân quyền (ADMIN).
 
 Tổng quan chọn kỳ 7/30/90 ngày cho biểu đồ; mặc định 30 ngày. Cột phân chia số phiếu đã hoàn tất và phần còn lại theo **ngày tạo phiếu**, tối đa 14 ngày có phát sinh gần nhất. Biểu đồ tròn thể hiện trạng thái hiện tại của các phiếu tạo trong kỳ. Chỉ số KPI phía trên là số tổng toàn hệ thống, có nhãn phân biệt với thống kê trong kỳ.
 
