@@ -69,3 +69,18 @@ test('MQTT identity diagnostics locate the rejected field without exposing paylo
  assert.equal(serialsAllowed(s,{data:{device_sn:'UAV1234',battery:{sn:'BAT1234'}}}),true);
  assert.equal(serialsAllowed(s,{data:{gateway_sn:'OTHER'}}),false);
 });
+
+test('Mavic 3T state: payload component SN differs from aircraft without bypassing device identity',()=>{
+ const {serialsAllowed,serialIdentityMismatch,topicAllowed}=require('../src/services/mqttAccess');
+ const s={rc_sn:'5YSZM3K0031EYQ',aircraft_sn:'1581F5FJC243K00DNRRT'};
+ const state={method:'update',data:{payloads:[{sn:'CAMERA_COMPONENT_123',payload_index:'67-0-0'},{sn:'SECOND_COMPONENT',payload_index:'68-0-0'}]}};
+ assert.equal(topicAllowed(s,'thing/product/'+s.aircraft_sn+'/state','publish'),true);
+ assert.equal(serialsAllowed(s,state),true);
+ assert.equal(serialsAllowed(s,{data:{payloads:[{sn:'CAMERA',device_sn:'OTHER'}]}}),false);
+ assert.equal(serialsAllowed(s,{data:{payloads:[{sn:'CAMERA',nested:{sn:'OTHER'}}]}}),false);
+ assert.equal(serialsAllowed(s,{data:{sub_devices:[{sn:'OTHER'}]}}),false);
+ assert.equal(serialsAllowed(s,{data:{sn:'OTHER'}}),false);
+ assert.equal(serialsAllowed(s,{payloads:[{sn:'OTHER'}]}),false);
+ assert.equal(topicAllowed(s,'thing/product/OTHER/state','publish'),false);
+ assert.equal(serialIdentityMismatch(s,state),null);
+});

@@ -74,3 +74,10 @@ Log được giới hạn tần suất và không chứa username thô, mật kh
 Bản mới tự tạo `operator` khi chạy launcher trên PC nếu chưa tồn tại. Mật khẩu khởi tạo riêng: `backend/data/operator-password.txt`; đăng nhập Web và đổi trước khi dùng RC. Operator tạm được toàn bộ phạm vi nghiệp vụ theo yêu cầu, nhưng không có quyền cài đặt/quản lý tài khoản. Admin có thể thu hẹp trong tab Quản lý tài khoản.
 
 Trên trang đăng nhập Pilot chọn **Ghi nhớ đăng nhập trên RC này (30 ngày)**. Trình duyệt giữ cookie opaque HttpOnly; DB chỉ lưu SHA256 token, không lưu mật khẩu dạng rõ hoặc mật khẩu trong localStorage. Lần sau vẫn chọn phiếu và kết nối nhưng không cần nhập lại mật khẩu. Nút Quên tài khoản đã lưu/Đổi tài khoản xóa cookie và token server. Đổi mật khẩu, khóa tài khoản, sửa quyền/phạm vi hoặc hết hạn làm token không còn dùng được. Dùng cùng IP/hostname khi mở lại (cookie thuộc origin; đổi IP cần đăng nhập lại).
+
+### Sửa ngắt MQTT khi Mavic 3T gửi trạng thái camera (28/10/2026)
+Log RC thực cho thấy `thing/product/<aircraft>/state` bị từ chối tại `$.data.payloads[0].sn`.
+Đây là serial thành phần camera/payload, không phải serial aircraft/RC. Bộ lọc chỉ miễn so khớp
+`sn` trực tiếp của từng phần tử `data.payloads`; topic, device_sn/gateway_sn và topology vẫn kiểm tra như cũ.
+Sau cập nhật cần thử RC thật và kiểm tra không còn `Payload identity denied` ở trường này.
+Log STS 503 là lỗi riêng: kho S3/MinIO chưa sẵn sàng, chưa thể đồng bộ ảnh tự động.

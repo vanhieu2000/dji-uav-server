@@ -46,6 +46,9 @@ function serialIdentityMismatch(s, value, depth = 0, path = '$') {
   } else if (value && typeof value === 'object') {
     for (const [k, x] of Object.entries(value)) {
       if (IGNORED_SN_KEYS.has(k)) continue;
+      // Aircraft state reports payload/camera component serials here, not an aircraft identity.
+      // Keep device_sn/gateway_sn and all serials outside this exact component field checked.
+      if (k === 'sn' && /^\$\.data\.payloads\[\d+\]$/.test(path)) continue;
       if (k === 'batteries' || k === 'battery' || k === 'dongle_infos' || k === 'camera_list' || k === 'cameras' || k === 'payload') continue;
       const field=path+'.'+k.replace(/[^A-Za-z0-9_-]/g,'_').slice(0,64);
       if ((k === 'sn' || k === 'device_sn' || k === 'gateway_sn' || k === 'aircraft_sn' || k === 'rc_sn') && typeof x === 'string' && x && !allowedSerials.includes(x)) {
