@@ -2,9 +2,9 @@ const express=require('express'),{asyncHandler}=require('../utils/http'),authori
 const {failure}=require('../services/deviceCommands'),{videoIds}=require('../services/liveCapabilities');
 function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession,monitoring,streamAccess,getClient,liveEnabled,rtmpBase,liveReady,access=authorization,revalidate=async req=>req.user}){
  const router=express.Router();
- async function target(req){
+ async function target(req,deviceSn){
   const actor=await revalidate(req);if(!actor||actor.must_change_password)throw failure('Phiên Web đã hết hạn hoặc cần đổi mật khẩu',401);req.user=actor;
-  const sn=req.body?.device_sn||req.query.device_sn;
+  const sn=deviceSn||req.body?.device_sn||req.query.device_sn;
   if(typeof sn!=='string'||!/^[A-Za-z0-9_-]{4,64}$/.test(sn))throw failure('Chọn rõ máy bay cần thao tác',400);
   const device=devices[sn],gateway=gatewayOfAircraft[sn];
   if(!device||!gateway||!gateways[gateway])throw failure('Chưa xác nhận topology UAV/tay điều khiển');
@@ -24,7 +24,7 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
  router.get('/devices',asyncHandler(async(req,res)=>{
   const visible=[];
   for(const sn of Object.keys(devices)){
-   try{const t=await target({...req,body:{device_sn:sn}});visible.push({device_sn:sn,device_name:t.device.device_name||sn,gateway_sn:t.gateway,status:t.fresh?'ONLINE':'OFFLINE'});}catch(e){if(e.status!==403&&e.status!==409)throw e;}
+   try{const t=await target(req,sn);visible.push({device_sn:sn,device_name:t.device.device_name||sn,gateway_sn:t.gateway,status:t.fresh?'ONLINE':'OFFLINE'});}catch(e){if(e.status!==403&&e.status!==409)throw e;}
   }
   ok(res,visible);
  }));

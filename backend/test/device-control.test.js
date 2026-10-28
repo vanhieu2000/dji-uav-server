@@ -92,3 +92,12 @@ test('Aircraft OSD remains aircraft even after state/gateway cache contamination
  assert.equal(isGatewayOsd('UAV1234',{attitude_head:0},{},{UAV1234:{}}),false);
  assert.equal(isGatewayOsd('RC1234',{app_version:'14.0',capacity_percent:72},{},{RC1234:{}}),true);
 });
+
+test('Control device listing preserves the original Express request for token revalidation',async t=>{
+ const app=express();let original,validated=0;
+ app.use((req,res,next)=>{req.user={user_id:1,role:'ADMIN'};original=req;next();});
+ app.use('/api/control',require('../src/routes/deviceControl').createRouter({devices:{UAV1234:{status:'ONLINE',last_osd_at:new Date()}},gateways:{RC1234:{}},gatewayOfAircraft:{UAV1234:'RC1234'},activeSession:async()=>({rc_sn:'RC1234',aircraft_sn:'UAV1234',ticket_id:1}),access:{permission(){},async ticket(){}},revalidate:async req=>{assert.equal(req,original);assert.equal(req.get('authorization'),'Bearer fixture');validated++;return req.user;}}));
+ const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.on('listening',r));t.after(()=>new Promise(r=>server.close(r)));
+ const res=await fetch('http://127.0.0.1:'+server.address().port+'/api/control/devices',{headers:{Authorization:'Bearer fixture'}});
+ assert.equal(res.status,200);assert.equal((await res.json()).data[0].device_sn,'UAV1234');assert.equal(validated,1);
+});
