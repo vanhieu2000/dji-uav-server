@@ -17,5 +17,22 @@ window.PilotBridge = (() => {
   // Optional native config read-back is omitted: it returned615011 on the real RC.
 
  }
- return {value,call,serial,load,connected,freshThing};
+ async function enableOriginalPhotos(isCurrent=()=>true){
+  let lastError='Pilot chưa xác nhận cấu hình media';
+  for(let attempt=0;attempt<8;attempt++){
+   await new Promise(resolve=>setTimeout(resolve,350));if(!isCurrent())return {cancelled:true};
+   try{
+    if(!connected(call('platformIsComponentLoaded','media'))){load('media',{autoUploadPhoto:true,autoUploadPhotoType:0,autoUploadVideo:false});lastError='Module media chưa sẵn sàng';continue;}
+    let auto=null,type=null;
+    try{auto=connected(call('mediaGetAutoUploadPhoto'));type=Number(call('mediaGetUploadPhotoType'));}catch{}
+    if(auto===true&&type===0)return {verified:true};
+    if(auto!==true)call('mediaSetAutoUploadPhoto',true);
+    if(type!==0)call('mediaSetUploadPhotoType',0);
+    try{if(connected(call('mediaGetAutoUploadPhoto'))&&Number(call('mediaGetUploadPhotoType'))===0)return {verified:true};}catch{}
+    lastError='Pilot đã nhận yêu cầu nhưng chưa xác nhận tự tải ảnh gốc';
+   }catch(error){lastError=error.message;}
+  }
+  return {verified:false,message:lastError};
+ }
+ return {value,call,serial,load,connected,freshThing,enableOriginalPhotos};
 })();

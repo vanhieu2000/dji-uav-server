@@ -128,3 +128,9 @@ và đổi query version script để tránh WebView dùng cache. Không thêm t
 Broker giữ nguyên chính sách xác thực/ACL của mốc đó; native storage và camera live trên dashboard được giữ riêng.
 Việc đọc trạng thái broker vẫn phải xác nhận đúng phiên; không bật thành công theo timer.
 Đây là khôi phục code đã được người dùng xác nhận trước đó, chưa phải xác minh kết nối RC của lần hiện tại.
+
+### Media setter615012 tách khỏi trạng thái MQTT (28/10/2026)
+Log RC xác nhận mediaSetAutoUploadPhoto615012 trong khối đăng nhập chung. Giữ nguyên freshThing của4a12b16;
+module media vẫn nạp theo thứ tự baseline, nhưng setter/getter ảnh chạy bất đồng bộ sau xác nhận broker.
+Ưu tiên đọc cấu hình đã bật từ load params, chỉ set nếu chưa bật; chờ readiness và thử lại hữu hạn khi module chưa sẵn sàng.
+Lỗi Media hiển thị riêng trên thẻ kết nối, không ngắt MQTT hoặc báo ảnh đã nhận khi chưa có file thật.

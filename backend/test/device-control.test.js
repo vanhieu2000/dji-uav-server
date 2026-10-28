@@ -104,3 +104,12 @@ test('Control device listing preserves the original Express request for token re
  const res=await fetch('http://127.0.0.1:'+server.address().port+'/api/control/devices',{headers:{Authorization:'Bearer fixture'}});
  assert.equal(res.status,200);assert.equal((await res.json()).data[0].device_sn,'UAV1234');assert.equal(validated,1);
 });
+
+test('Media initialization waits for readiness and retries setter independently of MQTT',async()=>{
+ const vm=require('vm'),fs=require('fs');let enabled=false,type=1,attempts=0;
+ const bridge={platformIsComponentLoaded:()=>true,mediaGetAutoUploadPhoto:()=>enabled,mediaGetUploadPhotoType:()=>type,mediaSetAutoUploadPhoto:()=>{if(++attempts<3)return '{"code":615012}';enabled=true;return '{"code":0}';},mediaSetUploadPhotoType:t=>{type=t;return '{"code":0}';}};
+ const box={window:{djiBridge:bridge},setTimeout:fn=>fn()};vm.runInNewContext(fs.readFileSync(require('path').join(__dirname,'../public/pilot-login/bridge.js'),'utf8'),box);
+ assert.equal((await box.window.PilotBridge.enableOriginalPhotos()).verified,true);assert.equal(attempts,3);assert.equal(type,0);
+ assert.equal((await box.window.PilotBridge.enableOriginalPhotos(()=>false)).cancelled,true);
+ enabled=false;bridge.mediaSetAutoUploadPhoto=()=>'{"code":615012}';const result=await box.window.PilotBridge.enableOriginalPhotos();assert.equal(result.verified,false);assert.match(result.message,/mediaSetAutoUploadPhoto code 615012/);
+});
