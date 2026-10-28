@@ -60,7 +60,13 @@ const path=require('path');const req=require('module').createRequire(path.resolv
   await page.waitForSelector('#insights-reports-root .gis-empty',{state:'attached'});
   for(const view of ['dashboard','tickets-solar','tickets-dcl','control-manual','uav','reports','assets','admin']){await page.evaluate(v=>switchView(v),view);await page.waitForTimeout(150);assert.equal(await page.locator('.page-view.active').count(),1);}
   assert.deepEqual(commands,[]);assert.deepEqual(errors,[]);assert.deepEqual(externalLibraries,[]);assert.ok(await page.evaluate(()=>!!(window.L?.PM&&window.flvjs&&window.XLSX?.utils)));
+  await page.evaluate(()=>switchView('map-solar'));await page.waitForFunction(()=>!!gBaseLayerSolar);
+  assert.match(await page.evaluate(()=>gBaseLayerSolar._url),/mt1\.google\.com/);
+  await page.evaluate(()=>{for(let i=0;i<4;i++)gBaseLayerSolar.fire('tileerror');});await page.waitForTimeout(200);
+  assert.match(await page.evaluate(()=>gBaseLayerSolar._url),/mt1\.google\.com/);assert.match(await page.locator('#topbar-net-status').innerText(),/Lỗi|lỗi/);
+  await page.evaluate(()=>setBasemap('offline','solar'));assert.equal(await page.evaluate(()=>gBaseLayerSolar._url),'/tiles/{z}/{x}/{y}.png');assert.equal(await page.evaluate(()=>localStorage.getItem('uav-basemap-solar')),'offline');
+  await page.evaluate(()=>setBasemap('google_hybrid','solar'));assert.equal(await page.evaluate(()=>savedBasemap('solar')),'google_hybrid');
   await page.goto(base+'/accounts.html');await page.waitForSelector('#permission-checks input');assert.equal(await page.locator('#permission-checks input').count(),6);assert.equal(await page.locator('#message').innerText(),'');assert.deepEqual(errors,[]);
-  console.log('PASS '+engineName+': dashboard boots, two UAV markers, zero battery, offline event, realtime photo; task UI mounts, legacy simulation sends no commands; no page errors');
+  console.log('PASS '+engineName+': dashboard boots, two UAV markers, zero battery, offline event, realtime photo; task UI mounts, legacy simulation sends no commands; online map default and tile errors preserve provider; explicit offline choice; no page errors');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});

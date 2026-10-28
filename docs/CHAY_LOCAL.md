@@ -42,7 +42,8 @@ macOS/Linux: thay hai dòng cuối bằng `cp .env.example .env` và mở `.env`
 Điền/sửa các dòng sau trong `.env` ở **thư mục gốc repo**, không đặt trong `backend/`:
 
 ```dotenv
-HOST_IP=127.0.0.1
+HOST_IP=auto
+LOCAL_NETWORK_MODE=lan
 PORT=8080
 MQTT_PORT=1883
 MYSQL_HOST=127.0.0.1
@@ -74,12 +75,12 @@ npm start
 
 ## 3. Đăng nhập kiểm tra
 
-Giữ cửa sổ `npm start` mở. Mở:
+Giữ cửa sổ server mở. Dùng IP LAN và cổng thực được launcher in ra (không nhập nguyên dấu ngoặc nhọn):
 
-- `http://localhost:8080/dashboard/` — dashboard.
-- `http://localhost:8080/m/` — giao diện điện thoại.
-- `http://localhost:8080/pilot-login/` — trang Pilot; trình duyệt máy tính không có DJI Bridge nên không phải kết nối UAV.
-- `http://localhost:8080/api/health` — tình trạng kết nối DB/MQTT, HTTP200 khi sẵn sàng.
+- `http://<IP-LAN-PC>:<PORT>/dashboard/` — dashboard.
+- `http://<IP-LAN-PC>:<PORT>/m/` — giao diện điện thoại.
+- `http://<IP-LAN-PC>:<PORT>/pilot-login/` — trang Pilot; trình duyệt máy tính không có DJI Bridge nên không phải kết nối UAV.
+- `http://<IP-LAN-PC>:<PORT>/api/health` — tình trạng kết nối DB/MQTT, HTTP200 khi sẵn sàng.
 
 Tài khoản Web là `local-admin`. Mật khẩu ban đầu được tạo ngẫu nhiên trong `backend/data/bootstrap-password` (khi đang đứng trong `backend`: file `data/bootstrap-password`). Mở file này bằng trình soạn thảo trên máy cá nhân, đăng nhập và đổi mật khẩu ngay theo màn hình yêu cầu. Sau khi đổi, dùng mật khẩu mới và xóa file mật khẩu ban đầu. Không gửi mật khẩu hoặc file này lên GitHub.
 
@@ -140,3 +141,20 @@ Kiểm chứng launcher một nút: 79 test Node/MySQL đạt (0 skip), gồm kh
 ## Thử Mavic 3T sau bản sửa kết nối
 
 Xem [MAVIC_3T_LOCAL_TEST.md](MAVIC_3T_LOCAL_TEST.md) để dùng IP LAN, license DJI, xin quyền Pilot, storage MinIO/STS và chọn kênh camera thiết bị công bố. `CHAY_LOCAL.bat` chạy dashboard/API/MySQL đã cấu hình; không tự cung cấp license DJI hay cài MinIO. Lần sửa này giữ form/bộ lọc/biểu đồ hiển thị trực tiếp, chỉ dùng dialog cho chi tiết bản ghi khi người dùng yêu cầu.
+
+## Chạy qua Wi-Fi/LAN (bản sửa bản đồ)
+
+Chạy `CHAY_WIFI.bat` hoặc `CHAY_LOCAL.bat` (mặc định chế độ LAN). Launcher ưu tiên IPv4 của Wi-Fi, bỏ adapter Docker/WSL/VPN; nếu nhiều card phù hợp sẽ yêu cầu đặt HOST_IP rõ ràng, không tự chọn một IP giả. Cấu hình mới dùng:
+
+```dotenv
+HOST_IP=auto
+LOCAL_NETWORK_MODE=lan
+```
+
+Cấu hình cũ HOST_IP=127.0.0.1 được launcher chuyển sang địa chỉ LAN lúc chạy mà không ghi đè `.env` hoặc mật khẩu. Nếu nhiều card, đổi HOST_IP thành IPv4 của PC trên cùng mạng với tay điều khiển (xem `ipconfig`, mục Wireless LAN adapter Wi-Fi). Không dùng IP minh họa của người khác. Để mở bằng URL localhost khi thử trên máy, đặt LOCAL_NETWORK_MODE=loopback.
+
+Cửa sổ chạy in ba địa chỉ chính xác theo IP/cổng thực: SERVER SAN SANG (dashboard), PILOT 2 và MQTT. Trình duyệt mở bằng IP LAN, không còn mặc định localhost. Phép kiểm tra sức khỏe nội bộ vẫn gọi127.0.0.1; đó không phải địa chỉ cấp cho RC. Dịch vụ HTTP/MQTT lắng nghe trên các interface của máy.
+
+PC, điện thoại và RC cần cùng LAN, không bật AP/client isolation hoặc dùng guest Wi-Fi tách thiết bị. Cho phép Node.js/các cổng thực được in qua Windows Firewall trên mạng Private; không tắt firewall toàn bộ. Live cần thêm cổng RTMP/FLV cấu hình; auto upload cần endpoint S3_PUBLIC_ENDPOINT mà RC truy cập được. Các biến MQTT_PUBLIC_URL/RTMP_PUBLIC_BASE_URL/MEDIA_HTTP_BASE_URL nếu đã đặt thủ công không được trỏlocalhost; để trống để dùng địa chỉ mặc định từ HOST_IP. MYSQL_HOST/S3_STS_ENDPOINT nội bộ vẫn có thể dùng127.0.0.1.
+
+Bản đồ Google vệ tinh trở lại mặc định trên ba màn bản đồ. Chỉ chuyển offline khi bạn bấm chọn; ghi nhớ lựa chọn riêng mỗi màn. Ô ảnh lỗi không tự biến thành lưới giả hoặc tự đổi provider. Badge phản ánh tải ảnh trong trình duyệt, không suy ra tình trạng UAV. `/api/map/status` là phép thử OSM từ server (`scope=server-osm-probe`, `affects_basemap=false`), không quyết định chế độ bản đồ trên trình duyệt. Wi-Fi không có Internet vẫn nhận được UAV qua LAN nhưng cần bộ tile offline thực nếu muốn xem ảnh nền; lưới kỹ thuật không phải ảnh vệ tinh đã lưu.

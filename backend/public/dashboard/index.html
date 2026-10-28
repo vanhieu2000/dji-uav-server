@@ -1257,6 +1257,7 @@ function switchView(viewName){
  if(window.matchMedia('(max-width:900px)').matches) document.querySelectorAll('.map-workspace').forEach(el=>el.classList.add('panel-collapsed'));
  if(!VIEW_TITLES[viewName]) viewName='dashboard';
  gCurrentView = viewName;
+ updateBasemapStatus();
  document.getElementById('app').classList.remove('sidebar-mobile-open');
 
  // Cập nhật tiêu đề Topbar
@@ -1327,63 +1328,36 @@ function switchView(viewName){
 let droneMarker = null;
 let manualDroneMarker = null;
 
-let gTileErrorCounts = { solar: 0, substation: 0, manual: 0 };
-let gBasemapOfflineFallbackNotified = false;
-
-function setBasemap(type, target){
- const cfg = BASEMAPS[type] || BASEMAPS.offline;
- const netStatusEl = document.getElementById('topbar-net-status');
- if (netStatusEl) {
-   if (type === 'offline') {
-     netStatusEl.innerHTML = '<span class="dot" style="background:#00f2fe"></span>Sơ đồ Ngoại Tuyến';
-   } else {
-     netStatusEl.innerHTML = '<span class="dot"></span>Bản đồ vệ tinh';
-   }
+const gBasemapStates={};
+function savedBasemap(target){try{const chosen=localStorage.getItem('uav-basemap-'+target);return Object.hasOwn(BASEMAPS,chosen)?chosen:'google_hybrid';}catch{return 'google_hybrid';}}
+function updateBasemapStatus(){
+ const target=gCurrentView==='map-substation'?'substation':gCurrentView==='control-manual'?'manual':'solar',state=gBasemapStates[target],el=document.getElementById('topbar-net-status');
+ if(!el||!state)return;
+ const cfg=BASEMAPS[state.type];
+ el.textContent=state.type==='offline'?'Sơ đồ ngoại tuyến (đã chọn)':cfg.name+(state.status==='ready'?' · Đã tải':state.status==='error'?' · Lỗi tải ô ảnh':state.status==='degraded'?' · Một số ô ảnh lỗi':' · Đang tải');
+ el.title=state.type==='offline'?'Lớp offline do người dùng chọn; không xác nhận có ảnh vệ tinh lưu sẵn.':'Trạng thái tải ảnh trong trình duyệt. Lỗi ô ảnh không đổi lớp nền và không ảnh hưởng kết nối UAV.';
+}
+function setBasemap(type,target){
+ if(!Object.hasOwn(BASEMAPS,type))type='google_hybrid';const cfg=BASEMAPS[type];
+ function createLayer(map,key){
+  const state={type,status:'loading',loaded:0,errors:0};gBasemapStates[key]=state;try{localStorage.setItem('uav-basemap-'+key,type);}catch{}
+  const layer=L.tileLayer(cfg.url,{maxZoom:22,maxNativeZoom:cfg.native||19,attribution:cfg.attr});
+  layer.on('loading',()=>{if(gBasemapStates[key]!==state)return;state.loaded=0;state.errors=0;state.status='loading';updateBasemapStatus();});
+  layer.on('tileload',()=>{if(gBasemapStates[key]!==state)return;state.loaded++;state.status=state.errors?'degraded':'ready';updateBasemapStatus();});
+  layer.on('tileerror',()=>{if(gBasemapStates[key]!==state)return;state.errors++;state.status=state.loaded?'degraded':'error';updateBasemapStatus();});
+  updateBasemapStatus();return layer.addTo(map);
  }
- function createLayer(map, tgtKey) {
-   const layer = L.tileLayer(cfg.url, {
-     maxZoom: 22,
-     maxNativeZoom: cfg.native || 19,
-     attribution: cfg.attr,
-     errorTileUrl: '/tiles/0/0/0.png'
-   });
-   layer.on('tileerror', function() {
-     gTileErrorCounts[tgtKey] = (gTileErrorCounts[tgtKey] || 0) + 1;
-     if (gTileErrorCounts[tgtKey] >= 3 && type !== 'offline') {
-       if (!gBasemapOfflineFallbackNotified) {
-         gBasemapOfflineFallbackNotified = true;
-         toast('📡 Mất kết nối Internet: Đã tự động kích hoạt Bản đồ Lưới Kỹ thuật Ngoại tuyến');
-       }
-       setTimeout(() => setBasemap('offline', tgtKey), 100);
-     }
-   });
-   return layer.addTo(map);
- }
- if(!target || target === 'solar'){
-  if(gMap){
-   if(gBaseLayerSolar) gMap.removeLayer(gBaseLayerSolar);
-   gBaseLayerSolar = createLayer(gMap, 'solar');
-  }
- }
- if(!target || target === 'substation'){
-  if(gMapSub){
-   if(gBaseLayerSub) gMapSub.removeLayer(gBaseLayerSub);
-   gBaseLayerSub = createLayer(gMapSub, 'substation');
-  }
- }
- if(!target || target === 'manual'){
-  if(gMapManual){
-   if(gBaseLayerManual) gMapManual.removeLayer(gBaseLayerManual);
-   gBaseLayerManual = createLayer(gMapManual, 'manual');
-  }
- }
+ if((!target||target==='solar')&&gMap){if(gBaseLayerSolar)gMap.removeLayer(gBaseLayerSolar);gBaseLayerSolar=createLayer(gMap,'solar');}
+ if((!target||target==='substation')&&gMapSub){if(gBaseLayerSub)gMapSub.removeLayer(gBaseLayerSub);gBaseLayerSub=createLayer(gMapSub,'substation');}
+ if((!target||target==='manual')&&gMapManual){if(gBaseLayerManual)gMapManual.removeLayer(gBaseLayerManual);gBaseLayerManual=createLayer(gMapManual,'manual');}
+ updateBasemapStatus();
 }
 
 function initSolarMap(){
  if(gMap) return;
  gMap = L.map('real-gis-map', { center: [11.831200, 106.591300], zoom: 17, zoomControl: false });
  L.control.zoom({ position: 'topright' }).addTo(gMap);
- setBasemap('offline', 'solar');
+ setBasemap(savedBasemap('solar'), 'solar');
 
  // Lớp tài sản thật từ CSDL (khu vực, chuỗi, tấm pin, bất thường...) + tâm theo nhà máy
  if(window.GIS){
@@ -1440,7 +1414,7 @@ function initSubstationMap(){
  if(gMapSub) return;
  gMapSub = L.map('real-gis-map-sub', { center: [11.832600, 106.592600], zoom: 18, zoomControl: false });
  L.control.zoom({ position: 'topright' }).addTo(gMapSub);
- setBasemap('offline', 'substation');
+ setBasemap(savedBasemap('substation'), 'substation');
 
  if(window.GIS){
   // Trạm đầu tiên có tọa độ làm tâm; chưa có thì theo nhà máy
@@ -1458,7 +1432,7 @@ function initManualMap(){
  if(gMapManual) return;
  gMapManual = L.map('real-gis-map-manual', { center: [11.831200, 106.591300], zoom: 17, zoomControl: false });
  L.control.zoom({ position: 'topright' }).addTo(gMapManual);
- setBasemap('offline', 'manual');
+ setBasemap(savedBasemap('manual'), 'manual');
  setTimeout(()=>{ if(gMapManual) gMapManual.invalidateSize(); }, 200);
 
  // Lớp tài sản thật (khu vực, dao cách ly, bất thường) thay cho dữ liệu mẫu

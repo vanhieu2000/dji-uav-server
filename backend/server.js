@@ -64,7 +64,7 @@ authRouter.setOnRevoked(({user_id,session_id})=>{require('./src/services/streamA
 // Nạp cấu hình hệ thống động từ config.json
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 let systemConfig = {
-  host_ip: process.env.HOST_IP || '10.20.28.101',
+  host_ip: process.env.HOST_IP || 'auto',
   port: 8080,
   mqtt_port: 1883,
   rtmp_port: 1935,
@@ -107,26 +107,11 @@ if (!systemConfig.dji_license.appKey || !systemConfig.dji_license.appLicense) {
   console.warn('[Config] Chưa cấu hình khóa DJI (DJI_APP_ID / DJI_APP_KEY / DJI_APP_LICENSE hoặc config.json).');
 }
 
-// Hàm tự động phát hiện IP card Wi-Fi
-function getWifiIp() {
-  if (process.env.HOST_IP) return process.env.HOST_IP;
-  if (systemConfig.host_ip && systemConfig.host_ip !== '10.20.28.50') return systemConfig.host_ip;
-  const nets = os.networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    if (/wi-fi|wlan|wireless/i.test(name)) {
-      for (const netInfo of nets[name]) {
-        if (netInfo.family === 'IPv4' && !netInfo.internal) {
-          return netInfo.address;
-        }
-      }
-    }
-  }
-  return '10.20.28.101';
-}
-
+// Explicit host for production; auto resolves an actual LAN interface, never an invented IP.
 const PORT = Number(process.env.PORT || systemConfig.port || 8080);
 const MQTT_PORT = Number(process.env.MQTT_PORT || systemConfig.mqtt_port || 1883);
-const HOST_IP = process.env.HOST_IP || systemConfig.host_ip || getWifiIp();
+const configuredHost=process.env.HOST_IP||systemConfig.host_ip||'auto';
+const HOST_IP=configuredHost==='auto'?require('./src/services/localNetwork').resolveHost({configured:'auto'}):configuredHost;
 
 app.use(require('./src/middleware/transportSecurity').securityHeaders);
 app.use(require('./src/middleware/transportSecurity').originPolicy);

@@ -6,6 +6,15 @@ test('local launcher: validate ports and never reuse an unidentified health endp
  const net=require('net'),server=net.createServer();await new Promise(r=>server.listen(0,'0.0.0.0',r));const port=server.address().port;
  try{const selected=await freePort(port);assert.ok(selected>port);}finally{await new Promise(r=>server.close(r));}
 });
+test('LAN: prefer Wi-Fi, reject ambiguous adapters, preserve explicit host and build consistent URLs',()=>{
+ const {resolveHost,urls}=require('../src/services/localNetwork');
+ const nic=address=>[{family:'IPv4',address,internal:false}];
+ const interfaces={'Ethernet':nic('192.168.2.10'),'Wi-Fi':nic('192.168.1.20'),'vEthernet (WSL)':nic('172.20.0.1'),'docker0':nic('172.17.0.1')};
+ assert.equal(resolveHost({configured:'auto',interfaces}),'192.168.1.20');assert.equal(resolveHost({configured:'127.0.0.1',interfaces}),'192.168.1.20');
+ assert.equal(resolveHost({configured:'192.168.9.2',interfaces}),'192.168.9.2');assert.equal(resolveHost({configured:'auto',mode:'loopback',interfaces}),'127.0.0.1');
+ assert.throws(()=>resolveHost({interfaces:{a:nic('10.1.1.2'),b:nic('10.2.1.2')}}),/HOST_IP/);assert.throws(()=>resolveHost({interfaces:{docker0:nic('172.17.0.1'),wifi:nic('169.254.1.2')}}),/IPv4 LAN/);
+ assert.deepEqual(urls('192.168.1.20',8081,1884),{dashboard:'http://192.168.1.20:8081/dashboard/',pilot:'http://192.168.1.20:8081/pilot-login/',mqtt:'tcp://192.168.1.20:1884'});
+});
 test('one-click: initialize in path with spaces, start, reuse without reset, stop cleanly',async t=>{
  if(!await h.mysqlAvailable())return t.skip('MySQL chưa sẵn sàng');
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'uav launcher with spaces ')),backend=path.join(root,'backend'),data=path.join(backend,'data'),source=path.resolve(__dirname,'..'),database=h.TEST_DB+'_launcher';
@@ -17,7 +26,7 @@ test('one-click: initialize in path with spaces, start, reuse without reset, sto
  for(const file of ['server.js','package.json','package-lock.json'])fs.copyFileSync(path.join(source,file),path.join(backend,file));
  fs.cpSync(path.resolve(source,'../mysql_init'),path.join(root,'mysql_init'),{recursive:true});fs.symlinkSync(path.join(source,'node_modules'),path.join(backend,'node_modules'),'junction');
  const config=h.rootConfig(),port=await freePort(19080),mqtt=await freePort(19180,[port]);
- const env={...process.env,MYSQL_HOST:config.host,MYSQL_PORT:String(config.port),MYSQL_USER:config.user,MYSQL_PASSWORD:config.password,MYSQL_DATABASE:database,PORT:String(port),MQTT_PORT:String(mqtt),HOST_IP:'127.0.0.1',BOOTSTRAP_ADMIN_USER:'launcher-admin',BOOTSTRAP_PASSWORD_FILE:path.join(data,'password'),LOCAL_NO_BROWSER:'1',NODE_ENV:'test',LIVE_STREAM_ENABLED:'false',VISION_ENABLED:'false',MQTT_BROKER_URL:''};delete env.MYSQL_PASSWORD_FILE;
+ const env={...process.env,MYSQL_HOST:config.host,MYSQL_PORT:String(config.port),MYSQL_USER:config.user,MYSQL_PASSWORD:config.password,MYSQL_DATABASE:database,PORT:String(port),MQTT_PORT:String(mqtt),HOST_IP:'127.0.0.1',LOCAL_NETWORK_MODE:'loopback',BOOTSTRAP_ADMIN_USER:'launcher-admin',BOOTSTRAP_PASSWORD_FILE:path.join(data,'password'),LOCAL_NO_BROWSER:'1',NODE_ENV:'test',LIVE_STREAM_ENABLED:'false',VISION_ENABLED:'false',MQTT_BROKER_URL:''};delete env.MYSQL_PASSWORD_FILE;
  fs.writeFileSync(path.join(root,'.env'),Object.entries(env).filter(([k])=>['MYSQL_HOST','MYSQL_PORT','MYSQL_USER','MYSQL_PASSWORD','MYSQL_DATABASE','PORT','MQTT_PORT','HOST_IP','BOOTSTRAP_ADMIN_USER'].includes(k)).map(([k,v])=>k+'='+JSON.stringify(v)).join('\n'),{mode:0o600});
  const hash=crypto.createHash('sha256').update(fs.readFileSync(path.join(backend,'package-lock.json'))).digest('hex');fs.writeFileSync(path.join(data,'local-deps.sha256'),hash);
  log=fs.openSync(path.join(data,'test.log'),'w');launcher=spawn(process.execPath,['scripts/start-local.js'],{cwd:backend,env,stdio:['ignore',log,log]});launcher.on('exit',()=>exited=true);

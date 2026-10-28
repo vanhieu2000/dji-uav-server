@@ -26,7 +26,8 @@ try {
         }
         $passwordFileForEnv = $passwordPath.Replace('\', '/')
         $content = @"
-HOST_IP=127.0.0.1
+HOST_IP=auto
+LOCAL_NETWORK_MODE=lan
 PORT=8080
 MQTT_PORT=1883
 MYSQL_HOST=127.0.0.1

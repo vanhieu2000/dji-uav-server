@@ -1,8 +1,9 @@
 /** One-click local launcher. No passwords in arguments, no account reset, no schema DROP on existing DB. */
 const fs=require('fs'),path=require('path'),crypto=require('crypto'),net=require('net'),{spawn}=require('child_process');
+const {resolveHost,urls}=require('../src/services/localNetwork');
 const ROOT=path.resolve(__dirname,'../..'),BACKEND=path.join(ROOT,'backend'),DATA=path.join(BACKEND,'data');
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
-function fingerprint(root=ROOT){const hash=crypto.createHash('sha256');for(const file of ['.env','backend/package-lock.json','backend/server.js'])hash.update(fs.readFileSync(path.join(root,file)));for(const key of ['MYSQL_PASSWORD','JWT_SECRET','S3_SERVICE_ACCESS_KEY','S3_SERVICE_SECRET_KEY','SMTP_PASSWORD','VISION_WEBHOOK_SECRET','VISION_API_TOKEN','MQTT_PASSWORD'])if(process.env[key+'_FILE'])hash.update(fs.readFileSync(process.env[key+'_FILE']));return hash.digest('hex');}
+function fingerprint(root=ROOT){const hash=crypto.createHash('sha256');for(const file of ['.env','backend/package-lock.json','backend/server.js','backend/scripts/start-local.js','backend/src/services/localNetwork.js'])hash.update(fs.readFileSync(path.join(root,file)));for(const key of ['MYSQL_PASSWORD','JWT_SECRET','S3_SERVICE_ACCESS_KEY','S3_SERVICE_SECRET_KEY','SMTP_PASSWORD','VISION_WEBHOOK_SECRET','VISION_API_TOKEN','MQTT_PASSWORD'])if(process.env[key+'_FILE'])hash.update(fs.readFileSync(process.env[key+'_FILE']));hash.update(process.env.HOST_IP||'');hash.update(process.env.LOCAL_NETWORK_MODE||'lan');return hash.digest('hex');}
 function portNumber(value,fallback){const n=value==null||value===''?fallback:Number(value);if(!Number.isInteger(n)||n<1024||n>65525)throw Error('Cổng local cần là số từ 1024 đến 65525');return n;}
 async function available(port){return new Promise(resolve=>{const s=net.createServer();s.once('error',()=>resolve(false));s.listen(port,'0.0.0.0',()=>s.close(()=>resolve(true)));});}
 async function freePort(start,excluded=[]){for(let n=start;n<start+10;n++)if(!excluded.includes(n)&&await available(n))return n;throw Error('Không có cổng trống gần '+start+'; kiểm tra PORT/MQTT_PORT trong .env');}
@@ -28,9 +29,9 @@ async function ensureAdmin(db,env=process.env){
 async function main(){
  if(Number(process.versions.node.split('.')[0])<24)throw Error('Cần cài Node.js 24 LTS rồi bấm lại file CHAY_LOCAL.bat');
  const envFile=path.join(ROOT,'.env');if(!fs.existsSync(envFile))throw Error('Chưa có .env; bấm CHAY_LOCAL.bat để nhập cấu hình lần đầu');
- process.loadEnvFile(envFile);if(process.env.NODE_ENV==='production')throw Error('File này chỉ dành cho local; dùng bộ triển khai production riêng');fs.mkdirSync(DATA,{recursive:true});const stateFile=path.join(DATA,'local-launcher.json'),lockFile=path.join(DATA,'local-launcher.lock'),signature=fingerprint();
+ process.loadEnvFile(envFile);if(process.env.NODE_ENV==='production')throw Error('File này chỉ dành cho local; dùng bộ triển khai production riêng');process.env.HOST_IP=resolveHost({configured:process.env.HOST_IP,mode:process.env.LOCAL_NETWORK_MODE||'lan'});fs.mkdirSync(DATA,{recursive:true});const stateFile=path.join(DATA,'local-launcher.json'),lockFile=path.join(DATA,'local-launcher.lock'),signature=fingerprint();
  let state=readJson(stateFile);
- if(await running(state)){if(state.signature!==signature)throw Error('Code/cấu hình đã đổi. Đóng cửa sổ server cũ rồi bấm CHAY_LOCAL.bat lại.');const url=`http://127.0.0.1:${state.port}/dashboard/`;console.log('Server đang chạy: '+url);openBrowser(url);return;}
+ if(await running(state)){if(state.signature!==signature)throw Error('Code/cấu hình đã đổi. Đóng cửa sổ server cũ rồi bấm CHAY_LOCAL.bat lại.');const url=urls(state.host||process.env.HOST_IP,state.port,state.mqtt).dashboard;console.log('Server đang chạy: '+url);openBrowser(url);return;}
  let lock;
  try{lock=fs.openSync(lockFile,'wx',0o600);}catch(e){
   if(e.code!=='EEXIST')throw e;const owner=readJson(lockFile);let alive=false;
@@ -38,7 +39,7 @@ async function main(){
   if(!Number.isInteger(owner?.pid)||owner.pid<=0)throw Error('Khóa khởi động chưa hoàn tất. Chờ vài giây rồi bấm lại; nếu cửa sổ cũ đã đóng, xem hướng dẫn xử lý local-launcher.lock');
   if(!alive){fs.rmSync(lockFile,{force:true});return main();}
   console.log('Một cửa sổ khác đang khởi động; chờ server sẵn sàng...');
-  for(let n=0;n<120;n++){state=readJson(stateFile);if(await running(state)){if(state.signature!==signature)throw Error('Cấu hình cửa sổ khác không khớp; xem cửa sổ server');openBrowser(`http://127.0.0.1:${state.port}/dashboard/`);return;}await delay(1000);}
+  for(let n=0;n<120;n++){state=readJson(stateFile);if(await running(state)){if(state.signature!==signature)throw Error('Cấu hình cửa sổ khác không khớp; xem cửa sổ server');openBrowser(urls(state.host||process.env.HOST_IP,state.port,state.mqtt).dashboard);return;}await delay(1000);}
   throw Error('Chưa khởi động xong. Xem lỗi trong cửa sổ chạy đầu tiên; không khởi động thêm server.');
  }
  fs.writeSync(lock,JSON.stringify({pid:process.pid}));fs.closeSync(lock);
@@ -57,10 +58,10 @@ async function main(){
   console.log('[4/4] Khởi động server, chờ DB/MQTT sẵn sàng...');
   child=spawn(process.execPath,['server.js'],{cwd:BACKEND,env:{...process.env,PORT:String(port),MQTT_PORT:String(mqtt),LOCAL_LAUNCH_ID:instance},stdio:'inherit'});
   const exit=new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',(code,signal)=>resolve({code,signal}));});exit.catch(()=>{});
-  state={pid:child.pid,instance,port,mqtt,signature};fs.writeFileSync(stateFile,JSON.stringify(state,null,2),{mode:0o600});
+  state={pid:child.pid,instance,port,mqtt,host:process.env.HOST_IP,signature};fs.writeFileSync(stateFile,JSON.stringify(state,null,2),{mode:0o600});
   let ready=false;for(let n=0;n<120;n++){if(stopped)return;if(child.exitCode!==null||child.signalCode)throw Error('Server đã dừng; xem lỗi phía trên');if(await running(state)){ready=true;break;}await delay(1000);}
   if(!ready)throw Error('Server chưa sẵn sàng sau 120 giây; xem lỗi DB/khởi tạo phía trên');
-  const url=`http://127.0.0.1:${port}/dashboard/`;console.log('\nSERVER SAN SANG: '+url+'\nGiữ cửa sổ này mở. Ctrl+C để dừng.\n');openBrowser(url);
+  const links=urls(process.env.HOST_IP,port,mqtt);console.log('\nSERVER SAN SANG: '+links.dashboard+'\nPILOT 2: '+links.pilot+'\nMQTT: '+links.mqtt+'\nDùng cùng Wi-Fi/LAN, cho phép các cổng này qua firewall mạng Private. Giữ cửa sổ này mở. Ctrl+C để dừng.\n');openBrowser(links.dashboard);
   const ended=await exit;if(stopped)return;if(ended.code&&ended.code!==0)throw Error('Server dừng với mã '+ended.code);
  }finally{if(child&&!child.killed)child.kill();cleanup();process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);process.removeListener('exit',cleanup);}
 }
