@@ -62,3 +62,10 @@ test('Bridge reconnect replaces loaded MQTT module and rejects retained username
  bridge.platformLoadComponent=()=>{active={host:'tcp://new:1884',username:'old'};loaded=true;return '{"code":0}';};
  assert.throws(()=>box.window.PilotBridge.freshThing({host:'tcp://new:1884',username:'pilot:43',password:'test-next'}),/MQTT cũ/);
 });
+
+test('MQTT identity diagnostics locate the rejected field without exposing payload values',()=>{
+ const {serialIdentityMismatch,serialsAllowed}=require('../src/services/mqttAccess');const s={rc_sn:'RC1234',aircraft_sn:'UAV1234'};
+ assert.deepEqual(serialIdentityMismatch(s,{data:{sub_devices:[{sn:'OTHER'}]}}),{path:'$.data.sub_devices[0].sn',reason:'SERIAL_MISMATCH'});
+ assert.equal(serialsAllowed(s,{data:{device_sn:'UAV1234',battery:{sn:'BAT1234'}}}),true);
+ assert.equal(serialsAllowed(s,{data:{gateway_sn:'OTHER'}}),false);
+});

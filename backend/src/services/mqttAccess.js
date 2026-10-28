@@ -37,22 +37,33 @@ async function bindTopology(session,topic,payload){
 const brokers=new Set();
 function revoke({user_id,session_id}){for(const broker of brokers)for(const client of Object.values(broker.clients))if(!client.uavInternal&&client.uavScope?.user_id===user_id&&(!session_id||client.uavScope.auth_session_id===session_id))client.close();}
 const IGNORED_SN_KEYS = new Set(['battery_sn', 'payload_sn', 'gimbal_sn', 'camera_sn', 'dongle_sn', 'component_sn']);
-function serialsAllowed(s, value, depth = 0) {
-  if (depth > 16) return false;
+function serialIdentityMismatch(s, value, depth = 0, path = '$') {
+  if (depth > 16) return {path, reason:'DEPTH_LIMIT'};
   const allowedSerials = [s.rc_sn, s.aircraft_sn].filter(Boolean);
-  if (!allowedSerials.length) return true;
-  if (Array.isArray(value)) return value.every(x => serialsAllowed(s, x, depth + 1));
-  if (value && typeof value === 'object') {
+  if (!allowedSerials.length) return null;
+  if (Array.isArray(value)) {
+    for(let i=0;i<value.length;i++){const denied=serialIdentityMismatch(s,value[i],depth+1,path+'['+i+']');if(denied)return denied;}
+  } else if (value && typeof value === 'object') {
     for (const [k, x] of Object.entries(value)) {
       if (IGNORED_SN_KEYS.has(k)) continue;
       if (k === 'batteries' || k === 'battery' || k === 'dongle_infos' || k === 'camera_list' || k === 'cameras' || k === 'payload') continue;
+      const field=path+'.'+k.replace(/[^A-Za-z0-9_-]/g,'_').slice(0,64);
       if ((k === 'sn' || k === 'device_sn' || k === 'gateway_sn' || k === 'aircraft_sn' || k === 'rc_sn') && typeof x === 'string' && x && !allowedSerials.includes(x)) {
-        return false;
+        return {path:field,reason:'SERIAL_MISMATCH'};
       }
-      if (!serialsAllowed(s, x, depth + 1)) return false;
+      const denied=serialIdentityMismatch(s,x,depth+1,field);if(denied)return denied;
     }
   }
-  return true;
+  return null;
+}
+function serialsAllowed(s,value,depth=0){return !serialIdentityMismatch(s,value,depth);}
+const identityLogTimes=new Map();
+function logIdentityDenied(client,session,topic,mismatch){
+ const safe=v=>String(v||'-').replace(/[^A-Za-z0-9_./:\[\]-]/g,'_').slice(0,256);
+ const key=safe(client.id)+':'+safe(topic)+':'+mismatch.path,now=Date.now();
+ if(now-(identityLogTimes.get(key)||0)<15000)return;
+ if(identityLogTimes.size>=1000)identityLogTimes.delete(identityLogTimes.keys().next().value);identityLogTimes.set(key,now);
+ console.warn(`[MQTT Identity] DENY client=${safe(client.id)} session=${safe(session.session_id)} topic=${safe(topic)} field=${safe(mismatch.path)} reason=${mismatch.reason} rc=${safe(session.rc_sn)} aircraft=${safe(session.aircraft_sn)}`);
 }
 async function authenticatePilot(username,password,lookup=principal){
  const name=Buffer.isBuffer(username)?username.toString('utf8'):username;
@@ -95,7 +106,8 @@ function configure(broker){
       return callback(Error('Topic denied'));
     }
     await bindTopology(s,packet.topic,payload);
-    if(!serialsAllowed(s,payload))return callback(Error('Payload identity denied'));
+    const mismatch=serialIdentityMismatch(s,payload);
+    if(mismatch){logIdentityDenied(client,s,packet.topic,mismatch);return callback(Error('Payload identity denied'));}
     client.uavScope=s;callback(null);
   }).catch(()=>callback(Error('Session unavailable')));
  };
@@ -110,4 +122,4 @@ function configure(broker){
  const timer=setInterval(async()=>{for(const client of Object.values(broker.clients))if(!client.uavInternal){let s=null;try{s=await principal(client.uavSessionId);}catch(e){}if(!s)client.close();else client.uavScope=s;}},10000);timer.unref();broker.on('closed',()=>{clearInterval(timer);brokers.delete(broker);});
  return internal;
 }
-module.exports={configure,credentials,principal,topicAllowed,serialsAllowed,bindTopology,authenticatePilot,revoke};
+module.exports={configure,credentials,principal,topicAllowed,serialsAllowed,serialIdentityMismatch,bindTopology,authenticatePilot,revoke};
