@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const h=require('./helpers');
 async function port(){const s=net.createServer();await new Promise(r=>s.listen(0,'127.0.0.1',r));const p=s.address().port;await new Promise(r=>s.close(r));return p;}
 async function until(fn,ms=15000){const end=Date.now()+ms;let last;while(Date.now()<end){try{const value=await fn();if(value)return value;}catch(e){last=e;}await new Promise(r=>setTimeout(r,50));}throw last||Error('Timeout');}
-test('serveur réel + 10 UAV MQTT isolés (localhost, aucun ordre de vol)',async t=>{
+test('server thật + 10 UAV MQTT và camera M3T giả lập, localhost không thiết bị thật)',async t=>{
  if(!await h.mysqlAvailable())return t.skip('MySQL indisponible');await h.resetTestDatabase();const db=require('../src/config/db');await db.testConnection();
  const auth=require('../src/routes/auth'),bcrypt=require('bcryptjs');const [admin]=[await db.query("INSERT INTO users (username,password_hash,full_name,role) VALUES ('runtime-admin',?,'Fixture','ADMIN')",[await bcrypt.hash('runtime-test-password',4)])];
  const [user]=await db.query('SELECT * FROM users WHERE user_id=?',[admin.insertId]);const token=await auth.issueToken(user);
@@ -14,6 +14,9 @@ test('serveur réel + 10 UAV MQTT isolés (localhost, aucun ordre de vol)',async
  await until(async()=>{if(serverExited)throw Error('Server exited: '+fs.readFileSync(path.join(dir,'server.log'),'utf8').slice(-2000));const r=await fetch(base+'/api/health');return r.ok;});
  const headers={Authorization:'Bearer '+token};
  assert.equal((await fetch(base+'/api/devices')).status,401);
+ for(const endpoint of ['/api/control/photo','/api/control/live','/api/control/authorize'])assert.equal((await fetch(base+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,401);
+ assert.equal((await fetch(base+'/storage/api/v1/workspaces/runtime-workspace/sts')).status,401);
+ assert.equal((await fetch(base+'/uploads/media/private.jpg')).status,401);
  assert.equal((await fetch(base+'/api/devices',{headers:{Origin:'https://foreign.example'}})).status,403);
  assert.equal((await fetch(base+'/foo/media/unsigned.jpg',{method:'PUT',body:'bad'})).status,404);
  assert.equal((await fetch(base+'/api/mqtt/test-publish',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({topic:'thing/product/FAKE/services'})})).status,410);
@@ -40,6 +43,31 @@ test('serveur réel + 10 UAV MQTT isolés (localhost, aucun ordre de vol)',async
  const routes=await fetch(base+'/wayline/api/v1/workspaces/runtime-workspace/waylines',{headers:{'x-auth-token':pilotToken}});assert.equal(routes.status,200);assert.deepEqual((await routes.json()).data.list,[]);
  const badWorkspace=await fetch(base+'/wayline/api/v1/workspaces/OTHER/waylines',{headers:{'x-auth-token':pilotToken}});assert.equal(badWorkspace.status,403);
  const storage=await fetch(base+'/storage/api/v1/workspaces/runtime-workspace/sts',{headers:{'x-auth-token':pilotToken}});assert.equal(storage.status,503);
+ // Bench simulator on the private random-port localhost broker. No real RC/UAV is connected.
+ const learnedRc='BINDRC1234',learnedUav='BINDUAV1234';
+ const learnedSession=(await db.query('INSERT INTO pilot_sessions (user_id,username,ticket_id,rc_sn,upload_namespace) VALUES (?,?,?,?,?)',[user.user_id,user.username,first.tid,learnedRc,crypto.randomUUID()])).insertId;
+ const learnedCredentials=await require('../src/services/mqttAccess').credentials(learnedSession,await auth.userForToken(token));
+ const simulator=await connect(learnedCredentials),methods=[];
+ const publish=(topic,packet)=>new Promise((resolve,reject)=>simulator.publish(topic,JSON.stringify(packet),{qos:1},e=>e?reject(e):resolve()));
+ await new Promise((resolve,reject)=>simulator.subscribe(`thing/product/${learnedRc}/services`,{qos:1},e=>e?reject(e):resolve()));
+ simulator.on('message',(topic,bytes)=>{
+  if(topic!==`thing/product/${learnedRc}/services`)return;
+  const packet=JSON.parse(bytes);methods.push(packet.method);
+  publish(`thing/product/${learnedRc}/services_reply`,{tid:packet.tid,bid:packet.bid,timestamp:Date.now(),method:packet.method,data:{result:0}}).catch(()=>{});
+  if(packet.method==='cloud_control_auth_request')publish(`thing/product/${learnedRc}/state`,{timestamp:Date.now(),data:{is_cloud_control_auth:true}}).catch(()=>{});
+ });
+ await publish(`sys/product/${learnedRc}/status`,{tid:crypto.randomUUID(),bid:crypto.randomUUID(),method:'update_topo',timestamp:Date.now(),data:{sub_devices:[{sn:learnedUav,type:77,sub_type:1}]}});
+ await until(async()=>{const [row]=await db.query('SELECT aircraft_sn FROM pilot_sessions WHERE session_id=?',[learnedSession]);return row.aircraft_sn===learnedUav;});
+ await publish(`thing/product/${learnedUav}/osd`,{timestamp:Date.now(),data:{latitude:10,longitude:106,height:0,elevation:0,horizontal_speed:0}});
+ async function control(path){const r=await fetch(base+'/api/control/'+path,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({device_sn:learnedUav,mode:'dual'})});return {status:r.status,data:await r.json()};}
+ async function readiness(){const r=await fetch(base+'/api/control/status?device_sn='+learnedUav,{headers});return (await r.json()).data;}
+ await until(async()=>{try{return (await readiness()).telemetry_fresh;}catch{return false;}});
+ assert.equal((await control('photo')).status,403);assert.deepEqual(methods,[]);
+ assert.equal((await control('authorize')).status,200);await until(async()=> (await readiness()).cloud_control_authorized);
+ const captured=await control('photo');assert.equal(captured.status,200);assert.equal(captured.data.data.image_received,false);
+ assert.deepEqual(methods,['cloud_control_auth_request','camera_mode_switch','photo_storage_set','camera_photo_take']);
+ await publish(`thing/product/${learnedRc}/state`,{timestamp:Date.now(),data:{is_cloud_control_auth:false}});await until(async()=>!(await readiness()).cloud_control_authorized);
+ assert.equal((await control('photo')).status,403);
  const lib=require('../src/services/routeLibrary');fs.mkdirSync(lib.WAYLINE_DIR,{recursive:true});const zip=new(require('adm-zip'))();zip.addFile('wpmz/waylines.wpml',Buffer.from('<kml/>'));const kmz=path.join(lib.WAYLINE_DIR,'fixture-download.kmz');fs.writeFileSync(kmz,zip.toBuffer());
  const route=await lib.addKmz({fileName:'fixture-download.kmz',routeName:'TEST ONLY — do not fly'});await db.query('INSERT INTO ticket_routes (ticket_id,route_id,sort_order) VALUES (?,?,0)',[first.tid,route.route_id]);
  const urlResponse=await fetch(base+'/wayline/api/v1/workspaces/runtime-workspace/waylines/'+route.route_uuid+'/url?format=json',{headers:{'x-auth-token':pilotToken}});assert.equal(urlResponse.status,200);const link=(await urlResponse.json()).data.url;

@@ -146,7 +146,7 @@
     }
   }
 
-  async function openFlight(id) {
+  async function openFlight(id, details = false) {
     const req = ++st.reqId;
     const res = await GIS.run(() => GIS.api('GET', `/api/flights/${id}`));
     if (!res || req !== st.reqId) return;
@@ -154,7 +154,7 @@
     st.root.querySelectorAll('.gis-fh-row').forEach(r => r.classList.toggle('on', Number(r.dataset.id) === id));
     drawFlight(res.data);
     renderDetail(res.data);
-    GIS.Compact?.reveal(st.root.querySelector('#gis-fh-detail'),'Chi tiết chuyến bay');
+    if(details){const detail=st.root.querySelector('#gis-fh-detail');GIS.Compact?.reveal(detail,'Chi tiết chuyến bay');detail.closest('dialog')?.addEventListener('close',()=>{detail.hidden=true;},{once:true});}
   }
 
   GIS.FlightHistory = {
@@ -183,7 +183,7 @@
         root.querySelector('#gis-fh-filter').addEventListener('submit', e => { e.preventDefault(); loadList(); });
         root.querySelector('#gis-fh-list').addEventListener('click', e => {
           const row = e.target.closest('tr[data-id]');
-          if (row) openFlight(Number(row.dataset.id));
+          if (row) openFlight(Number(row.dataset.id),Boolean(e.target.closest('button')));
         });
         const plant = await GIS.getPlant();
         const center = plant && plant.center_lat != null ? [plant.center_lat, plant.center_lng] : [11.8312, 106.5913];

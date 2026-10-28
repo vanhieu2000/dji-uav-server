@@ -132,7 +132,7 @@
       if (msg.type === 'osd' && msg.data && msg.device_sn) {
         const prev = devices.get(msg.device_sn) || {};
         devices.set(msg.device_sn, { ...prev, ...msg.data, device_sn: msg.device_sn });
-        if (!selected) select(msg.device_sn);
+        // Keep target selection explicit; incoming telemetry must not select a control target.
       } else if (msg.type === 'device_status') {
         const d = devices.get(msg.device_sn); if (d) d.status = msg.status;
       } else if (msg.type === 'media_synced' && msg.data) {
@@ -149,6 +149,7 @@
     },
     reconnect: catchUp,
     selected: () => selected,
+    selectDevice: select,
     streamPath: () => currentPath,
     playbackUrl: () => streams.find(s=>s.streamPath===currentPath)?.flv_url || null,
     mount(callback) {

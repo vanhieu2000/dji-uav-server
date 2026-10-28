@@ -136,3 +136,7 @@ Repo được clone riêng tại `/workspace/dji-uav-local`, cấu hình ngoài 
 Kết quả kiểm tra bản clone ngày 27/10/2026: health200, DB/MQTT kết nối; đăng nhập và đổi mật khẩu bắt buộc, dashboard/bản đồ/quản trị/mobile/đăng xuất đạt với Chromium thật, không mock API/CDN; không lỗi JavaScript hay tải thư viện. DB hiện tại chưa có phiếu để xuất báo cáo nên không tự tạo dữ liệu giả; xuất Word/PDF đã kiểm tra bằng fixture trong bộ 77 test. Ảnh nền Internet vẫn có thể trống khi mạng chặn máy chủ tiles; cần nhập tiles nhà máy để xem offline. Ảnh chụp và JSON kết quả riêng ở backend/data, không commit thông tin tài khoản.
 
 Kiểm chứng launcher một nút: 79 test Node/MySQL đạt (0 skip), gồm khởi tạo DB trong đường dẫn có dấu cách, bấm lại dùng đúng server và không đổi hash mật khẩu/dữ liệu, từ chối cấu hình đã thay đổi khi server cũ còn chạy, dừng và dọn khóa. PowerShell7 đã parse và chạy wizard bằng mật khẩu ký tự đặc biệt với Node/browser stub trong cloud; chưa kiểm thử thao tác GUI trực tiếp trên Windows. CI có job parse bằng Windows PowerShell.
+
+## Thử Mavic 3T sau bản sửa kết nối
+
+Xem [MAVIC_3T_LOCAL_TEST.md](MAVIC_3T_LOCAL_TEST.md) để dùng IP LAN, license DJI, xin quyền Pilot, storage MinIO/STS và chọn kênh camera thiết bị công bố. `CHAY_LOCAL.bat` chạy dashboard/API/MySQL đã cấu hình; không tự cung cấp license DJI hay cài MinIO. Lần sửa này giữ form/bộ lọc/biểu đồ hiển thị trực tiếp, chỉ dùng dialog cho chi tiết bản ghi khi người dùng yêu cầu.

@@ -54,7 +54,7 @@ const path=require('path');const req=require('module').createRequire(path.resolv
   await page.waitForTimeout(400);
   assert.equal(await page.locator('#real-gis-map .leaflet-control-layers').count(),1);
   if(process.env.BROWSER_SCREENSHOT) await page.screenshot({path:process.env.BROWSER_SCREENSHOT,fullPage:false});
-  await page.evaluate(()=>{triggerPhoto();startSimulatedMissionFlight();toggleSimulated3Cams();GIS.Tasks.render(document.getElementById('gis-assets-root'));});
+  await page.evaluate(()=>{triggerPhoto();flyAndCapturePoint(10,106);flyDroneToPoint(10,106);startSimulatedMissionFlight();toggleSimulated3Cams();GIS.Tasks.render(document.getElementById('gis-assets-root'));});
   await page.waitForSelector('#task-form',{state:'attached'});
   await page.evaluate(()=>GIS.Insights.reports());
   await page.waitForSelector('#insights-reports-root .gis-empty',{state:'attached'});

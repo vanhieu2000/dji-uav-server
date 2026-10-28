@@ -12,8 +12,8 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
     body {
-      background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
-      color: #c9d1d9;
+      background: #edf5f3;
+      color: #244d4e;
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -21,11 +21,11 @@
       padding: 16px;
     }
     .card {
-      background: rgba(22, 27, 34, 0.85);
+      background: #fff;
       backdrop-filter: blur(12px);
-      border: 1px solid rgba(48, 54, 61, 0.8);
+      border: 1px solid #c1d8d2;
       border-radius: 16px;
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 12px 32px rgba(13, 70, 60, 0.12);
       width: 100%;
       max-width: 460px;
       padding: 28px 24px;
@@ -36,7 +36,7 @@
     }
     .badge {
       display: inline-block;
-      background: #238636;
+      background: #0d6e6e;
       color: #ffffff;
       font-size: 11px;
       font-weight: 700;
@@ -47,14 +47,14 @@
       margin-bottom: 8px;
     }
     h2 {
-      color: #f0f6fc;
+      color: #173b3e;
       font-size: 20px;
       font-weight: 600;
       margin-bottom: 6px;
     }
     .subtitle {
       font-size: 13px;
-      color: #8b949e;
+      color: #526b6c;
     }
     .form-group {
       margin-bottom: 16px;
@@ -63,28 +63,28 @@
       display: block;
       font-size: 12px;
       font-weight: 600;
-      color: #8b949e;
+      color: #526b6c;
       margin-bottom: 6px;
       text-transform: uppercase;
       letter-spacing: 0.3px;
     }
     input, select {
       width: 100%;
-      background: #0d1117;
-      border: 1px solid #30363d;
+      background: #ffffff;
+      border: 1px solid #b5cfca;
       border-radius: 8px;
-      color: #f0f6fc;
+      color: #173b3e;
       padding: 12px 14px;
       font-size: 14px;
       outline: none;
       transition: border-color 0.2s;
     }
     input:focus, select:focus {
-      border-color: #58a6ff;
+      border-color: #0b6262;
     }
     .btn {
       width: 100%;
-      background: #1f6feb;
+      background: #0d6e6e;
       color: #ffffff;
       border: none;
       border-radius: 8px;
@@ -96,7 +96,7 @@
       margin-top: 10px;
     }
     .btn:hover {
-      background: #388bfd;
+      background: #095656;
     }
     .btn:active {
       transform: scale(0.98);
@@ -108,30 +108,30 @@
       font-size: 13px;
       background: rgba(56, 139, 253, 0.1);
       border: 1px solid rgba(56, 139, 253, 0.3);
-      color: #58a6ff;
+      color: #0b6262;
       display: none;
     }
     .status-box.success {
       background: rgba(35, 134, 54, 0.15);
       border-color: rgba(35, 134, 54, 0.4);
-      color: #3fb950;
+      color: #246244;
       display: block;
     }
     .status-box.error {
       background: rgba(248, 81, 73, 0.15);
       border-color: rgba(248, 81, 73, 0.4);
-      color: #f85149;
+      color: #a62e38;
       display: block;
     }
     .log-container {
       margin-top: 16px;
-      background: #090d13;
-      border: 1px solid #21262d;
+      background: #f0f6f4;
+      border: 1px solid #c1d8d2;
       border-radius: 6px;
       padding: 10px;
       font-family: Consolas, monospace;
       font-size: 11px;
-      color: #8b949e;
+      color: #526b6c;
       max-height: 120px;
       overflow-y: auto;
     }
@@ -139,14 +139,16 @@
       text-align: center;
       margin-top: 18px;
       font-size: 11px;
-      color: #6e7681;
+      color: #526b6c;
     }
   </style>
+<link rel="icon" type="image/x-icon" href="/dashboard/assets/rtc-logo.ico"><link rel="apple-touch-icon" href="/dashboard/assets/rtc-logo.png"><link rel="stylesheet" href="/dashboard/css/rtc-brand.css">
+<link rel="stylesheet" href="/dashboard/css/fonts.css">
 </head>
 <body>
 
   <div class="card">
-    <div class="header">
+    <div class="header"><img class="rtc-logo" style="width:64px;height:64px;margin:0 auto 16px" src="/dashboard/assets/rtc-logo.png" alt="RTC">
       <div class="badge">DJI Cloud API Platform</div>
       <h2>Trung Tâm Giám Sát UAV M3T</h2>
       <div class="subtitle">Đồng bộ Đường bay • Ảnh chụp • Livestream • Vị trí</div>
@@ -174,20 +176,16 @@
     </form>
 
     <!-- THẺ TRẠNG THÁI KẾT NỐI THÀNH CÔNG (CHẠY NGẦM KHÔNG HỦY PHIÊN) -->
-    <div id="connectedCard" style="display:none; background: rgba(35, 134, 54, 0.15); border: 1px solid #238636; border-radius: 12px; padding: 18px; margin-top: 16px; text-align: center;">
-      <div style="font-size: 32px; margin-bottom: 8px;">🟢</div>
-      <h3 style="color: #3fb950; margin-bottom: 6px;">ĐÃ KẾT NỐI CLOUD SERVER THÀNH CÔNG!</h3>
-      <p style="font-size: 13px; color: #c9d1d9; margin-bottom: 12px;">Hệ thống đang hoạt động ngầm và đồng bộ dữ liệu thời gian thực.</p>
-      <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; font-size: 12px; text-align: left; line-height: 1.6; color: #8b949e;">
-        • <b>Tay cầm:</b> DJI RC (<span id="rcSnText" style="color:#58a6ff;">5YSZM3K0031EYQ</span>)<br>
-        • <b>Dự án:</b> <span id="wsText" style="color:#f0f6fc;">Mavic 3T Solar Farm</span><br>
-        • <b>Giao thức:</b> MQTT tcp://10.20.28.50:1883 (<span style="color:#3fb950;">ONLINE</span>)<br>
-        • <b>Máy bay:</b> Sẵn sàng nhận lệnh & truyền OSD
-      </div>
-      <div style="margin-top: 14px; padding: 10px; background: rgba(56, 139, 253, 0.15); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 8px; font-size: 12px; color: #58a6ff;">
-        👉 <b>Bấm nút mũi tên quay lại &lt; ở góc trên bên trái</b> để ra màn hình chính DJI Pilot 2 và bấm <b>Enter Camera View</b> để bay!
-      </div>
-    </div>
+    <section id="connectedCard" style="display:none;border:1px solid #9bcfc1;border-radius:12px;padding:18px;margin-top:16px;background:#f0faf6;color:#173e38">
+      <h3 style="font-size:17px;color:#0c6954;margin-bottom:10px">MQTT đã kết nối</h3>
+      <dl style="font-size:13px;line-height:1.8;overflow-wrap:anywhere">
+        <dt>Tay điều khiển</dt><dd id="rcSnText">Chưa xác minh</dd>
+        <dt>Máy bay</dt><dd id="aircraftSnText">Chờ topology</dd>
+        <dt>Phiếu</dt><dd id="wsText">Chưa chọn</dd>
+        <dt>Broker</dt><dd id="mqttHostText">Chưa xác minh</dd>
+      </dl>
+      <p style="font-size:12px;margin-top:12px">Kết nối MQTT đã được Pilot xác nhận. Kiểm tra OSD mới, quyền điều khiển và ảnh gốc nhận được riêng trên Dashboard. Dùng nút quay lại của Pilot để về màn hình camera.</p>
+    </section>
 
     <div class="status-box" id="statusBox"></div>
 
@@ -201,6 +199,7 @@
     </div>
   </div>
 
+  <script src="./bridge.js"></script>
   <script>
     const logBox = document.getElementById('logBox');
     const statusBox = document.getElementById('statusBox');
@@ -266,14 +265,21 @@
     }
 
     // Đăng ký callback toàn cục theo chuẩn Thinklabs / DJI Cloud API
+    let connectionTimer=null, bridgeReady=false, lastConnectionState=false;
     window.connectCallback = function(t) {
-      addLog("<span style='color:#3fb950; font-weight:bold;'>✓ [DJI Pilot 2] MQTT Bắt tay thành công (Connect Callback): " + JSON.stringify(t) + "</span>");
-      showConnectedSuccess();
+      lastConnectionState=PilotBridge.connected(t);
+      if(!bridgeReady)return;
+      if (!lastConnectionState) {
+        statusBox.className='status-box error';statusBox.textContent='MQTT chưa kết nối hoặc đã mất kết nối. Kiểm tra địa chỉ broker và phiên Pilot.';
+        document.getElementById('connectedCard').style.display='none';statusBox.style.display='block';document.getElementById('loginForm').style.display='block';
+        connectBtn.disabled=false;connectBtn.innerText='THỬ LẠI';return;
+      }
+      clearTimeout(connectionTimer);addLog('✓ Pilot 2 xác nhận kết nối MQTT. Chờ OSD/ảnh thực trên Dashboard.');showConnectedSuccess();
     };
 
     window.liveStatusCallback = function(t) {
       try {
-        addLog("[LiveStatus] " + JSON.stringify(t));
+        addLog("[LiveStatus] " + escapeHtml(JSON.stringify(t)));
       } catch (e) {}
     };
 
@@ -283,11 +289,12 @@
       document.getElementById('loginForm').style.display = 'none';
       document.getElementById('statusBox').style.display = 'none';
       document.getElementById('connectedCard').style.display = 'block';
-      addLog("<span style='color:#3fb950;'>✓ HỆ THỐNG ĐÃ SẴN SÀNG! Đang chuyển dữ liệu Mavic 3T về máy tính.</span>");
+      addLog('✓ MQTT đã kết nối; không suy ra UAV hoặc kho ảnh đã sẵn sàng.');
     }
 
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      bridgeReady=false;lastConnectionState=false;clearTimeout(connectionTimer);
       connectBtn.disabled = true;
       connectBtn.innerText = "ĐANG KẾT NỐI...";
       addLog("Gửi yêu cầu xác thực tới máy chủ...");
@@ -297,18 +304,7 @@
       const ticketId = document.getElementById('ticketSelect').value;
 
       // Số serial tay điều khiển / máy bay (chỉ có khi mở trong DJI Pilot 2) để gắn ảnh đúng máy
-      function bridgeValue(fn) {
-        try {
-          if (!window.djiBridge || typeof window.djiBridge[fn] !== 'function') return null;
-          const raw = window.djiBridge[fn]();
-          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-          return (parsed && (parsed.data || parsed.sn)) || null;
-        } catch (e) { return null; }
-      }
-      const rcSn = bridgeValue('platformGetRemoteControllerSN');
-      const aircraftSn = bridgeValue('platformGetAircraftSN');
-      if (rcSn || aircraftSn) addLog('Tay điều khiển: ' + (rcSn || '?') + ' · Máy bay: ' + (aircraftSn || '?'));
-
+      const rcSn = null, aircraftSn = null; // Identity is read after license verification.
       try {
         const res = await fetch('/api/pilot/login', {
           method: 'POST',
@@ -320,131 +316,32 @@
         if (data.code === 0) {
           addLog("✓ Xác thực thành công: " + data.data.workspace_name);
           statusBox.className = "status-box success";
-          statusBox.innerHTML = `<strong>KẾT NỐI THÀNH CÔNG!</strong><br>Đã gán: ${escapeHtml(data.data.assigned_ticket)}<br>MQTT Host: ${escapeHtml(data.data.mqtt.host)}`;
+          statusBox.innerHTML = `<strong>ĐÃ XÁC THỰC TÀI KHOẢN</strong><br>Đã gán: ${escapeHtml(data.data.assigned_ticket)}<br>MQTT Host: ${escapeHtml(data.data.mqtt.host)}`;
 
-          // Nếu đang chạy trong app DJI Pilot 2 thực tế:
-          if (isDjiBridge || (typeof window !== 'undefined' && window.djiBridge)) {
-            addLog("Bắt đầu nạp các thông số chuẩn Thinklabs vào DJI Pilot 2...");
-
-            // 1. Xác thực License Thật
-            try {
-              addLog("Đang xác thực License DJI (AppID: " + data.data.license.appId + ")...");
-              const licRes = window.djiBridge.platformVerifyLicense(
-                data.data.license.appId,
-                data.data.license.appKey,
-                data.data.license.appLicense
-              );
-              addLog("Phản hồi VerifyLicense: " + JSON.stringify(licRes));
-
-              const isVerified = window.djiBridge.platformIsVerified();
-              addLog("Trạng thái platformIsVerified: " + isVerified);
-            } catch (err) {
-              addLog("Lỗi VerifyLicense: " + err.message);
-            }
-
-            // 2. Nạp module API đầu tiên (Bắt buộc theo chuẩn DJI & Thinklabs)
-            try {
-              const apiParam = JSON.stringify({
-                host: window.location.origin,
-                token: data.data.token
-              });
-              const apiRes = window.djiBridge.platformLoadComponent('api', apiParam);
-              addLog("✓ Nạp module 'api': " + JSON.stringify(apiRes));
-            } catch (err) {
-              addLog("Lỗi nạp module 'api': " + err.message);
-            }
-
-            // 3. Đăng ký Platform Information & Token
-            try {
-              window.djiBridge.platformSetInformation(
-                "Cloud Api Platform",
-                "Mavic 3T Solar Farm",
-                data.data.assigned_ticket || "Trạm Năng Lượng Mặt Trời"
-              );
-              if (window.djiBridge.apiSetToken) {
-                window.djiBridge.apiSetToken(data.data.token);
-              }
-              addLog("✓ Đã đăng ký Tên Dự Án ra màn hình chính DJI Pilot 2");
-            } catch (e) {
-              addLog("Lưu ý platformSetInformation: " + e.message);
-            }
-
-            // 4. Nạp module Liveshare
-            try {
-              const liveParam = JSON.stringify({
-                videoPublishType: "video-demand-aux-manual",
-                statusCallback: "liveStatusCallback"
-              });
-              window.djiBridge.platformLoadComponent('liveshare', liveParam);
-              addLog("✓ Đã kích hoạt module Liveshare");
-            } catch (err) {
-              addLog("Lỗi liveshare: " + err.message);
-            }
-
-            // 5. Nạp module Media (Tự động kéo ảnh thật từ thẻ nhớ Drone về Máy tính - Chuẩn Thinklabs)
-            try {
-              localStorage.setItem('djiAutoUploadImage', 'true');
-              const mediaParam = JSON.stringify({
-                autoUploadPhoto: true,
-                autoUploadPhotoType: 0, // 0: Đẩy cả ảnh gốc & ảnh nhiệt Radiometric RJPEG
-                autoUploadVideo: false
-              });
-              window.djiBridge.platformLoadComponent('media', mediaParam);
-              
-              // Gọi trực tiếp các hàm Native của DJI Bridge như trong mã nguồn Thinklabs
-              if (window.djiBridge.mediaSetAutoUploadPhoto) {
-                window.djiBridge.mediaSetAutoUploadPhoto(true);
-              }
-              if (window.djiBridge.mediaSetUploadPhotoType) {
-                window.djiBridge.mediaSetUploadPhotoType(0); // 0 = Original Photo (chứa kênh nhiệt RJPEG)
-              }
-              if (window.djiBridge.mediaSetDownloadOwner) {
-                window.djiBridge.mediaSetDownloadOwner(0); // 0 = Mine (Lấy từ máy bay hiện tại)
-              }
-              addLog("✓ Đã kích hoạt module Media Sync (Tự động tải ảnh thật về Server)");
-            } catch (err) {
-              addLog("Lỗi media: " + err.message);
-            }
-
-            // 6. Nạp module Mission (Đường bay KMZ)
-            try {
-              window.djiBridge.platformLoadComponent('mission', JSON.stringify({}));
-              addLog("✓ Đã kích hoạt module Mission");
-            } catch (err) {
-              addLog("Lỗi mission: " + err.message);
-            }
-
-            // 7. Cài đặt Workspace ID
-            try {
-              window.djiBridge.platformSetWorkspaceId(data.data.workspace_id);
-              addLog("✓ Đã cài đặt Workspace ID");
-            } catch (e) {
-              addLog("Lưu ý setWorkspaceId: " + e.message);
-            }
-
-            // 8. Nạp module THING (MQTT kết nối về máy chủ cục bộ)
-            try {
-              const mqttParam = JSON.stringify({
-                host: data.data.mqtt.host,
-                username: data.data.mqtt.username,
-                password: data.data.mqtt.password,
-                connectCallback: "connectCallback"
-              });
-              addLog("Đang nạp module Thing MQTT tới: " + data.data.mqtt.host);
-              const thingRes = window.djiBridge.platformLoadComponent('thing', mqttParam);
-              addLog("✓ Nạp module 'thing': " + JSON.stringify(thingRes));
-            } catch (err) {
-              addLog("Lỗi nạp module 'thing': " + err.message);
-            }
-          }
-
-          connectBtn.innerText = "ĐÃ GỬI LỆNH KẾT NỐI";
-          connectBtn.style.background = "#238636";
-
-          // Tự động hiển thị thẻ trạng thái kết nối thành công
-          setTimeout(() => {
-            showConnectedSuccess();
-          }, 1200);
+          if (!isDjiBridge) throw Error('Mở trang này trong DJI Pilot 2 để kết nối thiết bị; trình duyệt thường chỉ kiểm tra được đăng nhập.');
+          const cfg=data.data;
+          PilotBridge.call('platformVerifyLicense',cfg.license.appId,cfg.license.appKey,cfg.license.appLicense);
+          if(!PilotBridge.connected(PilotBridge.call('platformIsVerified')))throw Error('License DJI chưa được xác nhận.');
+          const identity={rc_sn:PilotBridge.serial('platformGetRemoteControllerSN'),aircraft_sn:PilotBridge.serial('platformGetAircraftSN')};
+          if(!identity.rc_sn)throw Error('Chưa đọc được serial tay điều khiển.');
+          const bound=await fetch('/api/pilot/identity',{method:'POST',headers:{'Content-Type':'application/json','x-auth-token':cfg.token},body:JSON.stringify(identity)});
+          const binding=await bound.json();if(!bound.ok||binding.code!==0)throw Error(binding.message||'Không gắn được thiết bị vào phiên.');
+          document.getElementById('rcSnText').textContent=identity.rc_sn;document.getElementById('aircraftSnText').textContent=identity.aircraft_sn||'Chờ topology';document.getElementById('wsText').textContent=cfg.assigned_ticket;document.getElementById('mqttHostText').textContent=cfg.mqtt.host;
+          addLog('Tay điều khiển: '+escapeHtml(identity.rc_sn)+' · Máy bay: '+escapeHtml(identity.aircraft_sn||'Chờ topology'));
+          PilotBridge.load('api',{host:location.origin,token:cfg.token});
+          PilotBridge.call('platformSetWorkspaceId',cfg.workspace_id);
+          PilotBridge.call('platformSetInformation','Giám sát UAV',cfg.workspace_name,cfg.assigned_ticket);
+          PilotBridge.load('thing',{...cfg.mqtt,connectCallback:'connectCallback'});
+          PilotBridge.load('liveshare',{videoPublishType:'video-demand-aux-manual',statusCallback:'liveStatusCallback'});
+          PilotBridge.load('media',{autoUploadPhoto:true,autoUploadPhotoType:0,autoUploadVideo:false});
+          PilotBridge.call('mediaSetAutoUploadPhoto',true);PilotBridge.call('mediaSetUploadPhotoType',0);
+          if(!PilotBridge.connected(PilotBridge.call('mediaGetAutoUploadPhoto'))||Number(PilotBridge.call('mediaGetUploadPhotoType'))!==0)throw Error('Pilot chưa bật tải ảnh gốc tự động.');
+          PilotBridge.load('mission',{});
+          bridgeReady=true;
+          statusBox.className='status-box';statusBox.textContent='Đã xác thực, đang chờ Pilot 2 xác nhận MQTT…';
+          connectBtn.innerText='ĐANG CHỜ MQTT';
+          if(lastConnectionState||PilotBridge.connected(PilotBridge.call('thingGetConnectState')))window.connectCallback(true);
+          else connectionTimer=setTimeout(()=>{statusBox.className='status-box error';statusBox.textContent='Chưa có xác nhận MQTT sau 20 giây. Kiểm tra IP/cổng, firewall và log broker.';connectBtn.disabled=false;connectBtn.innerText='THỬ LẠI';},20000);
 
         } else {
           statusBox.className = "status-box error";
@@ -455,7 +352,7 @@
       } catch (err) {
         statusBox.className = "status-box error";
         statusBox.innerHTML = `<strong>Không thể kết nối đến Server:</strong> ${escapeHtml(err.message)}`;
-        addLog("Lỗi: " + err.message);
+        addLog("Lỗi: " + escapeHtml(err.message));
         connectBtn.disabled = false;
         connectBtn.innerText = "THỬ LẠI";
       }

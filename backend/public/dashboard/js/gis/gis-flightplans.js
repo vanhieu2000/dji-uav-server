@@ -107,7 +107,7 @@
   async function preview() {
     const body = readBody();
     const problem = checkBody(body);
-    if (problem) { GIS.Compact.reveal(st.root.querySelector('.gis-fp-form'),'Cấu hình đường bay');GIS.toast(problem, 'error'); return; }
+    if (problem) { st.root.querySelector('.gis-fp-form').scrollIntoView({block:'nearest'});GIS.toast(problem, 'error'); return; }
     const res = await GIS.run(() => GIS.api('POST', '/api/flight-plans/preview', body));
     if (!res) return;
     st.lastPreview = res.data;
@@ -119,7 +119,7 @@
   async function create() {
     const body = readBody();
     const problem = checkBody(body) || (!body.route_name ? 'Nhập tên đường bay' : null);
-    if (problem) { GIS.Compact.reveal(st.root.querySelector('.gis-fp-form'),'Cấu hình đường bay');GIS.toast(problem, 'error'); return; }
+    if (problem) { st.root.querySelector('.gis-fp-form').scrollIntoView({block:'nearest'});GIS.toast(problem, 'error'); return; }
     const res = await GIS.run(() => GIS.api('POST', '/api/flight-plans', body));
     if (!res) return;
     GIS.toast(res.message);
@@ -205,10 +205,6 @@
             <section class="gis-fp-mapbox"><div id="gis-fp-map"></div></section>
           </div>
           <section class="card flat gis-fp-list"><h3 class="gis-fp-list-title">Đường bay đã tạo</h3><div id="gis-fp-routes"></div></section>`;
-        const form=root.querySelector('.gis-fp-form'),map=root.querySelector('.gis-fp'),toolbar=document.createElement('div');toolbar.className='fp-toolbar';
-        const config=document.createElement('button');config.type='button';config.className='btn';config.textContent='Cấu hình đường bay';config.onclick=()=>GIS.Compact.reveal(form,'Cấu hình đường bay');
-        const params=document.createElement('button');params.type='button';params.className='btn';params.textContent='Thông số';params.id='gis-fp-info';params.disabled=true;params.onclick=()=>GIS.Compact.reveal(root.querySelector('#gis-fp-stats'),'Thông số đường bay');
-        toolbar.append(config,root.querySelector('#gis-fp-preview'),root.querySelector('#gis-fp-create'),params);root.prepend(toolbar);form.querySelectorAll('.gis-row').forEach(row=>{if(!row.childElementCount)row.remove();});GIS.Compact.mount(form,'Cấu hình đường bay');form.previousElementSibling.remove();
         root.querySelectorAll('[name="fp-kind"]').forEach(r => r.addEventListener('change', () => {
           renderForm();
           st.root.querySelector('#gis-fp-create').disabled = true;

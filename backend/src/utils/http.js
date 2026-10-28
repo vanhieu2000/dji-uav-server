@@ -45,7 +45,7 @@ function asyncHandler(fn) {
             await fn(req, res, next);
         } catch (err) {
             const { status, message } = toHttpError(err);
-            if (status === 503) console.warn(`[API] ${req.method} ${req.originalUrl}: CSDL chưa sẵn sàng`);
+            if (err instanceof DbUnavailableError) console.warn(`[API] ${req.method} ${req.originalUrl}: CSDL chưa sẵn sàng`);
             else if (status >= 500) console.error(`[API] ${req.method} ${req.originalUrl}:`, err);
             if (!res.headersSent) res.status(status).json({ code: status, message });
         }

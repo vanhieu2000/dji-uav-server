@@ -28,4 +28,5 @@ async function receive(session,key){
   if(r.status==='failed'||r.media.ticket_id!==session.ticket_id)throw Error('Chưa ghi nhận được ảnh trong phiếu');return r;
  }catch(e){fs.rmSync(localPath,{force:true});throw e;}
 }
-module.exports={grant,receive,prefix};
+function readiness(){try{config();return {configured:true,mode:'minio-sts',verified:false};}catch{return {configured:false,mode:'minio-sts',verified:false};}}
+module.exports={grant,receive,prefix,readiness};

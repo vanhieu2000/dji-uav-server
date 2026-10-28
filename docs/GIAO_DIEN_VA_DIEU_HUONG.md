@@ -29,8 +29,16 @@ Các màn dùng chung nhãn ở trên ô nhập, khối bộ lọc, bảng danh 
 
 Tại các màn nhập ảnh/Excel/ZIP, bấm Chọn tệp hoặc Chọn thư mục ảnh. Vùng bên dưới liệt kê tên/dung lượng và xem trước ảnh đọc được trong trình duyệt. Chọn tệp chỉ chuẩn bị dữ liệu trên máy; nút Nhập/Tải lên riêng mới gửi tệp đến server. Preview giới hạn 4 ảnh trên màn hình nhỏ hoặc 12 ảnh trên desktop; toàn bộ tệp được giữ nguyên để xử lý. File không phải ảnh vẫn có danh sách tên/dung lượng; module Excel có bước kiểm tra nội dung riêng.
 
-## Chế độ xem gọn
+## Bố cục ưu tiên hiển thị trực tiếp (cập nhật 28/10/2026)
 
-Tên màn hình nằm ở thanh trên; bỏ tiêu đề lớn lặp. Trang Lập đường bay luôn dành chỗ cho cả bản đồ và bảng tuyến. Bấm Cấu hình đường bay để nhập tham số; đóng view giữ nguyên bản nháp, sau đó Xem trước/Tạo KMZ bằng toolbar. Thông số và Chi tiết đường bay mở view riêng, chứa cả hồ sơ, gán phiếu, tải KMZ và xóa. Trên màn hình nhỏ, bảng chỉ giữ các cột chính; bấm Chi tiết để xem đủ.
+Tên màn hình nằm ở thanh trên, bỏ tiêu đề lớn lặp. Bộ lọc, form, biểu đồ, ảnh xem trước và thông số chuẩn hiển thị ngay trên trang. Không tự chuyển cả khối thành nút chỉ vì trang cao hơn cửa sổ. Màn nhỏ cho phép cuộn trang tự nhiên; không cắt mất nội dung để đạt chỉ số không cuộn.
 
-Sidebar mở từng nhóm. Nếu màn hình thấp không đủ chỗ, bấm nhóm sẽ mở danh mục chức năng trong popup thay vì cuộn sidebar. Các phần dài dùng nút Mở view/Xem chi tiết; chỉ nội dung popup được phép cuộn khi cần. Dialog hỗ trợ Đóng, Escape và chạm nền ngoài. Bản đồ trong view lịch sử là chính bản đồ đang dùng, được trả lại vị trí cũ khi đóng.
+Lập đường bay: cấu hình nằm bên trái, bản đồ bên phải; hồ sơ và phiếu đặt cạnh nhau, thao tác Xem trước/Tạo KMZ chung hàng. Bảng đường bay bên dưới giữ các cột và thao tác. Trên mobile, cấu hình và bản đồ xếp dọc; bảng có thể cuộn ngang riêng. Chi tiết một bản ghi vẫn có thể mở dialog theo yêu cầu của người dùng.
+
+Lịch sử: mã UAV, phiếu, từ ngày, đến ngày và Lọc nằm cùng một hàng trên desktop; xuống hai cột trên mobile. Bản đồ và bảng danh sách luôn hiển thị. Chọn dòng để xem vết bay/thông tin; nút Chi tiết mở bản ghi và trình phát lại trong dialog, đóng sẽ trả lại chính bản đồ cũ. Bộ lọc không bị đưa vào popup.
+
+Tổng quan và Báo cáo giữ biểu đồ/thống kê/sự cố trực tiếp. Nhiệm vụ giữ form và bộ lọc trực tiếp; Tạo/Sửa đưa tới form hiện hữu, không giấu form sau nút. Ảnh chọn xem trước hiển thị ngay dưới nút chọn tệp.
+
+Sidebar mở từng nhóm. Chỉ khi chiều cao thực sự không đủ, danh mục nhóm mở trong dialog để giữ mọi liên kết có thể truy cập. Dialog bản ghi hỗ trợ Đóng, Escape và chạm nền ngoài. Các kiểm thử kiểm tra cả vị trí/không chồng lấn, thay vì chỉ kiểm tra kích thước viewport.
+
+Chỉ trên màn hình cực thấp (<500px), khối trạng thái/quyền UAV trên bản đồ có disclosure thu gọn để không phủ kín bản đồ. Desktop giữ đầy đủ controls; khối này không áp dụng cho bộ lọc/form ở các trang nghiệp vụ.

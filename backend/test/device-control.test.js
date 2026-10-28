@@ -1,0 +1,45 @@
+const test=require('node:test'),assert=require('node:assert/strict'),express=require('express');
+const {createCommands}=require('../src/services/deviceCommands');
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+test('commands: QoS1, exact gateway/tid/bid, rejection and timeout',async()=>{
+ let packet,topic,options;const c=createCommands({getClient:()=>({connected:true,publish:(t,b,o,cb)=>{topic=t;packet=JSON.parse(b);options=o;cb();}}),timeoutMs:60});
+ const p=c.send('RC1234','camera_photo_take',{});assert.equal(topic,'thing/product/RC1234/services');assert.equal(options.qos,1);
+ const reply={...packet,data:{result:0}};
+ assert.equal(c.reply('OTHER',reply),false);assert.equal(c.reply('RC1234',{...reply,bid:'wrong'}),false);
+ assert.equal(c.reply('RC1234',reply),true);assert.equal((await p).result,0);
+ const rejected=c.send('RC1234','camera_mode_switch',{});c.reply('RC1234',{...packet,data:{result:514001}});await assert.rejects(rejected,e=>e.status===422);
+ await assert.rejects(c.send('RC1234','camera_photo_take',{}),e=>e.status===504);
+ await assert.rejects(createCommands({getClient:()=>null}).send('RC1234','x',{}),e=>e.status===503);
+});
+test('commands: overlapping sequences cannot interleave',async()=>{
+ const c=createCommands({getClient:()=>null});const p=c.exclusive('RC1',()=>delay(20));await assert.rejects(c.exclusive('RC1',()=>null),e=>e.status===409);await p;
+});
+test('control HTTP: no fallback target, authorization, ordered photo ACKs, revoked authority, real live capability',async t=>{
+ const calls=[],devices={UAV1234:{type:77,sub_type:1,last_seen:new Date(),last_osd_at:new Date(),status:'ONLINE'}},gateways={RC1234:{is_cloud_control_auth:false,live_capacity:{device_list:[{sn:'UAV1234',camera_list:[{camera_index:'67-0-0',video_list:[{video_index:'real-index'}]}]}]}}};
+ let failMethod=null,client=true,revoke=false;
+ const commands={exclusive:async(g,fn)=>fn(),send:async(g,m,d)=>{calls.push({g,m,d});if(revoke&&m==='camera_mode_switch')gateways[g].is_cloud_control_auth=false;if(m===failMethod)throw Object.assign(new (require('../src/utils/validate').ValidationError)('Device rejected'),{status:422});return {result:0,status:'accepted'};}};
+ const app=express();app.use(express.json(),(req,res,next)=>{req.user={user_id:1,role:'ADMIN',username:'fixture'};next();});
+ app.use('/api/control',require('../src/routes/deviceControl').createRouter({commands,devices,gateways,gatewayOfAircraft:{UAV1234:'RC1234'},activeSession:async()=>({rc_sn:'RC1234',aircraft_sn:'UAV1234',ticket_id:1}),monitoring:{ensureStream:async()=>({streamPath:'/live/ticket_1_0123456789abcdef',channel:'ticket_1_0123456789abcdef'}),streams:async()=>[]},streamAccess:{mint:()=> 'fixture-grant'},getClient:()=>({connected:client}),liveEnabled:()=>true,liveReady:()=>true,rtmpBase:()=> 'rtmp://fixture:1935',access:{permission(){},async ticket(){}}}));
+ const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.on('listening',r));t.after(()=>new Promise(r=>server.close(r)));const base='http://127.0.0.1:'+server.address().port;
+ async function post(path,body={device_sn:'UAV1234'}){const r=await fetch(base+'/api/control/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return {status:r.status,body:await r.json()};}
+ assert.equal((await post('photo',{})).status,400);assert.equal((await post('photo')).status,403);assert.equal(calls.length,0);
+ gateways.RC1234.is_cloud_control_auth=true;assert.equal((await post('photo',{device_sn:'UAV1234',mode:'dual'})).status,200);
+ assert.deepEqual(calls.map(c=>c.m),['camera_mode_switch','photo_storage_set','camera_photo_take']);assert.deepEqual(calls[1].d.photo_storage_settings,['vision','ir']);assert.ok(calls.every(c=>c.g==='RC1234'));calls.length=0;
+ failMethod='camera_mode_switch';assert.equal((await post('photo')).status,422);assert.deepEqual(calls.map(c=>c.m),['camera_mode_switch']);calls.length=0;failMethod=null;
+ revoke=true;assert.equal((await post('photo')).status,403);assert.equal(calls.length,1);revoke=false;calls.length=0;gateways.RC1234.is_cloud_control_auth=true;
+ client=false;assert.equal((await post('photo')).status,503);client=true;
+ assert.equal((await post('live',{device_sn:'UAV1234',action:'start',video_id:'UAV1234/67-0-0/wide-0'})).status,400);
+ assert.equal((await post('live',{device_sn:'UAV1234',action:'start',video_id:'UAV1234/67-0-0/real-index'})).status,200);assert.match(calls.at(-1).d.url,/fixture-grant/);
+ assert.equal((await post('rth')).status,410);const n=calls.length;assert.equal((await post('media-sync')).body.data.sync_command_sent,false);assert.equal(calls.length,n);
+});
+test('MQTT: unknown serials cannot learn from arbitrary topics or wildcard subscriptions',()=>{
+ const {topicAllowed,serialsAllowed}=require('../src/services/mqttAccess');
+ const unknown={session_id:1,rc_sn:null,aircraft_sn:null};assert.equal(topicAllowed(unknown,'sys/product/RC1234/status','publish'),false);assert.equal(unknown.aircraft_sn,null);
+ const s={rc_sn:'RC1234',aircraft_sn:'UAV1234'};assert.equal(topicAllowed(s,'thing/product/UAV1234/osd','publish'),true);assert.equal(topicAllowed(s,'thing/product/OTHER/osd','publish'),false);assert.equal(topicAllowed(s,'thing/product/+/osd','subscribe'),false);
+ assert.equal(serialsAllowed(s,{device_sn:'OTHER'}),false);assert.equal(serialsAllowed(s,{battery:{sn:'BAT1234'}}),true);
+});
+test('Bridge: plain and wrapped getters, setup error, false callback never accepted',()=>{
+ const vm=require('vm'),fs=require('fs');const box={window:{}};vm.runInNewContext(fs.readFileSync(require('path').join(__dirname,'../public/pilot-login/bridge.js'),'utf8'),box);const p=box.window.PilotBridge;
+ assert.equal(p.value('RC1234'),'RC1234');assert.equal(p.value('{"code":0,"data":true}'),true);assert.equal(p.connected(false),false);assert.equal(p.connected('{"code":1}'),false);assert.equal(p.connected('{"code":0,"data":true}'),true);assert.throws(()=>p.value('{"code":5}'));
+ box.window.djiBridge={platformGetRemoteControllerSN:()=> 'RC1234'};assert.equal(p.serial('platformGetRemoteControllerSN'),'RC1234');
+});

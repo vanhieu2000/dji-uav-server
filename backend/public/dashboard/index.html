@@ -747,6 +747,11 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
       <!-- VIEW 10: ĐIỀU KHIỂN BUỒNG LÁI & GIÁM SÁT FULL MAP THÔNG MINH -->
       <section class="page-view" id="view-control-manual" style="position:relative;width:100%;height:100%;overflow:hidden">
 
+        <section id="device-readiness" aria-label="Kết nối & quyền thiết bị"><details id="device-readiness-details" open><summary>Kết nối & quyền UAV</summary>
+          <div class="device-controls"><label>UAV<select class="input" id="device-target"><option value="">Chọn máy bay</option></select></label><label>Kênh camera<select class="input" id="device-video"><option value="">Chờ capability camera</option></select></label></div>
+          <div class="actions"><button class="btn sm" data-refresh-device type="button">Kiểm tra kết nối</button><button class="btn sm" data-device-authorize type="button">Xin quyền từ Pilot</button><button class="btn sm" data-device-release type="button">Trả quyền</button><button class="btn sm" data-device-stop type="button">Dừng phát live</button></div>
+          <p data-device-status role="status">Chọn UAV rồi kiểm tra kết nối. Ảnh gốc được xác nhận riêng khi tải về.</p></details>
+        </section>
         <!-- BẢN ĐỒ GIS LEAFLET TOÀN MÀN HÌNH 100% -->
         <div id="real-gis-map-manual" style="position:absolute;inset:0;width:100%;height:100%;z-index:1"></div>
 
@@ -767,10 +772,10 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
         <div class="map-left-toolbar">
           <button class="map-icon-btn active" id="btn-toggle-live-pip" onclick="toggleAndStartLive()" title="🎥 Kích Hoạt & Xem Live Cam 1080p" aria-label="🎥 Kích Hoạt & Xem Live Cam 1080p" data-tip="🎥 Kích Hoạt & Xem Live Cam 1080p">🎥</button>
           <button class="map-icon-btn" style="background:#0284c7" onclick="captureLiveSnapshot()" title="⚡ Chụp Snapshot từ luồng Live" aria-label="⚡ Chụp Snapshot từ luồng Live" data-tip="⚡ Chụp Snapshot từ luồng Live">⚡</button>
-          <button class="map-icon-btn" style="background:#0d6e6e" onclick="triggerPhoto('dual')" title="📸 Chụp Kép (RGB 48MP + Nhiệt)" aria-label="📸 Chụp Kép (RGB 48MP + Nhiệt)" data-tip="📸 Chụp Kép (RGB 48MP + Nhiệt)">📸</button>
-          <button class="map-icon-btn" style="background:#2563eb" onclick="triggerPhoto('wide')" title="📷 Chụp RGB 48MP" aria-label="📷 Chụp RGB 48MP" data-tip="📷 Chụp RGB 48MP">📷</button>
+          <button class="map-icon-btn" style="background:#0d6e6e" onclick="triggerPhoto('dual')" title="📸 Chụp Kép (RGB + Nhiệt)" aria-label="📸 Chụp Kép (RGB + Nhiệt)" data-tip="📸 Chụp Kép (RGB + Nhiệt)">📸</button>
+          <button class="map-icon-btn" style="background:#2563eb" onclick="triggerPhoto('wide')" title="📷 Chụp RGB" aria-label="📷 Chụp RGB" data-tip="📷 Chụp RGB">📷</button>
           <button class="map-icon-btn" style="background:#cf2f5e" onclick="triggerPhoto('thermal')" title="🌡️ Chụp Hồng Ngoại Nhiệt" aria-label="🌡️ Chụp Hồng Ngoại Nhiệt" data-tip="🌡️ Chụp Hồng Ngoại Nhiệt">🌡️</button>
-          <button class="map-icon-btn" style="background:#7c3aed" onclick="triggerPhoto('zoom')" title="🔍 Chụp Phóng Đại Zoom" aria-label="🔍 Chụp Phóng Đại Zoom" data-tip="🔍 Chụp Phóng Đại Zoom">🔍</button>
+          <button class="map-icon-btn" style="background:#7c3aed" disabled title="Chọn chế độ Zoom trên Pilot 2; chưa xác minh thao tác chuyển lens từ Web"  aria-label="🔍 Chụp Phóng Đại Zoom" data-tip="🔍 Chụp Phóng Đại Zoom">🔍</button>
           <button class="map-icon-btn" onclick="manualSetGimbal(-90)" title="📐 Gimbal -90° (Soi Pin)" aria-label="📐 Gimbal -90° (Soi Pin)" data-tip="📐 Gimbal -90° (Soi Pin)">⬇️</button>
           <button class="map-icon-btn" onclick="manualSetGimbal(0)" title="📐 Gimbal 0° (Soi DCL)" aria-label="📐 Gimbal 0° (Soi DCL)" data-tip="📐 Gimbal 0° (Soi DCL)">➡️</button>
           <button class="map-icon-btn danger" onclick="manualSendRth()" title="🏠 Gọi Drone Về (RTH)" aria-label="🏠 Gọi Drone Về (RTH)" data-tip="🏠 Gọi Drone Về (RTH)">🏠</button>
@@ -790,15 +795,7 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
               <span class="dot off" id="pip-live-dot"></span>
               <span class="tag info" style="font-size:9.5px;padding:0 5px" id="manual-stream-badge">LIVE MAVIC 3T</span>
             </div>
-            <!-- Cụm chọn chế độ camera trực tiếp -->
-            <div class="live-cam-tabs">
-              <button class="live-cam-tab-btn active" id="btn-cam-wide" onclick="switchLiveCamMode('wide')" title="Camera Góc Rộng RGB">📷 Wide</button>
-              <button class="live-cam-tab-btn" id="btn-cam-thermal" onclick="switchLiveCamMode('thermal')" title="Camera Hồng Ngoại Nhiệt">🌡️ Nhiệt</button>
-              <button class="live-cam-tab-btn" id="btn-cam-zoom" onclick="switchLiveCamMode('zoom')" title="Camera Phóng Đại Zoom">🔍 Zoom</button>
-              <button class="live-cam-tab-btn" id="btn-cam-dual" onclick="switchLiveCamMode('dual')" title="Xem song song RGB & Camera Nhiệt">🔲 Dual-Cam</button>
-              <button class="live-cam-tab-btn" id="btn-cam-triple" onclick="switchLiveCamMode('triple')" title="Lưới xem cả 3 camera">🔳 3-Cam</button>
-              <button class="live-cam-tab-btn" id="btn-sim-cams" style="background:#047857;color:#fff" onclick="toggleSimulated3Cams()" title="Mô phỏng đồng thời 2-3 camera để debug">🧪 Test 3 Cam</button>
-            </div>
+            <span style="font-size:11px">Kênh camera đã chọn</span>
             <div style="display:flex;align-items:center;gap:3px">
               <button class="icon-btn" style="width:20px;height:20px;border:none;background:transparent;color:#94a3b8;font-size:12px" onclick="toggleLivePipSize()" title="Phóng to / Thu nhỏ">⛶</button>
               <button class="icon-btn" style="width:20px;height:20px;border:none;background:transparent;color:#94a3b8;font-size:12px" onclick="toggleLivePip()" title="Ẩn khung hình">✕</button>
@@ -808,7 +805,7 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
           <div class="live-pip-body" id="live-pip-body">
             <!-- PANE 1: CAMERA WIDE RGB -->
             <div class="cam-pane" id="cam-pane-wide">
-              <span class="cam-pane-label" style="border-color:#38bdf8">📷 RGB WIDE 1080P</span>
+              <span class="cam-pane-label" style="border-color:#38bdf8">Kênh thiết bị đã chọn</span>
               <video id="manual-live-video" autoplay muted playsinline controls style="width:100%;height:100%;object-fit:cover;display:none"></video>
               <canvas id="sim-canvas-wide" style="width:100%;height:100%;object-fit:cover;display:none"></canvas>
               <div id="manual-live-placeholder" style="text-align:center;padding:10px;z-index:1">
@@ -819,31 +816,6 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
               </div>
             </div>
 
-            <!-- PANE 2: CAMERA THERMAL HỒNG NGOẠI NHIỆT -->
-            <div class="cam-pane" id="cam-pane-thermal" style="display:none">
-              <span class="cam-pane-label" style="border-color:#f43f5e">🌡️ THERMAL INFRARED</span>
-              <video id="thermal-live-video" autoplay muted playsinline controls style="width:100%;height:100%;object-fit:cover;display:none"></video>
-              <canvas id="sim-canvas-thermal" style="width:100%;height:100%;object-fit:cover;display:none"></canvas>
-              <div id="thermal-live-placeholder" style="text-align:center;padding:10px;z-index:1">
-                <div style="font-size:22px">🌡️</div>
-                <div style="font-size:11px;color:#fff;font-weight:600;margin-top:2px">Chờ luồng camera Nhiệt...</div>
-                <div class="muted" id="pip-rtmp-hint-thermal" style="font-size:9.5px">rtmp://HOST_IP:1935/live/m3t_thermal</div>
-                <button class="btn sm" style="margin-top:6px;font-size:10.5px;padding:3px 12px;background:#cf2f5e;color:#fff" onclick="manualStartLive('thermal')">▶️ BẬT CAMERA NHIỆT</button>
-              </div>
-            </div>
-
-            <!-- PANE 3: CAMERA ZOOM TELEPHOTO -->
-            <div class="cam-pane" id="cam-pane-zoom" style="display:none">
-              <span class="cam-pane-label" style="border-color:#a855f7">🔍 TELE ZOOM 56X</span>
-              <video id="zoom-live-video" autoplay muted playsinline controls style="width:100%;height:100%;object-fit:cover;display:none"></video>
-              <canvas id="sim-canvas-zoom" style="width:100%;height:100%;object-fit:cover;display:none"></canvas>
-              <div id="zoom-live-placeholder" style="text-align:center;padding:10px;z-index:1">
-                <div style="font-size:22px">🔍</div>
-                <div style="font-size:11px;color:#fff;font-weight:600;margin-top:2px">Chờ luồng camera Zoom...</div>
-                <div class="muted" id="pip-rtmp-hint-zoom" style="font-size:9.5px">rtmp://HOST_IP:1935/live/m3t_zoom</div>
-                <button class="btn sm" style="margin-top:6px;font-size:10.5px;padding:3px 12px;background:#7c3aed;color:#fff" onclick="manualStartLive('zoom')">▶️ BẬT CAMERA ZOOM</button>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -1231,7 +1203,7 @@ let gBaseLayerSolar = null;
 let gBaseLayerSub = null;
 let gBaseLayerManual = null;
 let gAutoFollow = true;
-let gSelectedDroneSn = '1581F5FJC243K00DNRRT';
+let gSelectedDroneSn = null;
 let gDroneIsOnline = false;
 let gLastOsdAt = 0;
 
@@ -1643,36 +1615,11 @@ function getAuthHeaders() {
   };
 }
 
-async function flyDroneToPoint(lat, lng){
- toast(`Đang gửi lệnh điều hướng Mavic 3T bay đến tọa độ [${lat.toFixed(5)}, ${lng.toFixed(5)}]...`);
- try{
-  const res = await fetch('/api/control/flyto', {
-   method: 'POST',
-   headers: getAuthHeaders(),
-   body: JSON.stringify({
-    device_sn: gSelectedDroneSn,
-    latitude: lat,
-    longitude: lng,
-    altitude: 50
-   })
-  });
-  const data = await res.json();
-  if(data.code === 0){
-   toast(`✓ Đã phát lệnh bay tới tọa độ [${lat.toFixed(5)}, ${lng.toFixed(5)}] thành công!`);
-  } else {
-   toast(data.message || 'Mavic 3T đã nhận tọa độ bay');
-  }
- }catch(e){
-  toast(`✓ Đã phát lệnh bay tới tọa độ [${lat.toFixed(5)}, ${lng.toFixed(5)}]!`);
- }
+async function flyDroneToPoint(){
+ toast('Điều khiển bay tới điểm chưa được kiểm chứng. Lập KMZ và vận hành trên Pilot 2.');return false;
 }
-
-async function flyAndCapturePoint(lat, lng){
- toast(`Đang điều hướng bay và thiết lập tự động chụp ảnh tại [${lat.toFixed(5)}, ${lng.toFixed(5)}]...`);
- await flyDroneToPoint(lat, lng);
- setTimeout(()=>{
-  triggerPhoto('dual');
- }, 1500);
+async function flyAndCapturePoint(){
+ toast('Chưa hỗ trợ tự bay và chụp từ Web. Dùng điểm chụp trong nhiệm vụ KMZ trên Pilot 2.');return false;
 }
 
 function saveMapPointAsDevice(lat, lng){
@@ -1696,6 +1643,7 @@ function toggleAndStartLive(){
 }
 
 async function triggerPhoto(mode){
+  if(!gSelectedDroneSn){toast('Chọn rõ UAV trước khi chụp ảnh.');return;}
   const m = mode || 'dual';
   toast(`Đang gửi lệnh Chụp Ảnh (${m.toUpperCase()}) tới Mavic 3T...`);
   try {
@@ -2538,7 +2486,7 @@ async function manualSetGimbal(pitch){
     });
     const d = await res.json();
     if(res.ok && d.code === 0){
-      toast(`✓ Đã đặt góc Gimbal: ${pitch}° (${pitch === -90 ? 'Quét Pin NLMT' : 'Kiểm tra Dao Cách Ly'})`);
+      toast(d.message || 'Pilot đã chấp nhận lệnh gimbal');
     } else {
       toast('⚠️ ' + (d.message || 'Mavic 3T đang OFFLINE!'));
     }
@@ -2567,32 +2515,26 @@ async function manualSendRth(){
   }
 }
 
-async function manualStartLive(videoType){
-  const vType = videoType || 'wide';
-  toast(`Đang yêu cầu kích hoạt Live Stream ${vType.toUpperCase()} tới Flycam...`);
+async function manualStartLive(){
+  toast('Đang yêu cầu phát kênh camera đã chọn…');
   try {
     const res = await fetch('/api/control/live', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         action: 'start',
-        video_type: vType,
-        device_sn: gSelectedDroneSn || '1581F5FJC243K00DNRRT'
+        video_id: window.DeviceReadiness?.videoId() || '',
+        device_sn: gSelectedDroneSn
       })
     });
     const d = await res.json();
     if (res.ok && d.code === 0) {
-      toast('✓ Đã gửi lệnh mở luồng trực tiếp! Đang đón nhận video...');
-      const streamPath = d.channel ? `/live/${d.channel}` : (d.data && d.data.streamPath) || '/live/m3t_live';
-      setTimeout(() => startFlvLivePlayer(streamPath), 1000);
-    } else {
-      toast('⚠ ' + (d.message || 'Không thể gửi lệnh mở live stream'));
-      startFlvLivePlayer();
-    }
-  } catch (err) {
-    console.warn('Lỗi gọi API live:', err);
-    startFlvLivePlayer();
-  }
+      toast(d.message);
+      const label=document.querySelector('#cam-pane-wide .cam-pane-label');if(label)label.textContent=window.DeviceReadiness?.videoId()||'Kênh đã chọn';
+      if(d.data?.playback_url) startFlvLivePlayer(d.data.streamPath,d.data.playback_url);
+    } else { toast('⚠ '+(d.message||'Không thể mở live stream')); }
+  } catch(err){ toast('Lỗi live: '+err.message); }
+
 }
 function stopFlvLivePlayer(){
   if(gFlvPlayer){ try { gFlvPlayer.destroy(); } catch(e){} gFlvPlayer = null; }
@@ -2629,19 +2571,9 @@ function startFlvLivePlayer(streamPath, playbackUrl){
     gFlvPlayer = null;
   }
 
-  // Tự động tìm kênh phát phù hợp nhất
-  if (!streamPath) {
-    if (window.GIS && GIS.LiveMonitor && typeof GIS.LiveMonitor.streamPath === 'function') {
-      streamPath = GIS.LiveMonitor.streamPath();
-    }
-    if (!streamPath) {
-      const ticketSelect = document.getElementById('uav-live-ticket');
-      const ticketId = ticketSelect ? ticketSelect.value : null;
-      streamPath = ticketId ? `/live/ticket_${ticketId}_live` : '/live/m3t_live';
-    }
-  }
-
-  const flvUrl = playbackUrl || (window.GIS && GIS.LiveMonitor && typeof GIS.LiveMonitor.playbackUrl === 'function' && GIS.LiveMonitor.playbackUrl()) || `${location.protocol}//${location.hostname}:8000${streamPath}.flv`;
+  if(!streamPath)streamPath=window.GIS?.LiveMonitor?.streamPath?.();
+  const flvUrl=playbackUrl||window.GIS?.LiveMonitor?.playbackUrl?.();
+  if(!streamPath||!flvUrl){toast('Chưa có kênh phát đã xác minh. Chọn kênh do thiết bị công bố và kiểm tra kết nối.');return;}
   console.log('[FLV Player] Khởi tạo luồng phát:', flvUrl);
 
   try{
@@ -3214,7 +3146,7 @@ function applyTestCommandPreset(){
  const payloadInput = document.getElementById('test-payload-input');
  if(!topicInput || !payloadInput) return;
 
- const droneSn = gSelectedDroneSn || '1581F5FJC243K00DNRRT';
+ const droneSn = gSelectedDroneSn || '';
 
  switch(sel){
   case 'photo':
@@ -3434,17 +3366,7 @@ function setupRealtimeTelemetry(){
     if(window.GIS && GIS.FlightHistory) GIS.FlightHistory.refresh();
    }
 
-   // 1.1 Luồng Live Stream video từ Mavic 3T
-   if(msg.type === 'stream_started'){
-    toast('✓ Đã nhận luồng phát trực tiếp từ Mavic 3T! Đang hiển thị...');
-    const path = msg.stream_path || msg.streamPath || (msg.channel ? `/live/${msg.channel}` : '/live/m3t_live');
-    startFlvLivePlayer(path);
-   }
-   if(msg.type === 'stream_stopped'){
-    toast('Luồng phát trực tiếp từ Mavic 3T đã kết thúc');
-    stopFlvLivePlayer();
-   }
-
+   // Stream selection/publisher state is handled by GIS.LiveMonitor within its selected ticket.
    // 2. Ảnh chụp đồng bộ mới từ Mavic 3T
    if(msg.type === 'media_synced' && msg.data){
     toast(`📸 Đã nhận ảnh mới từ Mavic 3T: ${msg.data.file_name}`);
@@ -3455,20 +3377,19 @@ function setupRealtimeTelemetry(){
     // 3. Telemetry OSD từ UAV
     if(msg.type === 'osd' && msg.data){
      const sn = msg.device_sn || msg.sn;
-     if(!gSelectedDroneSn && sn) gSelectedDroneSn = sn;
-     if(!gSelectedDroneSn || sn === gSelectedDroneSn){
+     if(gSelectedDroneSn && sn === gSelectedDroneSn && msg.data.last_osd_at){
       window.gLastOsdAt = Date.now();
       setDroneOnlineState(true, sn, msg.data);
      }
     }
 
     // 3.0 Telemetry OSD từ Tay Cầm RC (Pilot 2 Gateway)
-    if(msg.type === 'rc_osd' && msg.data){
+    if(msg.type === 'rc_osd' && msg.data && msg.gateway_sn === window.gLastOsd?.gateway_sn){
      window.gLastRcOsdAt = Date.now();
      window.gLastRcOsd = { ...(window.gLastRcOsd || {}), ...msg.data };
      updateRcDisplay(window.gLastRcOsd);
     }
-    if(msg.type === 'rc_status'){
+    if(msg.type === 'rc_status' && msg.gateway_sn === window.gLastOsd?.gateway_sn){
      if(msg.status === 'OFFLINE'){
       if(window.gLastRcOsd) window.gLastRcOsd.status = 'OFFLINE';
       updateRcDisplay({ status: 'OFFLINE' });
@@ -3476,14 +3397,8 @@ function setupRealtimeTelemetry(){
     }
 
     // 3.1 Nhận sự kiện thay đổi trạng thái thiết bị từ Server (ONLINE / OFFLINE)
-    if(msg.type === 'device_status' || msg.type === 'device_offline' || msg.type === 'device_online'){
-     const sn = msg.device_sn || msg.sn;
-     const isOnline = msg.status === 'ONLINE' || msg.type === 'device_online';
-     if(!isOnline){
-      setDroneOnlineState(false, sn);
-     } else {
-      setDroneOnlineState(true, sn, msg.data);
-     }
+    if(['device_status','device_offline'].includes(msg.type)&& (msg.device_sn||msg.sn)===gSelectedDroneSn){
+      if(msg.status==='OFFLINE'||msg.type==='device_offline')setDroneOnlineState(false,gSelectedDroneSn);
     }
    }catch(e){}
   };
@@ -3504,6 +3419,7 @@ function updateRcDisplay(rc){
 }
 
 function setDroneOnlineState(isOnline, sn, d){
+ if(sn&&sn!==gSelectedDroneSn)return;
  window.gDroneIsOnline = isOnline;
  const topDrone = document.getElementById('topbar-drone-status');
  const dashBadge = document.getElementById('dash-drone-badge');
@@ -3511,7 +3427,7 @@ function setDroneOnlineState(isOnline, sn, d){
  const kpiSub = document.getElementById('kpi-drone-sub');
 
  if(!isOnline){
-  if(topDrone) topDrone.innerHTML = `<span class="dot off"></span>Mavic 3T: OFFLINE`;
+  if(topDrone) topDrone.innerHTML = `<span class="dot off"></span>${sn?'UAV: OFFLINE':'Chưa chọn UAV'}`;
   if(dashBadge){
    dashBadge.className = 'tag off';
    dashBadge.innerText = (sn || 'Mavic 3T') + ' · OFFLINE';
@@ -3520,7 +3436,7 @@ function setDroneOnlineState(isOnline, sn, d){
    kpiSt.innerText = 'NGẮT KẾT NỐI';
    kpiSt.style.color = 'var(--ink3)';
   }
-  if(kpiSub) kpiSub.innerText = (sn || 'Mavic 3T') + ' (Tắt nguồn hoặc mất sóng)';
+  if(kpiSub) kpiSub.innerText = sn ? sn+' (chưa có telemetry mới)' : 'Chọn UAV để xem thông số';
 
   const resetHud = (pfx) => {
    const elA = document.getElementById(pfx + '-alt'); if(elA) elA.innerText = '—';
@@ -3547,7 +3463,8 @@ function setDroneOnlineState(isOnline, sn, d){
  }
 
  // Khi ONLINE: Tích lũy OSD để không bị null các trường rời rạc
- const prev = window.gLastOsd || {};
+ const prev = window.gLastOsdSn===sn ? (window.gLastOsd||{}) : {};
+ window.gLastOsdSn=sn;
  const curr = d || {};
  const merged = { ...prev, ...curr };
  window.gLastOsd = merged;
@@ -3622,13 +3539,18 @@ function setDroneOnlineState(isOnline, sn, d){
  }
 }
 
+function selectUav(sn){
+ const chosen=sn||null;if(chosen===gSelectedDroneSn)return;
+ gSelectedDroneSn=chosen;const selector=document.getElementById('device-target');if(selector)selector.value=chosen||'';window.gLastOsd=null;window.gLastOsdSn=null;window.gLastOsdAt=null;window.gLastRcOsd=null;
+ setDroneOnlineState(false,chosen);updateRcDisplay({status:'OFFLINE'});stopFlvLivePlayer();checkInitialDroneStatus();window.DeviceReadiness?.refresh();
+}
 function refreshAllOsdDisplays(){
  setDroneOnlineState(Boolean(window.gDroneIsOnline), gSelectedDroneSn, window.gLastOsd);
 }
 
-// Watchdog Frontend: Nếu quá 8 giây không có OSD thì chuyển OFFLINE dứt khoát
+// Watchdog Frontend: Nếu quá 30 giây không có OSD thì chuyển OFFLINE dứt khoát
 setInterval(() => {
- if (window.gDroneIsOnline && window.gLastOsdAt && (Date.now() - window.gLastOsdAt > 8000)) {
+ if (window.gDroneIsOnline && window.gLastOsdAt && (Date.now() - window.gLastOsdAt > 30000)) {
   setDroneOnlineState(false, gSelectedDroneSn);
  }
 }, 2000);
@@ -3636,11 +3558,13 @@ setInterval(() => {
 // Khởi tạo ban đầu: Kiểm tra trạng thái máy bay ngay từ Database
 async function checkInitialDroneStatus(){
  try {
-  const res = await fetch('/api/monitoring/devices');
+  const requested=gSelectedDroneSn;if(!requested){setDroneOnlineState(false,null);return;}
+  const res = await fetch('/api/monitoring/devices',{headers:getAuthHeaders()});
   const d = await res.json();
   const list = d.data || [];
-  const target = list.find(x => x.device_sn === gSelectedDroneSn) || list[0];
-  if(target && target.status === 'ONLINE' && target.last_seen && (Date.now() - new Date(target.last_seen).getTime() < 8000)){
+  if(gSelectedDroneSn!==requested)return;
+  const target = list.find(x => x.device_sn === requested);
+  if(target && ['ONLINE','IN_FLIGHT'].includes(target.status) && target.last_seen && (Date.now() - new Date(target.last_seen).getTime() < 30000)){
    window.gLastOsdAt = new Date(target.last_seen).getTime();
    setDroneOnlineState(true, target.device_sn, target);
   } else {
@@ -3958,7 +3882,7 @@ async function triggerWaypointPhoto(){ return triggerPhoto(); }
    KHỞI ĐỘNG HỆ THỐNG KHI LOAD TRANG
    =================================================================== */
 document.addEventListener('DOMContentLoaded', ()=>{
- if(window.GIS && GIS.LiveMonitor) GIS.LiveMonitor.mount(sn => { gSelectedDroneSn = sn; });
+ if(window.GIS && GIS.LiveMonitor) GIS.LiveMonitor.mount(selectUav);
  // 0. Khôi phục trạng thái thu nhỏ / mở rộng của Sidebar từ localStorage
  if(localStorage.getItem('uav_sidebar_collapsed') === '1'){
   document.getElementById('app')?.classList.add('sidebar-collapsed');
@@ -4048,5 +3972,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
  switchView(initTab);
 });
 </script>
+<script src="js/device-readiness.js"></script>
 </body>
 </html>

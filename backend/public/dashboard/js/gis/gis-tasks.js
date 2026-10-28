@@ -35,7 +35,7 @@
       <h4>Ảnh trong phiếu</h4><div style="display:flex;flex-wrap:wrap;gap:12px">${d.photos.slice(0,200).map(m=>`<figure style="width:140px;margin:0"><a href="${esc(m.file_url)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(m.file_url)}" style="width:140px;height:100px;object-fit:cover" alt="${esc(m.file_name)}"></a><figcaption>${esc(m.lens||m.media_type)} · lượt ${esc(m.flight_session_id||'chưa gắn')}<br>${({EXPLICIT:'Đã xác nhận',FLIGHT:'Theo lượt bay',SESSION:'Theo phiên Pilot',UNRESOLVED:'Chưa xác định'})[m.assignment_status]||'Chưa xác định'}</figcaption></figure>`).join('')}</div>`;
     const eventBox=document.createElement('details');eventBox.innerHTML='<summary>Nhật ký nhận ảnh</summary><div class="task-ingest-events">Đang tải…</div>';root.querySelector('#task-detail').appendChild(eventBox);
     GIS.api('GET',`/api/tickets/${id}/ingest-events`).then(r=>{eventBox.querySelector('div').innerHTML=r.data.map(e=>`<div>${esc(e.original_name)} · ${({created:'Đã nhận',duplicate:'Trùng ảnh',failed:'Lỗi nhận ảnh'})[e.status]||esc(e.status)} · ${esc(e.note||'')}</div>`).join('')||'Chưa có sự kiện upload.';}).catch(()=>{});
-    root.querySelector('#task-edit').onclick=()=>GIS.Compact?.reveal(root.querySelector('#task-form').closest('.ui-section')||root.querySelector('#task-form'),'Chỉnh sửa nhiệm vụ');
+    root.querySelector('#task-edit').onclick=()=>(GIS.Compact?.closeAll(),root.querySelector('#task-form').scrollIntoView({block:'nearest'}));
     root.querySelectorAll('[data-status]').forEach(b=>b.onclick=()=>GIS.run(async()=>{await GIS.api('PATCH',`/api/tickets/${id}/status`,{status:b.dataset.status});await open(id);await list();}));
     root.querySelector('#task-reconcile').onsubmit=e=>{e.preventDefault();const f=e.target;GIS.run(async()=>{await GIS.api('POST',`/api/tickets/${id}/reconcile`,{expected_count:Number(f.expected.value),note:f.note.value,originals_checked:f.checked.checked});await open(id);});};
   }
@@ -57,7 +57,7 @@
       root.querySelector('[name="assigned_device_sn"]').innerHTML='<option value="">Chưa giao UAV</option>'+devs.data.filter(d=>d.device_type==='DRONE').map(d=>`<option value="${esc(d.device_sn)}">${esc(d.device_name)} · ${esc(d.device_sn)}</option>`).join('');
       root.querySelector('#task-team [name="members"]').innerHTML=people.data.map(p=>`<option value="${p.user_id}">${esc(p.full_name||p.username)}</option>`).join('');
     };
-    root.querySelector('#task-new').onclick=()=>{reset();GIS.Compact?.reveal(root.querySelector('#task-form').closest('.ui-section')||root.querySelector('#task-form'),'Thông tin & phân công');root.querySelector('[name=ticket_name]').focus({preventScroll:true});};
+    root.querySelector('#task-new').onclick=()=>{reset();GIS.Compact?.closeAll();root.querySelector('#task-form').scrollIntoView({block:'nearest'});root.querySelector('[name=ticket_name]').focus({preventScroll:true});};
     root.querySelector('#task-inbox-refresh').onclick=()=>GIS.run(async()=>{
       const r=await GIS.api('GET','/api/tickets/unresolved-media');
       root.querySelector('#task-inbox').innerHTML=r.data.map(m=>`<div>${esc(m.file_name)} · ${esc(m.device_sn)} · ${esc(m.captured_at?new Date(m.captured_at).toLocaleString('vi-VN'):'Chưa rõ giờ chụp')} <button class="btn sm" data-assign="${m.media_id}">Gắn vào phiếu đang mở</button></div>`).join('')||'Không có ảnh chưa gắn.';

@@ -9,7 +9,7 @@ async function principal(id){
  const [s]=await query(`SELECT p.*,u.status,u.role,u.unit_id,u.auth_version AS current_auth_version FROM pilot_sessions p
   JOIN users u ON p.user_id=u.user_id JOIN user_sessions s ON p.auth_session_id=s.session_id
   WHERE p.session_id=? AND p.ended_at IS NULL AND s.expires_at>NOW() AND u.status='ACTIVE'`,[id]);
- if(!s||s.auth_version!==s.current_auth_version)return null;
+ if(!s||!s.ticket_id||s.auth_version!==s.current_auth_version)return null;
  if(s.ticket_id){
   const plants=await query('SELECT plant_id FROM user_plant_scopes WHERE user_id=?',[s.user_id]);
   const user={...s,plant_ids:plants.map(p=>p.plant_id)};try{await authorization.ticket(user,s.ticket_id);}catch(e){return null;}
@@ -18,15 +18,21 @@ async function principal(id){
 }
 function topicAllowed(session,topic,direction){
  if(typeof topic!=='string'||topic.includes('+')||topic.includes('#'))return false;
- const match=/^(thing|sys)\/product\/([A-Za-z0-9_-]{4,64})\/([a-z_]+)$/.exec(topic);if(!match)return false;
- const allowedSerials=[session.rc_sn,session.aircraft_sn].filter(Boolean);
- if(!allowedSerials.length){
-  if(!session.aircraft_sn){session.aircraft_sn=match[2];query('UPDATE pilot_sessions SET aircraft_sn=? WHERE session_id=? AND aircraft_sn IS NULL',[match[2],session.session_id]).catch(()=>{});}
- }else if(!allowedSerials.includes(match[2])){
-  if(!session.aircraft_sn){session.aircraft_sn=match[2];query('UPDATE pilot_sessions SET aircraft_sn=? WHERE session_id=? AND aircraft_sn IS NULL',[match[2],session.session_id]).catch(()=>{});}
-  else return false;
- }
- const allowed=direction==='publish'?['osd','state','events','requests','services_reply','status','status_reply']:['services','requests_reply','events_reply','status_reply'];return allowed.includes(match[3]);
+ const match=/^(thing|sys)\/product\/([A-Za-z0-9_-]{4,64})\/([a-z_]+)$/.exec(topic);
+ if(!match||![session.rc_sn,session.aircraft_sn].filter(Boolean).includes(match[2]))return false;
+ const allowed=direction==='publish'?['osd','state','events','requests','services_reply','status']:['services','requests_reply','events_reply','status_reply','state_reply'];
+ return allowed.includes(match[3]);
+}
+// Only authenticated gateway topology may bind an aircraft; never infer its identity from an arbitrary topic.
+async function bindTopology(session,topic,payload){
+ if(!session.rc_sn||topic!==`sys/product/${session.rc_sn}/status`||payload?.method!=='update_topo')return;
+ const devices=payload.data?.sub_devices;
+ if(!Array.isArray(devices)||devices.length!==1)return;
+ const d=devices[0];
+ if(d.type!==77||d.sub_type!==1||typeof d.sn!=='string'||!/^[A-Za-z0-9_-]{4,64}$/.test(d.sn))return;
+ if(session.aircraft_sn&&session.aircraft_sn!==d.sn)throw Error('Aircraft does not match Pilot session');
+ await query('UPDATE pilot_sessions SET aircraft_sn=? WHERE session_id=? AND ended_at IS NULL AND (aircraft_sn IS NULL OR aircraft_sn=?)',[d.sn,session.session_id,d.sn]);
+ session.aircraft_sn=d.sn;
 }
 const brokers=new Set();
 function revoke({user_id,session_id}){for(const broker of brokers)for(const client of Object.values(broker.clients))if(!client.uavInternal&&client.uavScope?.user_id===user_id&&(!session_id||client.uavScope.auth_session_id===session_id))client.close();}
@@ -40,7 +46,7 @@ function serialsAllowed(s, value, depth = 0) {
     for (const [k, x] of Object.entries(value)) {
       if (IGNORED_SN_KEYS.has(k)) continue;
       if (k === 'batteries' || k === 'battery' || k === 'dongle_infos' || k === 'camera_list' || k === 'cameras' || k === 'payload') continue;
-      if ((k === 'sn' || k === 'device_sn' || k === 'gateway_sn') && typeof x === 'string' && x && !allowedSerials.includes(x)) {
+      if ((k === 'sn' || k === 'device_sn' || k === 'gateway_sn' || k === 'aircraft_sn' || k === 'rc_sn') && typeof x === 'string' && x && !allowedSerials.includes(x)) {
         return false;
       }
       if (!serialsAllowed(s, x, depth + 1)) return false;
@@ -61,13 +67,15 @@ function configure(broker){
   if(packet.payload.length>1024*1024||packet.retain)return callback(Error('Payload/retain denied'));
   const now=Date.now();if(!client.uavRate||now-client.uavRate.at>1000)client.uavRate={at:now,n:0};if(++client.uavRate.n>100)return callback(Error('Rate denied'));
   let payload;try{payload=JSON.parse(packet.payload.toString());}catch(e){return callback(Error('JSON required'));}
-  principal(client.uavSessionId).then(s=>{
+  principal(client.uavSessionId).then(async s=>{
     if (!s) return callback(Error('Session unavailable'));
     if (!topicAllowed(s, packet.topic, 'publish')) {
       console.warn(`[MQTT Access] ⚠ Từ chối publish topic=${packet.topic} từ ClientID=${client.id}`);
       return callback(Error('Topic denied'));
     }
-    callback(null);
+    await bindTopology(s,packet.topic,payload);
+    if(!serialsAllowed(s,payload))return callback(Error('Payload identity denied'));
+    client.uavScope=s;callback(null);
   }).catch(()=>callback(Error('Session unavailable')));
  };
  broker.authorizeSubscribe=(client,sub,callback)=>{
@@ -76,9 +84,9 @@ function configure(broker){
  };
  // Recheck each outbound packet so locked/revoked subscribers cannot keep reading commands.
  broker.authorizeForward=(client,packet)=>client.uavInternal||topicAllowed(client.uavScope||{},packet.topic,'subscribe')?packet:null;
- broker.on('subscribe',(subs,client)=>{if(client&&!client.uavInternal)principal(client.uavSessionId).then(s=>{client.uavScope=s||{};}).catch(()=>{});});
- broker.on('clientReady',client=>{if(!client.uavInternal)principal(client.uavSessionId).then(s=>{client.uavScope=s||{};}).catch(()=>{});});
+ broker.on('subscribe',(subs,client)=>{if(client&&!client.uavInternal)principal(client.uavSessionId).then(async s=>{client.uavScope=s||{};}).catch(()=>{});});
+ broker.on('clientReady',client=>{if(!client.uavInternal)principal(client.uavSessionId).then(async s=>{client.uavScope=s||{};}).catch(()=>{});});
  const timer=setInterval(async()=>{for(const client of Object.values(broker.clients))if(!client.uavInternal){let s=null;try{s=await principal(client.uavSessionId);}catch(e){}if(!s)client.close();else client.uavScope=s;}},10000);timer.unref();broker.on('closed',()=>{clearInterval(timer);brokers.delete(broker);});
  return internal;
 }
-module.exports={configure,credentials,principal,topicAllowed,serialsAllowed,revoke};
+module.exports={configure,credentials,principal,topicAllowed,serialsAllowed,bindTopology,revoke};
