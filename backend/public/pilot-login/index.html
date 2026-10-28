@@ -368,7 +368,7 @@
         }
       } catch (err) {
         statusBox.className = "status-box error";
-        statusBox.innerHTML = `<strong>Không thể kết nối đến Server:</strong> ${escapeHtml(err.message)}`;
+        statusBox.innerHTML = `<strong>Kết nối chưa hoàn tất:</strong> ${escapeHtml(err.message)}`;
         addLog("Lỗi: " + escapeHtml(err.message));
         connectBtn.disabled = false;
         connectBtn.innerText = "THỬ LẠI";

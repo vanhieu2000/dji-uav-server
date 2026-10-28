@@ -41,6 +41,7 @@ test('MQTT: unknown serials cannot learn from arbitrary topics or wildcard subsc
 test('Bridge: plain and wrapped getters, setup error, false callback never accepted',()=>{
  const vm=require('vm'),fs=require('fs');const box={window:{}};vm.runInNewContext(fs.readFileSync(require('path').join(__dirname,'../public/pilot-login/bridge.js'),'utf8'),box);vm.runInNewContext('Object.hasOwn=undefined',box);const p=box.window.PilotBridge;
  assert.equal(p.value('RC1234'),'RC1234');assert.equal(p.value('{"code":0,"data":true}'),true);assert.equal(p.connected(false),false);assert.equal(p.connected('{"code":1}'),false);assert.equal(p.connected('{"code":0,"data":true}'),true);assert.throws(()=>p.value('{"code":5}'));
+ box.window.djiBridge={platformLoadComponent:()=>JSON.stringify({code:615012})};assert.throws(()=>p.load('thing',{password:'never-log-this'}),/platformLoadComponent \[thing\] code 615012/);
  box.window.djiBridge={platformGetRemoteControllerSN:()=> 'RC1234'};assert.equal(p.serial('platformGetRemoteControllerSN'),'RC1234');
 });
 test('MQTT CONNECT diagnostics distinguish cached credentials without accepting invalid sessions',async()=>{
