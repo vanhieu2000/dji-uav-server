@@ -14,14 +14,9 @@ window.PilotBridge = (() => {
   if(loaded){call('thingDisconnect');call('platformUnloadComponent','thing');if(connected(call('platformIsComponentLoaded','thing')))throw Error('Không gỡ được cấu hình MQTT cũ; thoát Cloud Service trên Pilot rồi đăng nhập lại.');}
   const params={host:config.host,username:config.username,password:config.password,connectCallback:'connectCallback'};
   load('thing',params);
-  // Module loading may be asynchronous on Pilot. Wait for readiness before explicitly connecting.
-  let ready=false;for(let n=0;n<60;n++){if(connected(call('platformIsComponentLoaded','thing'))){ready=true;break;}await new Promise(resolve=>setTimeout(resolve,50));}
-  if(!ready)throw Error('Pilot chưa nạp xong module MQTT thing sau 3 giây.');
-  let nativeConnected=false;try{nativeConnected=connected(call('thingGetConnectState'));}catch{}
-  // A native getter can retain a stale true state; request the current credentials explicitly.
-  try{call('thingConnect',params.username,params.password,'connectCallback');return {nativeConnected,connectRequested:true};}
-  catch(error){return {nativeConnected,connectRequested:false,connectError:error.message};}
-  // Broker confirmation remains mandatory even when native connect reports success.
+  // DJI's official Pilot demo starts MQTT by loading thing. Do not race its
+  // asynchronous auto-connect with thingConnect/getters or other component loads.
+  return {autoConnect:true};
 
  }
  return {value,call,serial,load,connected,freshThing};

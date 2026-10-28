@@ -112,3 +112,11 @@ Sau khi nạp thing và xác nhận component đã sẵn sàng, trang gọi thin
 Broker phải xác nhận đúng session mới báo thành công. Lỗi media/liveshare/mission hiển thị riêng, không chặn MQTT.
 Log TCP phân biệt có kết nối tới cổng broker hay chưa; API connection phân biệt chưa CONNECT/xác thực bị từ chối/client đã ngắt.
 Lỗi token401/403 không còn bị hiển thị thành timeout MQTT chung. Cần thử lại RC thật sau cập nhật.
+
+### Hiệu chỉnh theo thứ tự mẫu DJI chính thức (28/10/2026)
+Đối chiếu Cloud-API-Demo-Web `src/pages/page-pilot/pilot-home.vue`: load thing tự bắt đầu MQTT;
+media/liveshare/mission chỉ được nạp trong callback kết nối thành công. Mã hiện tại áp dụng thứ tự này,
+không gọi thêm thingConnect/getter ngay khi thing đang tự kết nối. Các hướng dẫn explicit connect trước đó đã bị thay thế.
+Broker vẫn xác nhận đúng phiên; ảnh/live lỗi không làm mất đăng nhập MQTT đã xác nhận.
+Nguồn: https://github.com/dji-sdk/Cloud-API-Demo-Web/blob/master/src/pages/page-pilot/pilot-home.vue
+Chưa có định nghĩa công khai được xác minh cho615011; log thực cần phân biệt TCP/CONNECT và kết quả native.
