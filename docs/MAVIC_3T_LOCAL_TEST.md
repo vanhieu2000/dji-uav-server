@@ -1,3 +1,5 @@
+> Bản local mới dùng STORAGE_MODE=local: signed upload do Node phục vụ, không cần MinIO riêng. Hướng dẫn các bản trước dưới đây là lịch sử. Xem CHAY_LOCAL.md và OPERATIONS.md cho cấu hình hiện tại.
+
 # Mavic 3T: kiểm tra kết nối bản sửa 28/10/2026
 
 Đối chiếu DJI Cloud-API-Doc commit `4ec6b0c7f9472aeb09a0a47949855d19c473ea07`:
@@ -92,3 +94,14 @@ Trạng thái chờ/reconnect có thời hạn 20 giây; callback true chỉ là
 Không ghi token native vào localStorage. Nút quay lại vẫn trả false theo tài liệu DJI để Pilot đóng WebView;
 không gọi thingDisconnect/onStop khi quay lại. Thoát Cloud Service thực sự vẫn ngắt theo hành vi Pilot.
 Kiểm thử browser và server thật/MySQL/10 UAV giả lập đạt; cần kiểm tra lại trên RC vật lý.
+
+### Native photo storage và live lens (28/10/2026)
+Code loại bỏ S3 mock không ký và thay bằng native upload có xác thực AWS SigV4 theo namespace phiên.
+PUT/multipart/HEAD/ListParts/abort dùng chữ ký và STS credentials ngẫu nhiên15phút, không chấp nhận username/key mẫu.
+Callback chỉ xác nhận sau khi JPEG được ghi nhận; callback lặp trả cùng ảnh, không xóa ảnh đã được đăng ký nhưng chưa gắn phiếu.
+Ảnh được lưu ở MEDIA_DIR và web đọc cùng thư mục, kể cả các API ma trận/metadata nhiệt.
+Live dùng video_type/switchable_video_types thiết bị công bố. Combo đổi lens gửi live_lens_change;
+đổi video_id có thể dừng/phát lại, không giả ba nguồn video từ một luồng.
+Thử với AWS SDK thật và HTTP/server/MySQL trên loopback; chưa nghiệm thu signed upload/lens change trên RC thật.
+Bộ lọc upload native hỗ trợ SigV4 header và payload hash/UNSIGNED-PAYLOAD; nếu SDK RC gửi kiểu streaming signature khác,
+server từ chối rõ ràng để đối chiếu log, không bỏ xác thực.

@@ -33,6 +33,7 @@ const path=require('path');const req=require('module').createRequire(path.resolv
   assert.equal(await page.evaluate(()=>GIS.LiveMonitor.selected()),null);
   await page.selectOption('#uav-monitor-target','UAV-A');assert.equal(await page.evaluate(()=>GIS.LiveMonitor.selected()),'UAV-A');
   await page.selectOption('#uav-monitor-target','');assert.equal(await page.evaluate(()=>GIS.LiveMonitor.selected()),null);
+  assert.equal(await page.evaluate(()=>{gActiveThermal.canvas=document.createElement('canvas');gActiveThermal.ctx=gActiveThermal.canvas.getContext('2d');gActiveThermal.hasRaw=false;return calculatePixelTemp(0,0);}),null);
   await page.evaluate(()=>switchView('map-solar'));
   await page.waitForFunction(()=>document.querySelectorAll('#real-gis-map .leaflet-interactive').length>=2);
   await page.evaluate(()=>GIS.LiveMonitor.onEvent({type:'osd',device_sn:'UAV-A',data:{device_sn:'UAV-A',lat:10.002,lng:106.002,battery:0,status:'ONLINE',ticket_id:1,last_seen:new Date().toISOString()}}));
@@ -59,7 +60,7 @@ const path=require('path');const req=require('module').createRequire(path.resolv
   await page.waitForTimeout(400);
   assert.equal(await page.locator('#real-gis-map .leaflet-control-layers').count(),1);
   if(process.env.BROWSER_SCREENSHOT) await page.screenshot({path:process.env.BROWSER_SCREENSHOT,fullPage:false});
-  await page.evaluate(()=>{triggerPhoto();flyAndCapturePoint(10,106);flyDroneToPoint(10,106);startSimulatedMissionFlight();toggleSimulated3Cams();GIS.Tasks.render(document.getElementById('gis-assets-root'));});
+  await page.evaluate(()=>{triggerPhoto();flyAndCapturePoint(10,106);flyDroneToPoint(10,106);GIS.Tasks.render(document.getElementById('gis-assets-root'));});
   await page.waitForSelector('#task-form',{state:'attached'});
   await page.evaluate(()=>GIS.Insights.reports());
   await page.waitForSelector('#insights-reports-root .gis-empty',{state:'attached'});

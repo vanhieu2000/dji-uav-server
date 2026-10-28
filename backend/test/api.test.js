@@ -406,18 +406,11 @@ test('API tài sản & bản đồ', async (t) => {
         await db.query("UPDATE pilot_sessions SET started_at='2026-10-26 10:00:00' WHERE session_id=?",[sessionId]);
         const [uploadContext]=await db.query('SELECT upload_namespace FROM pilot_sessions WHERE session_id=?',[sessionId]);
 
-        // Tải nhiều phần: 3 phần gửi lệch thứ tự phải ghép đúng
+        // Native signed PUT/multipart is tested end-to-end in local-storage/production tests.
+        // This fixture exercises metadata, namespace assignment and reconciliation only.
         const img = h.fakeDjiJpeg({ lat: 11.8505, lng: 107.0007, source: 'WideCamera' });
-        const cut = [0, 100, 250, img.length];
-        const key = `/dji-media/media/${uploadContext.upload_namespace}/DJI_20261026101530_0001_W.JPG`;
-        const init = await fetch(`${app.base}${key}?uploads`, { method: 'POST' });
-        const uploadId = /<UploadId>([a-f0-9]+)<\/UploadId>/.exec(await init.text())[1];
-        for (const i of [2, 0, 1]) {
-            const r = await fetch(`${app.base}${key}?partNumber=${i + 1}&uploadId=${uploadId}`, { method: 'PUT', body: img.subarray(cut[i], cut[i + 1]) });
-            assert.equal(r.status, 200);
-        }
-        const done = await fetch(`${app.base}${key}?uploadId=${uploadId}`, { method: 'POST' });
-        assert.equal(done.status, 200);
+        const file='DJI_20261026101530_0001_W.JPG',destination=path.join(process.env.MEDIA_DIR,file);
+        fs.writeFileSync(destination,img);await require('../src/routes/mediaUpload').ingestSaved(destination,file,file,{source:'CLOUD',uploadNamespace:uploadContext.upload_namespace});
         const rows = await db.query("SELECT * FROM media_files WHERE original_name = 'DJI_20261026101530_0001_W.JPG'");
         assert.equal(rows.length, 1);
         const m = rows[0];
@@ -431,7 +424,7 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal(m.source, 'CLOUD');
 
         // Gửi lại đúng ảnh đó (PUT 1 lần) → nhận là trùng, không thêm dòng
-        await fetch(`${app.base}/dji-media/media/copy.JPG`, { method: 'PUT', body: img });
+        const copy=path.join(process.env.MEDIA_DIR,'copy.JPG');fs.writeFileSync(copy,img);await require('../src/routes/mediaUpload').ingestSaved(copy,'copy.JPG','copy.JPG',{source:'CLOUD',uploadNamespace:uploadContext.upload_namespace});
         assert.equal((await db.query('SELECT COUNT(*) n FROM media_files WHERE sha256 = ?', [m.sha256]))[0].n, 1);
 
         // Callback DJI gắn mã chuyến bay
@@ -878,15 +871,15 @@ test('API tài sản & bản đồ', async (t) => {
         }
         for(const [index,date] of ['2026:10:26 10:02:00','2026:10:26 10:35:00'].entries()){
             const img=h.fakeDjiJpeg({lat:11.85,lng:107,date});
-            const key=`/dji-media/media/${ctx.upload_namespace}/TASKF_${index}_W.JPG`;
-            assert.equal((await fetch(app.base+key,{method:'PUT',body:img})).status,200);
+            const file=`TASKF_${index}_W.JPG`,local=path.join(process.env.MEDIA_DIR,file);fs.writeFileSync(local,img);
+            assert.equal((await require('../src/routes/mediaUpload').ingestSaved(local,file,file,{source:'CLOUD',uploadNamespace:ctx.upload_namespace})).status,'created');
         }
         const images=await db.query("SELECT * FROM media_files WHERE ticket_id=? ORDER BY media_id",[id]);
         assert.equal(images.length,2);assert.deepEqual(images.map(m=>m.flight_session_id),ids);
         assert.ok(images.every(m=>m.assignment_status==='FLIGHT'&&m.pilot_session_id===a));
         assert.equal((await db.query('SELECT COUNT(*) AS n FROM media_files WHERE ticket_id=?',[newId]))[0].n,0);
         const unknown=h.fakeDjiJpeg({lat:11.85,lng:107});
-        assert.equal((await fetch(app.base+'/dji-media/media/UNKNOWN_W.JPG',{method:'PUT',body:unknown})).status,200);
+        const unknownFile=path.join(process.env.MEDIA_DIR,'UNKNOWN_W.JPG');fs.writeFileSync(unknownFile,unknown);await require('../src/routes/mediaUpload').ingestSaved(unknownFile,'UNKNOWN_W.JPG','UNKNOWN_W.JPG',{source:'CLOUD'});
         const [unresolved]=await db.query("SELECT ticket_id,assignment_status FROM media_files WHERE original_name='UNKNOWN_W.JPG'");
         assert.equal(unresolved.ticket_id,null);assert.equal(unresolved.assignment_status,'UNRESOLVED');
         // Reupload same bytes creates only an ingest event; no task/flight reassignment.

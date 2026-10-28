@@ -7,7 +7,7 @@ test('server thật + 10 UAV MQTT và camera M3T giả lập, localhost không t
  const auth=require('../src/routes/auth'),bcrypt=require('bcryptjs');const [admin]=[await db.query("INSERT INTO users (username,password_hash,full_name,role) VALUES ('runtime-admin',?,'Fixture','ADMIN')",[await bcrypt.hash('runtime-test-password',4)])];
  const [user]=await db.query('SELECT * FROM users WHERE user_id=?',[admin.insertId]);const token=await auth.issueToken(user);
  const httpPort=await port(),mqttPort=await port();const dir=fs.mkdtempSync(path.join(os.tmpdir(),'uav-runtime-'));
- const log=fs.openSync(path.join(dir,'server.log'),'w'),child=spawn(process.execPath,['server.js'],{cwd:path.resolve(__dirname,'..'),env:{...process.env,PORT:String(httpPort),MQTT_PORT:String(mqttPort),HOST_IP:'127.0.0.1',LIVE_STREAM_ENABLED:'false',MQTT_BROKER_URL:'',VISION_ENABLED:'false',NODE_ENV:'test',JWT_SECRET:process.env.JWT_SECRET},stdio:['ignore',log,log]});
+ const log=fs.openSync(path.join(dir,'server.log'),'w'),child=spawn(process.execPath,['server.js'],{cwd:path.resolve(__dirname,'..'),env:{...process.env,PORT:String(httpPort),MQTT_PORT:String(mqttPort),HOST_IP:'127.0.0.1',LIVE_STREAM_ENABLED:'false',MQTT_BROKER_URL:'',VISION_ENABLED:'false',NODE_ENV:'test',STORAGE_MODE:'local',LOCAL_STORAGE_DIR:path.join(dir,'native-storage'),JWT_SECRET:process.env.JWT_SECRET},stdio:['ignore',log,log]});
  const clients=[];let serverExited=false;child.on('exit',()=>serverExited=true);
  t.after(async()=>{for(const c of clients)c.end(true);child.kill('SIGTERM');await until(()=>serverExited).catch(()=>child.kill('SIGKILL'));fs.closeSync(log);await db.closePool();await h.dropTestDatabase();});
  const base='http://127.0.0.1:'+httpPort;
@@ -47,7 +47,15 @@ test('server thật + 10 UAV MQTT và camera M3T giả lập, localhost không t
  const connection=await fetch(base+'/api/pilot/connection',{headers:{'x-auth-token':pilotToken}});assert.equal(connection.status,200);assert.equal((await connection.json()).data.mqtt_connected,true);
  const routes=await fetch(base+'/wayline/api/v1/workspaces/runtime-workspace/waylines',{headers:{'x-auth-token':pilotToken}});assert.equal(routes.status,200);assert.deepEqual((await routes.json()).data.list,[]);
  const badWorkspace=await fetch(base+'/wayline/api/v1/workspaces/OTHER/waylines',{headers:{'x-auth-token':pilotToken}});assert.equal(badWorkspace.status,403);
- const storage=await fetch(base+'/storage/api/v1/workspaces/runtime-workspace/sts',{headers:{'x-auth-token':pilotToken}});assert.equal(storage.status,503);
+ const storage=await fetch(base+'/storage/api/v1/workspaces/runtime-workspace/sts',{headers:{'x-auth-token':pilotToken}});assert.equal(storage.status,200);
+ const grant=(await storage.json()).data,{S3Client,PutObjectCommand}=require('@aws-sdk/client-s3');
+ const nativeS3=new S3Client({endpoint:grant.endpoint,region:grant.region,forcePathStyle:true,requestChecksumCalculation:'WHEN_REQUIRED',credentials:{accessKeyId:grant.credentials.access_key_id,secretAccessKey:grant.credentials.access_key_secret,sessionToken:grant.credentials.security_token}});
+ const objectKey=grant.object_key_prefix+'real-native_W.JPG',jpeg=h.fakeDjiJpeg({lat:10,lng:106,rel:0,date:new Date().toISOString().slice(0,19).replace(/-/g,':').replace('T',' ')});
+ await nativeS3.send(new PutObjectCommand({Bucket:grant.bucket,Key:objectKey,Body:jpeg,ContentType:'image/jpeg'}));
+ const callback=()=>fetch(base+'/media/api/v1/workspaces/runtime-workspace/upload-callback',{method:'POST',headers:{'x-auth-token':pilotToken,'Content-Type':'application/json'},body:JSON.stringify({name:'real-native_W.JPG',object_key:objectKey})});
+ const ingested=await callback();assert.equal(ingested.status,200);const received=(await ingested.json()).data;
+ const [photo]=await db.query('SELECT * FROM media_files WHERE media_id=?',[received.media_id]);assert.equal(photo.ticket_id,first.tid);assert.ok(fs.readFileSync(photo.file_path_local).equals(jpeg));assert.equal((await callback()).status,200);
+
  // Bench simulator on the private random-port localhost broker. No real RC/UAV is connected.
  const learnedRc='BINDRC1234',learnedUav='BINDUAV1234';
  const learnedSession=(await db.query('INSERT INTO pilot_sessions (user_id,username,ticket_id,rc_sn,upload_namespace) VALUES (?,?,?,?,?)',[user.user_id,user.username,first.tid,learnedRc,crypto.randomUUID()])).insertId;

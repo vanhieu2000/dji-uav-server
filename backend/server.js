@@ -7,8 +7,7 @@
 
 const path = require('path');
 
-// Chạy local (không qua Docker): nạp biến môi trường từ file .env ở thư mục gốc dự án.
-// Biến đã có sẵn (do docker-compose truyền vào) được giữ nguyên.
+// Nạp cấu hình máy local; giữ nguyên biến môi trường đã được thiết lập.
 try {
   process.loadEnvFile(path.join(__dirname, '..', '.env'));
 } catch (e) {
@@ -118,6 +117,7 @@ app.use(require('./src/middleware/transportSecurity').securityHeaders);
 app.use(diagnostics.http);
 app.use(require('./src/middleware/transportSecurity').originPolicy);
 app.use(require('./src/middleware/transportSecurity').rateLimit);
+if(process.env.STORAGE_MODE==='local'){require('./src/services/objectStorage').setLocalEndpoint(`http://${HOST_IP}:${PORT}`);app.use(require('./src/services/localObjectStorage').router());}
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 if(process.env.TRUST_PROXY==='1')app.set('trust proxy',1);
@@ -139,17 +139,6 @@ app.use((req, res, next) => {
     console.log(`[Pilot 2 HTTP] ${req.method} ${req.path}`);
   }
   next();
-});
-
-// A. OPTIONS & HEAD cho S3 / MinIO Mock Engine
-app.options(['/dji-media/*', '/media/*', '/*/media/*', '/api/media/*', '/uploads/media/*'], (req, res) => {
-  res.set({
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': '*',
-    'Access-Control-Expose-Headers': 'ETag, Content-Length, Content-Type'
-  });
-  res.status(200).end();
 });
 
 app.use(mediaUploadRouter);
@@ -287,7 +276,7 @@ const uploadWayline = multer({ storage: waylineStorage });
 
 const mediaStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = path.join(__dirname, 'uploads', 'media');
+    const dir = mediaUploadRouter.MEDIA_DIR;
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
@@ -315,7 +304,7 @@ const memoryStore = {
   rawMqttLogs: []
 };
 
-const monitoring = createMonitoring({ query, onEvent: broadcastWebSocket, playbackBase: process.env.MEDIA_HTTP_BASE_URL || `http://${HOST_IP}:8000` });
+const monitoring = createMonitoring({ query, onEvent: broadcastWebSocket, playbackBase: process.env.MEDIA_HTTP_BASE_URL || `http://${HOST_IP}:${process.env.MEDIA_HTTP_PORT||8000}` });
 app.use('/api/monitoring', require('./src/routes/monitoring').createRouter({ monitoring }));
 
 // ===================================================================
@@ -739,6 +728,7 @@ async function handleDjiMqttMessage(topic, json) {
     if(Number.isSafeInteger(json.timestamp)&&oldState!=null&&json.timestamp<oldState)return;
     if(Number.isSafeInteger(json.timestamp)){if(stateTimestamps.size>=1000&&!stateTimestamps.has(sn))stateTimestamps.delete(stateTimestamps.keys().next().value);stateTimestamps.set(sn,json.timestamp);}
     if(typeof d.is_cloud_control_auth==='boolean') memoryStore.gateways[sn]={...memoryStore.gateways[sn],gateway_sn:sn,is_cloud_control_auth:d.is_cloud_control_auth};
+    if(Array.isArray(d.live_status)&&memoryStore.gateways[sn])memoryStore.gateways[sn].live_status=d.live_status;
     if (d.live_capacity) {
       memoryStore.gateways[sn] = { ...memoryStore.gateways[sn], gateway_sn: sn, live_capacity: d.live_capacity };
     }
@@ -1120,7 +1110,7 @@ app.post('/api/media/snapshot', async (req, res) => {
 
     const suffix = mode === 'thermal' ? '_T' : (mode === 'wide' ? '_W' : '_Z');
     const fileName = `SNAP_${Date.now()}${suffix}.JPG`;
-    const uploadDir = path.join(__dirname, 'uploads', 'media');
+    const uploadDir = mediaUploadRouter.MEDIA_DIR;
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
     const localFilePath = path.join(uploadDir, fileName);
 
@@ -1284,7 +1274,7 @@ app.delete('/api/media/:id', async (req, res) => {
   try {
     const item = memoryStore.mediaFiles.find(m => String(m.media_id) === String(mediaId));
     if (item && item.file_name) {
-      const targetFile = path.join(__dirname, 'uploads', 'media', item.file_name);
+      const targetFile = path.join(mediaUploadRouter.MEDIA_DIR, item.file_name);
       if (fs.existsSync(targetFile)) {
         try { fs.unlinkSync(targetFile); } catch(e){}
       }
@@ -1306,11 +1296,11 @@ app.get('/api/media/thermal-meta', (req, res) => {
   let targetFile = null;
 
   if (fileName) {
-    targetFile = path.join(__dirname, 'uploads', 'media', path.basename(fileName));
+    targetFile = path.join(mediaUploadRouter.MEDIA_DIR, path.basename(fileName));
   } else if (mediaId) {
     const item = memoryStore.mediaFiles.find(m => String(m.media_id) === String(mediaId));
     if (item && item.file_name) {
-      targetFile = path.join(__dirname, 'uploads', 'media', item.file_name);
+      targetFile = path.join(mediaUploadRouter.MEDIA_DIR, item.file_name);
     }
   }
 
@@ -1350,11 +1340,11 @@ app.get('/api/media/thermal-matrix', (req, res) => {
   let targetFile = null;
 
   if (fileName) {
-    targetFile = path.join(__dirname, 'uploads', 'media', path.basename(fileName));
+    targetFile = path.join(mediaUploadRouter.MEDIA_DIR, path.basename(fileName));
   } else if (mediaId) {
     const item = memoryStore.mediaFiles.find(m => String(m.media_id) === String(mediaId));
     if (item && item.file_name) {
-      targetFile = path.join(__dirname, 'uploads', 'media', item.file_name);
+      targetFile = path.join(mediaUploadRouter.MEDIA_DIR, item.file_name);
     }
   }
 
@@ -1386,7 +1376,7 @@ app.get('/api/media/thermal-point', (req, res) => {
     return res.status(400).json({ code: 400, message: 'Thiếu tên file' });
   }
 
-  const targetFile = path.join(__dirname, 'uploads', 'media', path.basename(fileName));
+  const targetFile = path.join(mediaUploadRouter.MEDIA_DIR, path.basename(fileName));
   const pt = getPixelTemperature(targetFile, x, y);
   if (!pt) {
     return res.status(404).json({ code: 404, message: 'Không thể đọc nhiệt độ tại điểm này' });

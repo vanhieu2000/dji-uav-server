@@ -12,7 +12,7 @@ Mặc định `VISION_ENABLED=false`, không gửi dữ liệu ra ngoài. Khi c�
 - `VISION_WEBHOOK_SECRET`: shared secret riêng cho callback. Không đưa giá trị vào chat/log/commit. Không dùng cùng khóa JWT.
 - `VISION_ENABLED=true`: sau khi cấu hình hợp lệ; restart server. Worker chỉ khởi động sau migration/kết nối DB thành công.
 
-Đường HTTP nội bộ Docker chưa được cho phép qua URL ngoài loopback; triển khai proxy HTTPS đúng CA thay vì tắt kiểm tra TLS. Không bật worker vào endpoint chưa được đội Vision cung cấp. Không có AI container/model giả để làm test trông như production.
+Đường HTTP nội bộ chưa được cho phép qua URL ngoài loopback; triển khai proxy HTTPS đúng CA thay vì tắt kiểm tra TLS. Không bật worker vào endpoint chưa được đội Vision cung cấp. Không có AI container/model giả để làm test trông như production.
 
 ## Job request
 

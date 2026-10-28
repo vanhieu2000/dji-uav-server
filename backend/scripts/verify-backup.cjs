@@ -1,8 +1,7 @@
-/** Isolated restore drill. Only *_test databases and TEST_MYSQL_CONTAINER. */
+/** Isolated restore drill. Only *_test databases; native mysqldump. */
 const fs=require('fs'),path=require('path'),os=require('os'),crypto=require('crypto'),assert=require('assert/strict'),{spawnSync}=require('child_process');
 const h=require('../test/helpers'),{archive}=require('../../ops/archive');
 (async()=>{
- const container=process.env.TEST_MYSQL_CONTAINER;if(!container||!/^[a-zA-Z0-9_-]+$/.test(container))throw Error('TEST_MYSQL_CONTAINER cần container MySQL test');
  await h.resetTestDatabase();const db=require('../src/config/db');await db.testConnection();
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'uav-restore-drill-')),restoreDb='dji_uav_restore_test';let conn;
  try{
@@ -10,7 +9,8 @@ const h=require('../test/helpers'),{archive}=require('../../ops/archive');
   await db.query("INSERT INTO plants (plant_code,plant_name) VALUES ('BACKUP-TEST','Fixture restore')");
   await db.query("INSERT INTO media_files (device_sn,file_name,file_url,file_path_local,sha256) VALUES ('TESTUAV','original.jpg','/fixture.jpg',?,?)",[file,sha]);
   const password=(process.env.TEST_MYSQL_DUMP_PASSWORD??h.rootConfig().password).replace(/\\/g,'\\\\').replace(/"/g,'\\"');
-  const result=spawnSync('docker',['exec','-i',container,'sh','-c','task_config=$(mktemp); chmod 600 "$task_config"; cat > "$task_config"; mysqldump --defaults-extra-file="$task_config" --single-transaction --no-tablespaces --set-gtid-purged=OFF '+h.TEST_DB+'; task_status=$?; rm -f "$task_config"; exit "$task_status"'],{input:'[client]\nuser='+h.rootConfig().user+'\npassword="'+password+'"\n',maxBuffer:64*1024*1024});
+  const configFile=path.join(temp,'mysql.cnf');fs.writeFileSync(configFile,'[client]\nhost='+h.rootConfig().host+'\nport='+h.rootConfig().port+'\nuser='+h.rootConfig().user+'\npassword="'+password+'"\n',{mode:0o600});
+  const result=spawnSync(process.env.MYSQL_DUMP_BIN||'mysqldump',['--defaults-extra-file='+configFile,'--single-transaction','--no-tablespaces','--set-gtid-purged=OFF',h.TEST_DB],{maxBuffer:64*1024*1024});fs.rmSync(configFile,{force:true});
   if(result.status!==0)throw Error('mysqldump test thất bại: '+String(result.stderr).replaceAll(h.rootConfig().password,'[redacted]').replaceAll(process.env.TEST_MYSQL_DUMP_PASSWORD||'unused-placeholder','[redacted]'));fs.writeFileSync(path.join(temp,'database.sql'),result.stdout);
   const tar=path.join(temp,'snapshot.tar'),key=path.join(temp,'key'),encrypted=path.join(temp,'snapshot.uavbackup');fs.writeFileSync(key,crypto.randomBytes(32),{mode:0o600});
   assert.equal(spawnSync('tar',['-cf',tar,'-C',temp,'database.sql','media']).status,0);await archive('encrypt',tar,encrypted,key);fs.rmSync(file);fs.rmSync(path.join(temp,'database.sql'));fs.rmSync(tar);

@@ -1,3 +1,5 @@
+> Cập nhật triển khai: bản local hiện dùng Node/MySQL trực tiếp và signed upload native. Các mục triển khai cũ bên dưới là lịch sử; xem CHAY_LOCAL.md cho cách chạy hiện tại.
+
 # KẾ HOẠCH TRIỂN KHAI & BÀN GIAO – DJI UAV SERVER
 
 > Tài liệu để **bất kỳ ai** cũng tiếp tục được công việc: đã làm gì, còn lại gì, làm thế nào, kiểm tra ra sao.
@@ -438,3 +440,14 @@ Planner hỗ trợ2 nguồn điểm: có sẵn theo tài sản hoặc chọn nga
 Bổ sung logger JSONL local có rotation/retention, che secrets, request/response IDs, MQTT1Hz OSD sampling, browser thao tác/thông báo/lỗi, export ZIP có manifest. XUAT_LOG.bat dùng khi backend dừng; admin cũng tải trong console. Log ngoài Git, không chứa .env/ảnh/file mật khẩu. Xem LOG_CHAN_DOAN.md. Không có lệnh gửi tới UAV thật; native reconnect vẫn cần nghiệm thu trên RC sau đăng nhập lại.
 
 Kiểm chứng trước bàn giao:92/92 Node/MySQL,0 skip;13/13 đợt kiểm tra lại quyền/log/production; Chromium workspace (bao gồm click map/reorder/delete/preview), account tab, auth và Pilot nhớ phiên/reload MQTT đạt. Kiểm thử thực hiện trên broker localhost với thiết bị giả lập, không gửi lệnh tới UAV thật. Snapshot ảnh fixture và dữ liệu thử không được tính là dữ liệu thực. Operator thật được tạo trên DB local khi launcher chạy; mật khẩu và log không được commit.
+
+
+### Bản chạy native và đổi camera thực (28/10/2026)
+- Gỡ cấu hình/launcher container, seed nhà máy mẫu, controls mô phỏng chuyến bay/camera và nhiệt độ ước lượng từ màu ảnh.
+- Một Node server cung cấp HTTP/MQTT/RTMP/FLV và signed JPEG upload; MySQL chạy trực tiếp trên máy.
+- Ảnh native qua AWS SigV4, STS15phút, namespace phiên; PUT/multipart/HEAD/ListParts/abort, callback idempotent và gallery lưu MEDIA_DIR.
+- Combo camera gửi live_lens_change, giữ trong PiP và Dashboard khi đang phát; nguồn khác có thể stop/start, lỗi DJI không báo thành công.
+- Source không reset hoặc xóa ảnh/DB hiện trường. Tests vẫn nằm riêng và chỉ sử dụng DB test.
+- 97 test backend đạt ở lượt toàn bộ; sau khi gỡ S3 mock,49 kiểm thử API/launcher/server/security liên quan đạt lại.
+  Chromium: monitoring responsive, camera combo/rejection, Pilot resume đều đạt. Native S3 SDK thử chữ ký thật và JPEG trên đĩa.
+- Cần nghiệm thu signed upload và chuyển Wide/Zoom/Thermal trên RC thật; không coi ACK là đã xác minh hình camera.

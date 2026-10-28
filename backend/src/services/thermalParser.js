@@ -27,7 +27,7 @@ if (!isWindows && fs.existsSync(TSDK_CLI_PATH)) {
 }
 
 // Thư mục lưu cache ma trận nhiệt độ đã giải mã
-const CACHE_DIR = path.join(__dirname, '..', '..', 'uploads', 'media', 'thermal_cache');
+const CACHE_DIR = path.join(process.env.MEDIA_DIR||path.join(__dirname, '..', '..', 'uploads', 'media'), 'thermal_cache');
 if (!fs.existsSync(CACHE_DIR)) {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
 }

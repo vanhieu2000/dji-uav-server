@@ -1,0 +1,20 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),os=require('os'),path=require('path'),crypto=require('crypto'),express=require('express');
+const {S3Client,PutObjectCommand,CreateMultipartUploadCommand,UploadPartCommand,CompleteMultipartUploadCommand,HeadObjectCommand,ListPartsCommand,AbortMultipartUploadCommand}=require('@aws-sdk/client-s3');
+test('Native signed photo transport: SDK PUT/multipart, real files, session and prefix isolation',async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'uav-native-'));process.env.LOCAL_STORAGE_DIR=dir;const storage=require('../src/services/localObjectStorage');let revoked=false;
+ const s={session_id:123,upload_namespace:crypto.randomUUID()};const app=express();app.use(storage.router({lookup:async id=>!revoked&&id===123?s:null,capacity:async()=>{}}));
+ const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.on('listening',r));t.after(()=>{server.close();fs.rmSync(dir,{recursive:true,force:true});delete process.env.LOCAL_STORAGE_DIR;});const endpoint='http://127.0.0.1:'+server.address().port;
+ const g=storage.grant(s,endpoint),config={endpoint,region:g.region,forcePathStyle:true,requestChecksumCalculation:'WHEN_REQUIRED',credentials:{accessKeyId:g.credentials.access_key_id,secretAccessKey:g.credentials.access_key_secret,sessionToken:g.credentials.security_token}},client=new S3Client(config),Bucket=g.bucket,Key=g.object_key_prefix+'test_T.JPG',Body=Buffer.from([255,216,255,218,1,2,3,4]);
+ await client.send(new PutObjectCommand({Bucket,Key,Body,ContentType:'image/jpeg'}));assert.deepEqual(fs.readFileSync(storage.objectPath(Key)),Body);
+ assert.equal((await client.send(new HeadObjectCommand({Bucket,Key}))).ContentLength,Body.length);
+ const bad=new S3Client({...config,credentials:{...config.credentials,secretAccessKey:'incorrect-signing-secret'}});await assert.rejects(bad.send(new PutObjectCommand({Bucket,Key:g.object_key_prefix+'tampered.JPG',Body})),e=>e.$metadata?.httpStatusCode===403);
+ const unsigned=await fetch(endpoint+'/'+Bucket+'/'+g.object_key_prefix+'unsigned.JPG',{method:'PUT',body:Body});assert.equal(unsigned.status,403);
+ await assert.rejects(client.send(new PutObjectCommand({Bucket,Key:'media/'+crypto.randomUUID()+'/other.JPG',Body})),e=>e.$metadata?.httpStatusCode===403);
+ await assert.rejects(client.send(new PutObjectCommand({Bucket,Key:g.object_key_prefix+'notjpeg.JPG',Body:Buffer.from('not JPEG')})),e=>e.$metadata?.httpStatusCode===400);
+ const multi=g.object_key_prefix+'multipart.JPG',created=await client.send(new CreateMultipartUploadCommand({Bucket,Key:multi,ContentType:'image/jpeg'}));
+ const part=await client.send(new UploadPartCommand({Bucket,Key:multi,UploadId:created.UploadId,PartNumber:1,Body}));
+ const listed=await client.send(new ListPartsCommand({Bucket,Key:multi,UploadId:created.UploadId}));assert.equal(listed.Parts.length,1);
+ await client.send(new CompleteMultipartUploadCommand({Bucket,Key:multi,UploadId:created.UploadId,MultipartUpload:{Parts:[{ETag:part.ETag,PartNumber:1}]}}));assert.deepEqual(fs.readFileSync(storage.objectPath(multi)),Body);
+ const aborted=await client.send(new CreateMultipartUploadCommand({Bucket,Key:g.object_key_prefix+'abort.JPG'}));await client.send(new AbortMultipartUploadCommand({Bucket,Key:g.object_key_prefix+'abort.JPG',UploadId:aborted.UploadId}));
+ revoked=true;await assert.rejects(client.send(new PutObjectCommand({Bucket,Key:g.object_key_prefix+'revoked.JPG',Body})),e=>e.$metadata?.httpStatusCode===403);
+});

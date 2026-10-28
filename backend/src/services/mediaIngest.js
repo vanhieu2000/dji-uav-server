@@ -1,6 +1,6 @@
 /**
  * Nhận ảnh vào hệ thống – dùng chung cho mọi đường vào (Giai đoạn A3):
- *   - DJI Pilot 2 tự tải lên trong lúc bay (S3 giả lập / upload multipart)
+ *   - DJI Pilot 2 tự tải lên trong lúc bay (signed upload native / multipart)
  *   - Nhập từ thẻ nhớ qua web
  *   - Quét thư mục ảnh khi khởi động
  * Không gán cứng bất kỳ giá trị nào: vị trí, gimbal, RTK lấy từ XMP trong ảnh;

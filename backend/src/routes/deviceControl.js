@@ -1,7 +1,7 @@
 const express=require('express'),{asyncHandler}=require('../utils/http'),authorization=require('../services/authorization');
-const {failure}=require('../services/deviceCommands'),{videoIds}=require('../services/liveCapabilities');
+const {failure}=require('../services/deviceCommands'),{videoIds,videoSources}=require('../services/liveCapabilities');
 function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession,monitoring,streamAccess,getClient,liveEnabled,rtmpBase,liveReady,access=authorization,revalidate=async req=>req.user}){
- const router=express.Router();
+ const router=express.Router(),activeLives=new Map();
  async function target(req,deviceSn){
   const actor=await revalidate(req);if(!actor||actor.must_change_password)throw failure('Phiên Web đã hết hạn hoặc cần đổi mật khẩu',401);req.user=actor;
   const sn=deviceSn||req.body?.device_sn||req.query.device_sn;
@@ -28,7 +28,7 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
   }
   ok(res,visible);
  }));
- router.get('/status',asyncHandler(async(req,res)=>{const t=await target(req);ok(res,{device_sn:t.sn,gateway_sn:t.gateway,model:t.device.model||null,aircraft_type:t.device.type??null,aircraft_sub_type:t.device.sub_type??null,last_osd_at:t.device.last_osd_at||null,mqtt_connected:!!getClient()?.connected,telemetry_fresh:!!t.fresh,cloud_control_authorized:gateways[t.gateway].is_cloud_control_auth===true,video_ids:videoIds(gateways[t.gateway].live_capacity),storage:require('../services/objectStorage').readiness(),live_enabled:liveEnabled(),live_ready:liveReady()},'Trạng thái đã xác minh');}));
+ router.get('/status',asyncHandler(async(req,res)=>{const t=await target(req),rows=await monitoring.streams(t.session.ticket_id),publisher=rows.find(r=>r.device_sn===t.sn),live=activeLives.get(t.sn);ok(res,{device_sn:t.sn,gateway_sn:t.gateway,model:t.device.model||null,aircraft_type:t.device.type??null,aircraft_sub_type:t.device.sub_type??null,last_osd_at:t.device.last_osd_at||null,mqtt_connected:!!getClient()?.connected,telemetry_fresh:!!t.fresh,cloud_control_authorized:gateways[t.gateway].is_cloud_control_auth===true,video_ids:videoIds(gateways[t.gateway].live_capacity),video_sources:videoSources(gateways[t.gateway].live_capacity).filter(v=>v.video_id.startsWith(t.sn+'/')),is_live:publisher?.status==='STREAMING'||publisher?.status==='RECONNECTING',active_video_id:live?.video_id||null,active_video_type:live?.video_type||null,storage:require('../services/objectStorage').readiness(),live_enabled:liveEnabled(),live_ready:liveReady()},'Trạng thái đã xác minh');}));
  router.post('/authorize',asyncHandler(async(req,res)=>{const t=await target(req);ready(t);const result=await commands.exclusive(t.gateway,()=>commands.send(t.gateway,'cloud_control_auth_request',{user_id:String(req.user.user_id),user_callsign:req.user.full_name||req.user.username,control_keys:['flight']}));ok(res,{...result,authorized:gateways[t.gateway].is_cloud_control_auth===true},'Pilot đã phản hồi yêu cầu; chỉ điều khiển khi trạng thái cấp quyền được xác nhận.');}));
  router.post('/release',asyncHandler(async(req,res)=>{const t=await target(req);ready(t);const result=await commands.send(t.gateway,'cloud_control_release',{});gateways[t.gateway].is_cloud_control_auth=false;ok(res,result,'Đã trả quyền cho phi công');}));
  router.post('/photo',asyncHandler(async(req,res)=>{
@@ -50,15 +50,33 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
   const ids=videoIds(gateways[t.gateway].live_capacity).filter(id=>id.startsWith(t.sn+'/'));
   const id=req.body.video_id;
   if(typeof id!=='string'||!ids.includes(id))throw failure('Chọn video_id do thiết bị công bố; không suy đoán tên camera',400);
-  if(!['start','stop'].includes(req.body.action))throw failure('Thao tác live không hợp lệ',400);
+  if(!['start','stop','switch'].includes(req.body.action))throw failure('Thao tác live không hợp lệ',400);
+  const source=videoSources(gateways[t.gateway].live_capacity).find(v=>v.video_id===id),lens=req.body.video_type;
+  if(lens!=null&&(!source||!source.switchable_video_types.includes(lens)))throw failure('Thiết bị chưa công bố hỗ trợ loại camera đã chọn',400);
   const stream=await monitoring.ensureStream(t.session.ticket_id,t.sn),quality=Number(req.body.video_quality??2);
   if(!Number.isInteger(quality)||quality<0||quality>4)throw failure('Chất lượng phải từ 0 đến 4',400);
   const url=`${rtmpBase()}${stream.streamPath}?${streamAccess.mint(stream.streamPath,'publish',req.user)}`;
-  const result=await commands.exclusive(t.gateway,()=>commands.send(t.gateway,req.body.action==='stop'?'live_stop_push':'live_start_push',req.body.action==='stop'?{video_id:id}:{url_type:1,url,video_id:id,video_quality:quality}));
+  const result=await commands.exclusive(t.gateway,async()=>{
+   const reported=(gateways[t.gateway].live_status||[]).find(v=>v.status===1&&v.video_id?.startsWith(t.sn+'/'));
+   const previous=activeLives.get(t.sn)||(reported?{video_id:reported.video_id,video_type:reported.video_type}:null);
+   if(req.body.action==='stop'){const result=await commands.send(t.gateway,'live_stop_push',{video_id:previous?.video_id||id});activeLives.delete(t.sn);return result;}
+   const rows=await monitoring.streams(t.session.ticket_id),publishing=rows.some(r=>r.device_sn===t.sn&&['STREAMING','RECONNECTING'].includes(r.status));
+   if(req.body.action==='switch'&&!previous&&!publishing)throw failure('Chưa có luồng live; bấm Bắt đầu live trước',409);
+   let result;
+   if(req.body.action==='switch'&&(!previous||previous.video_id===id)&&lens){
+    result=await commands.send(t.gateway,'live_lens_change',{video_id:id,video_type:lens});
+   }else{
+    if(previous&&previous.video_id!==id)await commands.send(t.gateway,'live_stop_push',{video_id:previous.video_id});
+    result=await commands.send(t.gateway,'live_start_push',{url_type:1,url,video_id:id,video_quality:quality});
+    activeLives.set(t.sn,{video_id:id,video_type:null});
+    if(lens)result=await commands.send(t.gateway,'live_lens_change',{video_id:id,video_type:lens});
+   }
+   activeLives.set(t.sn,{video_id:id,video_type:lens||source?.video_type||null});return result;
+  });
   const row=(await monitoring.streams(t.session.ticket_id)).find(r=>r.device_sn===t.sn);
-  ok(res,{...result,playback_url:row?streamAccess.playback(row,req.user).flv_url:null,streamPath:stream.streamPath,channel:stream.channel,publisher_confirmed:false},'Pilot đã phản hồi lệnh live. Trạng thái phát được xác nhận riêng khi có publisher.');
+  ok(res,{...result,playback_url:row?streamAccess.playback(row,req.user).flv_url:null,streamPath:stream.streamPath,channel:stream.channel,publisher_confirmed:false,video_id:id,video_type:lens||null},'Pilot đã phản hồi lệnh live. Trạng thái phát được xác nhận riêng khi có publisher.');
  }));
- router.post('/media-sync',(req,res)=>{if(!require('../services/objectStorage').readiness().configured)return res.status(503).json({code:503,message:'Chưa cấu hình kho ảnh. Chạy CAI_DAT_KHO_ANH.bat (cần Docker Desktop), khởi động lại server rồi đăng nhập lại Pilot 2.',data:{sync_command_sent:false}});return res.json({code:0,message:'Ảnh gốc được tải bằng Media File Upload của Pilot 2. Bật tự tải ảnh gốc hoặc chọn tải thủ công trong thư viện Pilot; không phát lệnh media_files_sync không được xác nhận.',data:{strategy:'pilot-native-upload',sync_command_sent:false}});});
+ router.post('/media-sync',(req,res)=>{if(!require('../services/objectStorage').readiness().configured)return res.status(503).json({code:503,message:'Chưa cấu hình kho ảnh. Đặt STORAGE_MODE=local, khởi động lại server rồi đăng nhập lại Pilot 2.',data:{sync_command_sent:false}});return res.json({code:0,message:'Ảnh gốc được tải bằng Media File Upload của Pilot 2. Bật tự tải ảnh gốc hoặc chọn tải thủ công trong thư viện Pilot; không phát lệnh media_files_sync không được xác nhận.',data:{strategy:'pilot-native-upload',sync_command_sent:false}});});
  router.post(['/rth','/fly-to','/flyto'],(req,res)=>res.status(410).json({code:410,message:'Điều khiển chuyển động chưa được kiểm chứng theo DRC trên thiết bị này. Thực hiện trên Pilot 2; không phát lệnh suy đoán.'}));
  return router;
 }

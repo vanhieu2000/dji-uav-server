@@ -29,7 +29,7 @@ async function ensureAdmin(db,env=process.env){
 async function main(){
  if(Number(process.versions.node.split('.')[0])<24)throw Error('Cần cài Node.js 24 LTS rồi bấm lại file CHAY_LOCAL.bat');
  const envFile=path.join(ROOT,'.env');if(!fs.existsSync(envFile))throw Error('Chưa có .env; bấm CHAY_LOCAL.bat để nhập cấu hình lần đầu');
- process.loadEnvFile(envFile);require('../src/services/diagnostics').install();if(process.env.NODE_ENV==='production')throw Error('File này chỉ dành cho local; dùng bộ triển khai production riêng');process.env.HOST_IP=resolveHost({configured:process.env.HOST_IP,mode:process.env.LOCAL_NETWORK_MODE||'lan'});fs.mkdirSync(DATA,{recursive:true});const stateFile=path.join(DATA,'local-launcher.json'),lockFile=path.join(DATA,'local-launcher.lock'),signature=fingerprint();
+ process.loadEnvFile(envFile);process.env.STORAGE_MODE=process.env.STORAGE_MODE||'local';process.env.LIVE_STREAM_ENABLED=process.env.LIVE_STREAM_ENABLED||'true';require('../src/services/diagnostics').install();if(process.env.NODE_ENV==='production')throw Error('File này chỉ dành cho local; dùng bộ triển khai production riêng');process.env.HOST_IP=resolveHost({configured:process.env.HOST_IP,mode:process.env.LOCAL_NETWORK_MODE||'lan'});fs.mkdirSync(DATA,{recursive:true});const stateFile=path.join(DATA,'local-launcher.json'),lockFile=path.join(DATA,'local-launcher.lock'),signature=fingerprint();
  let state=readJson(stateFile);
  if(await running(state)){if(state.signature!==signature)throw Error('Code/cấu hình đã đổi. Đóng cửa sổ server cũ rồi bấm CHAY_LOCAL.bat lại.');const url=urls(state.host||process.env.HOST_IP,state.port,state.mqtt).dashboard;console.log('Server đang chạy: '+url);openBrowser(url);return;}
  let lock;
@@ -55,12 +55,18 @@ async function main(){
   try{await require('./setup-local').setupLocal(db.dbConfig);if(!await db.testConnection())throw Error('Không kết nối được MySQL. Kiểm tra dịch vụ MySQL và MYSQL_* trong .env');console.log('[3/4] Kiểm tra tài khoản Web...');await ensureAdmin(db);const operator=await require('./create-operator').ensureOperator(db);if(operator.created)console.log('Đã tạo '+operator.username+' (OPERATOR toàn bộ nghiệp vụ, không quản trị tài khoản/cài đặt). Mật khẩu ban đầu: '+operator.passwordFile+'; admin có thể thu hẹp phạm vi trong Quản lý tài khoản.');}finally{await db.closePool();}
   const requested=portNumber(process.env.PORT,8080),port=await freePort(requested),mqtt=await freePort(portNumber(process.env.MQTT_PORT,1883),[port]);instance=crypto.randomUUID();
   if(port!==requested)console.log('Cổng '+requested+' đang dùng; chuyển Web sang '+port+'.');
+  if(process.env.LIVE_STREAM_ENABLED==='true'){
+   const requestedRtmp=portNumber(process.env.RTMP_PORT,1935),rtmp=await freePort(requestedRtmp,[port,mqtt]);const requestedMedia=portNumber(process.env.MEDIA_HTTP_PORT,8000),media=await freePort(requestedMedia,[port,mqtt,rtmp]);
+   process.env.RTMP_PORT=String(rtmp);process.env.MEDIA_HTTP_PORT=String(media);
+   if(rtmp!==requestedRtmp||media!==requestedMedia)console.log('Live dùng RTMP '+rtmp+' / HTTP-FLV '+media+' vì cổng cũ đang dùng. Mở đúng cổng firewall và đăng nhập lại RC.');
+  }
   console.log('[4/4] Khởi động server, chờ DB/MQTT sẵn sàng...');
   child=spawn(process.execPath,['server.js'],{cwd:BACKEND,env:{...process.env,PORT:String(port),MQTT_PORT:String(mqtt),LOCAL_LAUNCH_ID:instance},stdio:'inherit'});
   const exit=new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',(code,signal)=>resolve({code,signal}));});exit.catch(()=>{});
   state={pid:child.pid,instance,port,mqtt,host:process.env.HOST_IP,signature};fs.writeFileSync(stateFile,JSON.stringify(state,null,2),{mode:0o600});
   let ready=false;for(let n=0;n<120;n++){if(stopped)return;if(child.exitCode!==null||child.signalCode)throw Error('Server đã dừng; xem lỗi phía trên');if(await running(state)){ready=true;break;}await delay(1000);}
   if(!ready)throw Error('Server chưa sẵn sàng sau 120 giây; xem lỗi DB/khởi tạo phía trên');
+  console.log('Thư mục ảnh gốc: '+path.resolve(process.env.MEDIA_DIR||path.join(BACKEND,'uploads/media')));if(process.env.LIVE_STREAM_ENABLED==='true')console.log('Live: RTMP '+process.env.RTMP_PORT+' / HTTP-FLV '+process.env.MEDIA_HTTP_PORT);
   const links=urls(process.env.HOST_IP,port,mqtt);console.log('\nSERVER SAN SANG: '+links.dashboard+'\nPILOT 2: '+links.pilot+'\nMQTT: '+links.mqtt+'\nDùng cùng Wi-Fi/LAN, cho phép các cổng này qua firewall mạng Private. Giữ cửa sổ này mở. Ctrl+C để dừng.\n');openBrowser(links.dashboard);
   const ended=await exit;if(stopped)return;if(ended.code&&ended.code!==0)throw Error('Server dừng với mã '+ended.code);
  }finally{if(child&&!child.killed)child.kill();cleanup();process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);process.removeListener('exit',cleanup);}

@@ -5,6 +5,7 @@ const {authenticateToken,passwordInput}=require('./auth');
 const v=require('../utils/validate');
 const router=express.Router();let onChanged=()=>{};router.setOnUserChanged=fn=>{onChanged=fn;};
 router.use(authenticateToken,(req,res,next)=>req.user.role==='ADMIN'?next():res.status(403).json({code:403,message:'Chỉ quản trị viên được quản lý tài khoản'}));
+router.get('/storage',asyncHandler(async(req,res)=>{const fs=require('fs'),folder=require('./mediaUpload').MEDIA_DIR;const [row]=await query('SELECT COUNT(*) AS count,COALESCE(SUM(file_size),0) AS bytes FROM media_files');const disk=fs.statfsSync(folder);ok(res,{...require('../services/objectStorage').readiness(),folder,photos:Number(row.count),bytes:Number(row.bytes),free_bytes:Number(disk.bavail)*Number(disk.bsize)});}));
 const ROLES=['ADMIN','ENGINEER','OPERATOR','VIEWER'],PERMISSIONS=['tasks:read','tasks:write','assets:read','media:write','alerts:write','reports:read'];
 const PUBLIC_COLUMNS='user_id,username,full_name,email,phone,role,status,unit_id,must_change_password,last_login,all_operation_scopes';
 async function scopes(conn,uid,ids){
