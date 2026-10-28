@@ -9,14 +9,12 @@ window.PilotBridge = (() => {
  function serial(name){let v;try{v=call(name);}catch{return null;}const sn=typeof v==='string'?v:v?.sn;return typeof sn==='string'&&/^[A-Za-z0-9_-]{4,64}$/.test(sn)?sn:null;}
  function load(name,params){call('platformLoadComponent',name,JSON.stringify(params));}
  function connected(raw){try{const v=value(raw);return v===true||v==='true';}catch{return false;}}
- async function freshThing(config){
+ function freshThing(config){
   const loaded=connected(call('platformIsComponentLoaded','thing'));
   if(loaded){call('thingDisconnect');call('platformUnloadComponent','thing');if(connected(call('platformIsComponentLoaded','thing')))throw Error('Không gỡ được cấu hình MQTT cũ; thoát Cloud Service trên Pilot rồi đăng nhập lại.');}
   const params={host:config.host,username:config.username,password:config.password,connectCallback:'connectCallback'};
   load('thing',params);
-  // DJI's official Pilot demo starts MQTT by loading thing. Do not race its
-  // asynchronous auto-connect with thingConnect/getters or other component loads.
-  return {autoConnect:true};
+  // Optional native config read-back is omitted: it returned615011 on the real RC.
 
  }
  return {value,call,serial,load,connected,freshThing};

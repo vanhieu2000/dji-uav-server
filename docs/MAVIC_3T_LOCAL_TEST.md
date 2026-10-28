@@ -120,3 +120,11 @@ không gọi thêm thingConnect/getter ngay khi thing đang tự kết nối. C�
 Broker vẫn xác nhận đúng phiên; ảnh/live lỗi không làm mất đăng nhập MQTT đã xác nhận.
 Nguồn: https://github.com/dji-sdk/Cloud-API-Demo-Web/blob/master/src/pages/page-pilot/pilot-home.vue
 Chưa có định nghĩa công khai được xác minh cho615011; log thực cần phân biệt TCP/CONNECT và kết quả native.
+
+### Khôi phục mốc kết nối đã hoạt động4a12b16 (28/10/2026)
+Theo yêu cầu đối chiếu bản trước phần lưu ảnh, trang Pilot và Bridge được khôi phục từ4a12b16.
+Khác biệt duy nhất trong hai file so với mốc: bỏ optional thingGetConfigs đã báo615011 trên RC,
+và đổi query version script để tránh WebView dùng cache. Không thêm thingConnect, polling module hay WebSocket fallback.
+Broker giữ nguyên chính sách xác thực/ACL của mốc đó; native storage và camera live trên dashboard được giữ riêng.
+Việc đọc trạng thái broker vẫn phải xác nhận đúng phiên; không bật thành công theo timer.
+Đây là khôi phục code đã được người dùng xác nhận trước đó, chưa phải xác minh kết nối RC của lần hiện tại.
