@@ -81,3 +81,14 @@ Log RC thực cho thấy `thing/product/<aircraft>/state` bị từ chối tại
 `sn` trực tiếp của từng phần tử `data.payloads`; topic, device_sn/gateway_sn và topology vẫn kiểm tra như cũ.
 Sau cập nhật cần thử RC thật và kiểm tra không còn `Payload identity denied` ở trường này.
 Log STS 503 là lỗi riêng: kho S3/MinIO chưa sẵn sàng, chưa thể đồng bộ ảnh tự động.
+
+### Phiên Pilot khi quay lại và trạng thái OSD (28/10/2026)
+Log RC thực 07:10–07:11 UTC có OSD trước/sau nút quay lại nhưng API thiết bị vẫn OFFLINE.
+Nguyên nhân: timestamp gói state bị lưu trong cache gateway cho cả aircraft; OSD sau đó bị phân loại là RC.
+Timestamp state nay dùng bộ nhớ riêng, aircraft đã biết/OSD có attitude không bị phân loại thành gateway.
+Trang Pilot kiểm tra `/api/pilot/connection` bằng token native cùng host: chỉ khôi phục phiên còn hợp lệ,
+broker còn client của đúng phiên. Mở lại WebView không đăng nhập lại hoặc unload thing khi phiên đang chạy.
+Trạng thái chờ/reconnect có thời hạn 20 giây; callback true chỉ là tín hiệu kiểm tra broker, không tự báo thành công.
+Không ghi token native vào localStorage. Nút quay lại vẫn trả false theo tài liệu DJI để Pilot đóng WebView;
+không gọi thingDisconnect/onStop khi quay lại. Thoát Cloud Service thực sự vẫn ngắt theo hành vi Pilot.
+Kiểm thử browser và server thật/MySQL/10 UAV giả lập đạt; cần kiểm tra lại trên RC vật lý.

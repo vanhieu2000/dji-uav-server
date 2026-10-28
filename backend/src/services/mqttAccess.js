@@ -35,6 +35,7 @@ async function bindTopology(session,topic,payload){
  session.aircraft_sn=d.sn;
 }
 const brokers=new Set();
+function sessionConnected(id){for(const broker of brokers)for(const client of Object.values(broker.clients))if(!client.uavInternal&&client.connected!==false&&Number(client.uavSessionId)===Number(id))return true;return false;}
 function revoke({user_id,session_id}){for(const broker of brokers)for(const client of Object.values(broker.clients))if(!client.uavInternal&&client.uavScope?.user_id===user_id&&(!session_id||client.uavScope.auth_session_id===session_id))client.close();}
 const IGNORED_SN_KEYS = new Set(['battery_sn', 'payload_sn', 'gimbal_sn', 'camera_sn', 'dongle_sn', 'component_sn']);
 function serialIdentityMismatch(s, value, depth = 0, path = '$') {
@@ -125,4 +126,4 @@ function configure(broker){
  const timer=setInterval(async()=>{for(const client of Object.values(broker.clients))if(!client.uavInternal){let s=null;try{s=await principal(client.uavSessionId);}catch(e){}if(!s)client.close();else client.uavScope=s;}},10000);timer.unref();broker.on('closed',()=>{clearInterval(timer);brokers.delete(broker);});
  return internal;
 }
-module.exports={configure,credentials,principal,topicAllowed,serialsAllowed,serialIdentityMismatch,bindTopology,authenticatePilot,revoke};
+module.exports={sessionConnected,configure,credentials,principal,topicAllowed,serialsAllowed,serialIdentityMismatch,bindTopology,authenticatePilot,revoke};

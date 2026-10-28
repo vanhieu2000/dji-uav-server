@@ -5,7 +5,7 @@ async function pilotAccess(req){
  const [s]=await query('SELECT * FROM pilot_sessions WHERE session_id=? AND user_id=? AND ended_at IS NULL AND started_at>DATE_SUB(NOW(),INTERVAL 12 HOUR)',[req.user.pilot_session_id,req.user.user_id]);
  if(!s)throw a.denied();await a.ticket(req.user,s.ticket_id);
  const match=/^\/(wayline|manage|storage|media)\/api\/v1\/workspaces\/([^/]+)\/(.+)$/.exec(p);
- if(p==='/api/pilot/identity'&&req.method==='POST'){req.pilotSession=s;return true;}
+ if((p==='/api/pilot/identity'&&req.method==='POST')||(p==='/api/pilot/connection'&&req.method==='GET')){req.pilotSession=s;return true;}
  if(match){
   if(match[2]!==req.user.workspace_id)throw a.denied();
   const suffix=match[3],read=req.method==='GET';

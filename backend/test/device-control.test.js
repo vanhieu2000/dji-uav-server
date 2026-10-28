@@ -84,3 +84,11 @@ test('Mavic 3T state: payload component SN differs from aircraft without bypassi
  assert.equal(topicAllowed(s,'thing/product/OTHER/state','publish'),false);
  assert.equal(serialIdentityMismatch(s,state),null);
 });
+
+test('Aircraft OSD remains aircraft even after state/gateway cache contamination',()=>{
+ const {isGatewayOsd}=require('../src/services/telemetryIdentity');
+ assert.equal(isGatewayOsd('UAV1234',{attitude_head:-100,battery:{capacity_percent:43}},{UAV1234:{}},{UAV1234:{source_state_timestamp:123}}),false);
+ assert.equal(isGatewayOsd('UAV1234',{battery:{capacity_percent:43}},{UAV1234:{}},{UAV1234:{}}),false);
+ assert.equal(isGatewayOsd('UAV1234',{attitude_head:0},{},{UAV1234:{}}),false);
+ assert.equal(isGatewayOsd('RC1234',{app_version:'14.0',capacity_percent:72},{},{RC1234:{}}),true);
+});

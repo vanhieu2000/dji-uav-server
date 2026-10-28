@@ -564,6 +564,7 @@ function registerMqttEvents(client) {
 }
 
 const deviceCommands=require('./src/services/deviceCommands').createCommands({getClient:()=>mqttClient});
+const stateTimestamps=new Map();
 async function handleDjiMqttMessage(topic, json) {
   const parts = topic.split('/');
   const sn = parts[2];
@@ -576,7 +577,7 @@ async function handleDjiMqttMessage(topic, json) {
     if (Number.isSafeInteger(json.timestamp) && previous && previous.source_timestamp != null && json.timestamp < previous.source_timestamp) return;
     
     // Phân biệt chính xác giữa Tay Cầm RC (Gateway) và Máy Bay Mavic 3T (UAV)
-    const isRcGateway = Boolean(memoryStore.gateways[sn]) || (d.app_version !== undefined && d.attitude_head === undefined);
+    const isRcGateway = require('./src/services/telemetryIdentity').isGatewayOsd(sn,d,memoryStore.devices,memoryStore.gateways);
 
     if (isRcGateway) {
       // ĐÂY LÀ TAY CẦM RC (PILOT 2 GATEWAY)
@@ -734,9 +735,9 @@ async function handleDjiMqttMessage(topic, json) {
   // 2.1 Xử lý topic state của máy bay hoặc gateway
   else if (topic.endsWith('/state')) {
     const d = json.data || {};
-    const oldState=memoryStore.gateways[sn]?.source_state_timestamp;
+    const oldState=stateTimestamps.get(sn);
     if(Number.isSafeInteger(json.timestamp)&&oldState!=null&&json.timestamp<oldState)return;
-    if(Number.isSafeInteger(json.timestamp))memoryStore.gateways[sn]={...memoryStore.gateways[sn],source_state_timestamp:json.timestamp};
+    if(Number.isSafeInteger(json.timestamp)){if(stateTimestamps.size>=1000&&!stateTimestamps.has(sn))stateTimestamps.delete(stateTimestamps.keys().next().value);stateTimestamps.set(sn,json.timestamp);}
     if(typeof d.is_cloud_control_auth==='boolean') memoryStore.gateways[sn]={...memoryStore.gateways[sn],gateway_sn:sn,is_cloud_control_auth:d.is_cloud_control_auth};
     if (d.live_capacity) {
       memoryStore.gateways[sn] = { ...memoryStore.gateways[sn], gateway_sn: sn, live_capacity: d.live_capacity };
@@ -977,6 +978,12 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
       route_count: ticketRouteList.length
     }
   });
+});
+
+app.get('/api/pilot/connection',(req,res)=>{
+ const s=req.pilotSession;if(!s)return res.status(403).json({code:403,message:'Cần token phiên Pilot'});
+ const dev=memoryStore.devices[s.aircraft_sn];
+ res.json({code:0,data:{rc_sn:s.rc_sn,aircraft_sn:s.aircraft_sn,ticket_id:s.ticket_id,mqtt_connected:require('./src/services/mqttAccess').sessionConnected(s.session_id),last_osd_at:dev?.last_osd_at||null}});
 });
 
 app.post('/api/pilot/identity',async(req,res)=>{
