@@ -326,6 +326,7 @@ function setupMqtt() {
     const broker = aedes({maxClientsIdLength:128,concurrency:100});
     const internal=require('./src/services/mqttAccess').configure(broker);
     const tcpServer = net.createServer(broker.handle);
+    tcpServer.on('connection',socket=>console.log('[MQTT TCP] Nhận kết nối từ '+socket.remoteAddress+' (chưa đồng nghĩa xác thực thành công)'));
 
     tcpServer.listen(MQTT_PORT, '0.0.0.0', () => {
       console.log(`[MQTT] ✓ Embedded MQTT Broker đang lắng nghe trên 0.0.0.0:${MQTT_PORT}`);
@@ -973,8 +974,8 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
 
 app.get('/api/pilot/connection',(req,res)=>{
  const s=req.pilotSession;if(!s)return res.status(403).json({code:403,message:'Cần token phiên Pilot'});
- const dev=memoryStore.devices[s.aircraft_sn];
- res.json({code:0,data:{rc_sn:s.rc_sn,aircraft_sn:s.aircraft_sn,ticket_id:s.ticket_id,mqtt_connected:require('./src/services/mqttAccess').sessionConnected(s.session_id),last_osd_at:dev?.last_osd_at||null}});
+ const dev=memoryStore.devices[s.aircraft_sn],connection=require('./src/services/mqttAccess').connectionState(s.session_id);
+ res.json({code:0,data:{rc_sn:s.rc_sn,aircraft_sn:s.aircraft_sn,ticket_id:s.ticket_id,mqtt_connected:connection.connected,mqtt_auth:connection.auth,last_osd_at:dev?.last_osd_at||null}});
 });
 
 app.post('/api/pilot/identity',async(req,res)=>{

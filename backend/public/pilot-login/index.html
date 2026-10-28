@@ -182,7 +182,7 @@
 
     <!-- THẺ TRẠNG THÁI KẾT NỐI THÀNH CÔNG (CHẠY NGẦM KHÔNG HỦY PHIÊN) -->
     <section id="connectedCard" style="display:none;border:1px solid #9bcfc1;border-radius:12px;padding:18px;margin-top:16px;background:#f0faf6;color:#173e38">
-      <h3 style="font-size:17px;color:#0c6954;margin-bottom:10px">MQTT đã kết nối</h3>
+      <h3 style="font-size:17px;color:#0c6954;margin-bottom:10px">MQTT đã kết nối</h3><p id="module-warning" role="status" style="color:#8a4b08"></p>
       <dl style="font-size:13px;line-height:1.8;overflow-wrap:anywhere">
         <dt>Tay điều khiển</dt><dd id="rcSnText">Chưa xác minh</dd>
         <dt>Máy bay</dt><dd id="aircraftSnText">Chờ topology</dd>
@@ -204,7 +204,7 @@
     </div>
   </div>
 
-  <script src="./bridge.js?v=20261028-no-readback"></script>
+  <script src="./bridge.js?v=20261028-explicit-connect"></script>
   <script>
     const logBox = document.getElementById('logBox');
     const statusBox = document.getElementById('statusBox');
@@ -278,13 +278,13 @@
     }
 
     // Đăng ký callback toàn cục theo chuẩn Thinklabs / DJI Cloud API
-    let connectionTimer=null, bridgeReady=false, lastConnectionState=false, currentToken=null, checkingConnection=false, connectedShown=false, connecting=false, retryAllowed=false;
+    let connectionTimer=null, bridgeReady=false, lastConnectionState=false, currentToken=null, checkingConnection=false, connectedShown=false, connecting=false, retryAllowed=false,lastConnectionHint='Broker chưa nhận được yêu cầu MQTT của phiên này.';
     function showWaiting(){
       if(retryAllowed)return;
       connectedShown=false;document.getElementById('connectedCard').style.display='none';
       statusBox.style.display='block';statusBox.className='status-box';statusBox.textContent='Đang chờ kết nối MQTT / kết nối lại…';
       document.getElementById('loginForm').style.display='block';connectBtn.disabled=true;connectBtn.innerText='ĐANG CHỜ MQTT';
-      if(!connectionTimer)connectionTimer=setTimeout(()=>{connectionTimer=null;retryAllowed=true;statusBox.className='status-box error';statusBox.textContent='MQTT chưa kết nối sau 20 giây. Kiểm tra log broker rồi thử lại.';connectBtn.disabled=false;connectBtn.innerText='THỬ LẠI';connecting=false;},20000);
+      if(!connectionTimer)connectionTimer=setTimeout(()=>{connectionTimer=null;retryAllowed=true;statusBox.className='status-box error';statusBox.textContent='MQTT chưa kết nối sau 20 giây. '+lastConnectionHint;addLog('MQTT timeout: '+escapeHtml(lastConnectionHint));connectBtn.disabled=false;connectBtn.innerText='THỬ LẠI';connecting=false;},20000);
     }
     async function checkConnection(){
       if(!bridgeReady||!currentToken||checkingConnection)return;
@@ -293,7 +293,12 @@
         const r=await fetch('/api/pilot/connection',{headers:{'x-auth-token':token}}),j=await r.json();
         if(token!==currentToken||!bridgeReady)return;
         if(r.ok&&j.code===0&&j.data.mqtt_connected){clearTimeout(connectionTimer);connectionTimer=null;connecting=false;if(!connectedShown){addLog('✓ Broker xác nhận MQTT của phiên hiện tại.');showConnectedSuccess();}}
-        else showWaiting();
+        else {
+          if(r.status===401||r.status===403){clearTimeout(connectionTimer);connectionTimer=null;bridgeReady=false;connecting=false;retryAllowed=true;statusBox.style.display='block';statusBox.className='status-box error';statusBox.textContent='Phiên Pilot không còn hợp lệ: '+(j.message||'đăng nhập lại');document.getElementById('connectedCard').style.display='none';document.getElementById('loginForm').style.display='block';connectBtn.disabled=false;connectBtn.innerText='ĐĂNG NHẬP LẠI';return;}
+          const reason=j.data?.mqtt_auth?.reason;
+          lastConnectionHint=!r.ok?'Không đọc được trạng thái broker: '+(j.message||r.status):reason&&reason!=='OK'?'Broker từ chối xác thực: '+reason:reason==='OK'?'Broker đã chấp nhận đăng nhập nhưng client đã ngắt; xem log broker.':'Broker chưa nhận được yêu cầu MQTT. Kiểm tra thingConnect, IP/cổng và firewall TCP.';
+          showWaiting();
+        }
       }catch{if(token===currentToken&&bridgeReady)showWaiting();}finally{checkingConnection=false;}
     }
     window.connectCallback = function(t) {
@@ -341,7 +346,7 @@
       if(connecting)return;connecting=true;
       await resumeReady;
       if(await resumeConnection()){connecting=false;return;}
-      retryAllowed=false;
+      retryAllowed=false;lastConnectionHint='Broker chưa nhận được yêu cầu MQTT của phiên này.';
       bridgeReady=false;connectedShown=false;lastConnectionState=false;clearTimeout(connectionTimer);connectionTimer=null;
       connectBtn.disabled = true;
       connectBtn.innerText = "ĐANG KẾT NỐI...";
@@ -381,17 +386,27 @@
           PilotBridge.call('apiSetToken',cfg.token);
           PilotBridge.call('platformSetWorkspaceId',cfg.workspace_id);
           PilotBridge.call('platformSetInformation','Giám sát UAV',cfg.workspace_name,cfg.assigned_ticket);
-          PilotBridge.freshThing(cfg.mqtt);
+          const mqttSetup=await PilotBridge.freshThing(cfg.mqtt);
+          if(mqttSetup.connectError)addLog('MQTT native: '+escapeHtml(mqttSetup.connectError)+'; đang kiểm tra kết nối tại broker.');
+          else addLog(mqttSetup.connectRequested?'Đã gọi thingConnect bằng tài khoản MQTT của phiên hiện tại.':'Pilot báo MQTT đã kết nối; đang đối chiếu broker.');
           addLog('✓ Đã nạp lại broker và tài khoản MQTT của phiên hiện tại; không dùng cấu hình lưu cũ.');
-          PilotBridge.load('liveshare',{videoPublishType:'video-demand-aux-manual',statusCallback:'liveStatusCallback'});
-          PilotBridge.load('media',{autoUploadPhoto:true,autoUploadPhotoType:0,autoUploadVideo:false});
-          PilotBridge.call('mediaSetAutoUploadPhoto',true);PilotBridge.call('mediaSetUploadPhotoType',0);
-          if(!PilotBridge.connected(PilotBridge.call('mediaGetAutoUploadPhoto'))||Number(PilotBridge.call('mediaGetUploadPhotoType'))!==0)throw Error('Pilot chưa bật tải ảnh gốc tự động.');
-          PilotBridge.load('mission',{});
           bridgeReady=true;
           statusBox.className='status-box';statusBox.textContent='Đã xác thực, đang chờ Pilot 2 xác nhận MQTT…';
           connectBtn.innerText='ĐANG CHỜ MQTT';
           showWaiting();checkConnection();
+          // Optional modules cannot turn an established MQTT session into a login failure.
+          document.getElementById('module-warning').textContent='';
+          setTimeout(()=>{
+            if(currentToken!==cfg.token||!bridgeReady)return;
+            const warnings=[];
+            const modules=[['Livestream',()=>PilotBridge.load('liveshare',{videoPublishType:'video-demand-aux-manual',statusCallback:'liveStatusCallback'})],['Ảnh gốc',()=>{
+              PilotBridge.load('media',{autoUploadPhoto:true,autoUploadPhotoType:0,autoUploadVideo:false});
+              PilotBridge.call('mediaSetAutoUploadPhoto',true);PilotBridge.call('mediaSetUploadPhotoType',0);
+              if(!PilotBridge.connected(PilotBridge.call('mediaGetAutoUploadPhoto'))||Number(PilotBridge.call('mediaGetUploadPhotoType'))!==0)throw Error('Pilot chưa xác nhận tự tải ảnh gốc.');
+            }],['Đường bay',()=>PilotBridge.load('mission',{})]];
+            for(const [name,setup]of modules)try{setup();}catch(error){warnings.push(name+': '+error.message);addLog('Module phụ chưa sẵn sàng: '+escapeHtml(name+' · '+error.message));}
+            document.getElementById('module-warning').textContent=warnings.join(' · ');
+          },0);
 
         } else {
           connecting=false;

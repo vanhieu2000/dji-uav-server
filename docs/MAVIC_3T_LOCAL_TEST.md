@@ -105,3 +105,10 @@ Live dùng video_type/switchable_video_types thiết bị công bố. Combo đ�
 Thử với AWS SDK thật và HTTP/server/MySQL trên loopback; chưa nghiệm thu signed upload/lens change trên RC thật.
 Bộ lọc upload native hỗ trợ SigV4 header và payload hash/UNSIGNED-PAYLOAD; nếu SDK RC gửi kiểu streaming signature khác,
 server từ chối rõ ràng để đối chiếu log, không bỏ xác thực.
+
+### Chờ MQTT sau khi đăng nhập (28/10/2026)
+Sau khi nạp thing và xác nhận component đã sẵn sàng, trang gọi thingConnect(username,password,callback)
+để yêu cầu kết nối bằng credentials hiện tại, không chỉ chờ autoconnect hoặc dựa vào trạng thái native có thể cũ.
+Broker phải xác nhận đúng session mới báo thành công. Lỗi media/liveshare/mission hiển thị riêng, không chặn MQTT.
+Log TCP phân biệt có kết nối tới cổng broker hay chưa; API connection phân biệt chưa CONNECT/xác thực bị từ chối/client đã ngắt.
+Lỗi token401/403 không còn bị hiển thị thành timeout MQTT chung. Cần thử lại RC thật sau cập nhật.

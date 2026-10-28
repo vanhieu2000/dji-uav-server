@@ -56,14 +56,15 @@ test('MQTT CONNECT diagnostics distinguish cached credentials without accepting 
  assert.equal((await authenticatePilot(Buffer.from('pilot:42'),Buffer.from(password),async()=>session)).session,session);
  assert.equal((await authenticatePilot('pilot:42',password,async()=>{throw Error('DB fixture');})).reason,'SESSION_LOOKUP_FAILED');
 });
-test('Bridge reconnect replaces MQTT config without optional native read-back',()=>{
+test('Bridge reconnect replaces MQTT config and explicitly connects without native read-back',async()=>{
  const vm=require('vm'),fs=require('fs'),calls=[];let loaded=true,active={host:'tcp://old:1883',username:'old'};
- const bridge={platformIsComponentLoaded:()=>loaded,thingDisconnect:()=>{calls.push('disconnect');return '{"code":0}';},platformUnloadComponent:()=>{calls.push('unload');loaded=false;return '{"code":0}';},platformLoadComponent:(name,raw)=>{calls.push('load');loaded=true;active=JSON.parse(raw);return '{"code":0}';},thingGetConfigs:()=>{throw Error('615011: read-back not available');}};
+ const bridge={platformIsComponentLoaded:()=>loaded,thingDisconnect:()=>{calls.push('disconnect');return '{"code":0}';},platformUnloadComponent:()=>{calls.push('unload');loaded=false;return '{"code":0}';},platformLoadComponent:(name,raw)=>{calls.push('load');loaded=true;active=JSON.parse(raw);return '{"code":0}';},thingGetConfigs:()=>{throw Error('615011: read-back not available');},thingGetConnectState:()=>false,thingConnect:(user,password,callback)=>{assert.match(user,/^pilot:/);assert.equal(callback,'connectCallback');calls.push('connect');return '{"code":0}';}};
  const box={window:{djiBridge:bridge}};vm.runInNewContext(fs.readFileSync(require('path').join(__dirname,'../public/pilot-login/bridge.js'),'utf8'),box);
- box.window.PilotBridge.freshThing({host:'tcp://new:1884',username:'pilot:42',password:'test-password'});
- assert.deepEqual(calls,['disconnect','unload','load']);assert.equal(active.username,'pilot:42');assert.equal(active.host,'tcp://new:1884');
+ const result=await box.window.PilotBridge.freshThing({host:'tcp://new:1884',username:'pilot:42',password:'test-password'});assert.equal(result.connectRequested,true);
+ assert.deepEqual(calls,['disconnect','unload','load','connect']);assert.equal(active.username,'pilot:42');assert.equal(active.host,'tcp://new:1884');
+ bridge.thingGetConnectState=()=>true; // stale native true must not suppress the connect request
  bridge.platformLoadComponent=()=>{active={host:'tcp://new:1884',username:'old'};loaded=true;return '{"code":0}';};
- assert.doesNotThrow(()=>box.window.PilotBridge.freshThing({host:'tcp://new:1884',username:'pilot:43',password:'test-next'}));
+ const again=await box.window.PilotBridge.freshThing({host:'tcp://new:1884',username:'pilot:43',password:'test-next'});assert.equal(again.connectRequested,true);assert.equal(calls.filter(c=>c==='connect').length,2);
 });
 
 test('MQTT identity diagnostics locate the rejected field without exposing payload values',()=>{

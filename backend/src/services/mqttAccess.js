@@ -34,7 +34,8 @@ async function bindTopology(session,topic,payload){
  await query('UPDATE pilot_sessions SET aircraft_sn=? WHERE session_id=? AND ended_at IS NULL AND (aircraft_sn IS NULL OR aircraft_sn=?)',[d.sn,session.session_id,d.sn]);
  session.aircraft_sn=d.sn;
 }
-const brokers=new Set();
+const brokers=new Set(),authAttempts=new Map();
+function connectionState(id){return {connected:sessionConnected(id),auth:authAttempts.get(Number(id))||null};}
 function sessionConnected(id){for(const broker of brokers)for(const client of Object.values(broker.clients))if(!client.uavInternal&&client.connected!==false&&Number(client.uavSessionId)===Number(id))return true;return false;}
 function revoke({user_id,session_id}){for(const broker of brokers)for(const client of Object.values(broker.clients))if(!client.uavInternal&&client.uavScope?.user_id===user_id&&(!session_id||client.uavScope.auth_session_id===session_id))client.close();}
 const IGNORED_SN_KEYS = new Set(['battery_sn', 'payload_sn', 'gimbal_sn', 'camera_sn', 'dongle_sn', 'component_sn']);
@@ -94,6 +95,7 @@ function configure(broker){
  broker.authenticate=(client,username,password,callback)=>{
   if(username===internal.username&&password?.toString()===internal.password){client.uavInternal=true;return callback(null,true);}
   authenticatePilot(username,password).then(result=>{
+   if(result.sessionId){if(authAttempts.size>=1000)authAttempts.delete(authAttempts.keys().next().value);authAttempts.set(Number(result.sessionId),{reason:result.reason||'OK',at:new Date().toISOString()});}
    logAuth(client,result);if(!result.session)return callback(null,false);
    client.uavSessionId=result.session.session_id;client.uavScope=result.session;callback(null,true);
   }).catch(()=>callback(null,false));
@@ -126,4 +128,4 @@ function configure(broker){
  const timer=setInterval(async()=>{for(const client of Object.values(broker.clients))if(!client.uavInternal){let s=null;try{s=await principal(client.uavSessionId);}catch(e){}if(!s)client.close();else client.uavScope=s;}},10000);timer.unref();broker.on('closed',()=>{clearInterval(timer);brokers.delete(broker);});
  return internal;
 }
-module.exports={sessionConnected,configure,credentials,principal,topicAllowed,serialsAllowed,serialIdentityMismatch,bindTopology,authenticatePilot,revoke};
+module.exports={connectionState,sessionConnected,configure,credentials,principal,topicAllowed,serialsAllowed,serialIdentityMismatch,bindTopology,authenticatePilot,revoke};

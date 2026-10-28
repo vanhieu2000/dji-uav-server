@@ -44,7 +44,7 @@ test('server thật + 10 UAV MQTT và camera M3T giả lập, localhost không t
  // Scoped native API uses exact Pilot session; no fallback to another task/library.
  const pilotToken=await auth.issuePilotToken(user,first.session,'runtime-workspace');const refreshedMqtt=await require('../src/services/mqttAccess').credentials(first.session,await auth.userForToken(pilotToken));
  assert.equal(await connect(first.credentials,false),null);await connect(refreshedMqtt);
- const connection=await fetch(base+'/api/pilot/connection',{headers:{'x-auth-token':pilotToken}});assert.equal(connection.status,200);assert.equal((await connection.json()).data.mqtt_connected,true);
+ const connection=await fetch(base+'/api/pilot/connection',{headers:{'x-auth-token':pilotToken}});assert.equal(connection.status,200);const connectionState=(await connection.json()).data;assert.equal(connectionState.mqtt_connected,true);assert.equal(connectionState.mqtt_auth.reason,'OK');
  const routes=await fetch(base+'/wayline/api/v1/workspaces/runtime-workspace/waylines',{headers:{'x-auth-token':pilotToken}});assert.equal(routes.status,200);assert.deepEqual((await routes.json()).data.list,[]);
  const badWorkspace=await fetch(base+'/wayline/api/v1/workspaces/OTHER/waylines',{headers:{'x-auth-token':pilotToken}});assert.equal(badWorkspace.status,403);
  const storage=await fetch(base+'/storage/api/v1/workspaces/runtime-workspace/sts',{headers:{'x-auth-token':pilotToken}});assert.equal(storage.status,200);
