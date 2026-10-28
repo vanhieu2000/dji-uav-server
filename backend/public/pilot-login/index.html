@@ -204,7 +204,7 @@
     </div>
   </div>
 
-  <script src="./bridge.js"></script>
+  <script src="./bridge.js?v=20261028-no-readback"></script>
   <script>
     const logBox = document.getElementById('logBox');
     const statusBox = document.getElementById('statusBox');
@@ -313,7 +313,7 @@
         currentToken=token;bridgeReady=true;
         PilotBridge.call('thingSetConnectCallback','connectCallback');
         document.getElementById('rcSnText').textContent=j.data.rc_sn||'Chờ topology';document.getElementById('aircraftSnText').textContent=j.data.aircraft_sn||'Chờ topology';document.getElementById('wsText').textContent='Phiếu #'+j.data.ticket_id;
-        const config=PilotBridge.call('thingGetConfigs');document.getElementById('mqttHostText').textContent=config?.host||'Đã xác minh tại broker';
+        document.getElementById('mqttHostText').textContent='Đã xác minh kết nối của phiên tại broker';
         addLog('✓ Khôi phục phiên MQTT đang chạy; giữ nguyên kết nối và phiếu.');showConnectedSuccess();return true;
       }catch{return false;}
     }

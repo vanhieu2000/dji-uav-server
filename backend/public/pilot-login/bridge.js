@@ -14,10 +14,9 @@ window.PilotBridge = (() => {
   if(loaded){call('thingDisconnect');call('platformUnloadComponent','thing');if(connected(call('platformIsComponentLoaded','thing')))throw Error('Không gỡ được cấu hình MQTT cũ; thoát Cloud Service trên Pilot rồi đăng nhập lại.');}
   const params={host:config.host,username:config.username,password:config.password,connectCallback:'connectCallback'};
   load('thing',params);
-  if(typeof window.djiBridge.thingGetConfigs==='function'){
-   const active=call('thingGetConfigs');
-   if(active&&typeof active==='object'&&((active.host&&active.host!==params.host)||(active.username&&active.username!==params.username)))throw Error('Pilot vẫn giữ broker/tài khoản MQTT cũ. Thoát Cloud Service rồi đăng nhập lại.');
-  }
+  // Native read-back is optional and may reject immediately after load.
+  // Verify the exact authenticated Pilot session at the broker instead.
+
  }
  return {value,call,serial,load,connected,freshThing};
 })();
