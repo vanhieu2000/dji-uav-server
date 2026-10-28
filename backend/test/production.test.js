@@ -39,7 +39,8 @@ test('server thật + 10 UAV MQTT và camera M3T giả lập, localhost không t
  const {topicAllowed}=require('../src/services/mqttAccess');assert.equal(topicAllowed({aircraft_sn:fixture[0].sn},`thing/product/${fixture[1].sn}/osd`,'publish'),false);
  const first=fixture[0];const denied=await new Promise(resolve=>first.client.subscribe('thing/product/#',(err,granted)=>resolve(Boolean(err)||granted[0].qos===128)));assert.equal(denied,true);
  // Scoped native API uses exact Pilot session; no fallback to another task/library.
- const pilotToken=await auth.issuePilotToken(user,first.session,'runtime-workspace');await require('../src/services/mqttAccess').credentials(first.session,await auth.userForToken(pilotToken));
+ const pilotToken=await auth.issuePilotToken(user,first.session,'runtime-workspace');const refreshedMqtt=await require('../src/services/mqttAccess').credentials(first.session,await auth.userForToken(pilotToken));
+ assert.equal(await connect(first.credentials,false),null);await connect(refreshedMqtt);
  const routes=await fetch(base+'/wayline/api/v1/workspaces/runtime-workspace/waylines',{headers:{'x-auth-token':pilotToken}});assert.equal(routes.status,200);assert.deepEqual((await routes.json()).data.list,[]);
  const badWorkspace=await fetch(base+'/wayline/api/v1/workspaces/OTHER/waylines',{headers:{'x-auth-token':pilotToken}});assert.equal(badWorkspace.status,403);
  const storage=await fetch(base+'/storage/api/v1/workspaces/runtime-workspace/sts',{headers:{'x-auth-token':pilotToken}});assert.equal(storage.status,503);
@@ -75,5 +76,19 @@ test('server thật + 10 UAV MQTT và camera M3T giả lập, localhost không t
  const changed=new URL(link);changed.searchParams.set('exp','1000000000');assert.equal((await fetch(changed)).status,401);
  await db.query('DELETE FROM user_sessions WHERE session_id=?',[auth.decodeToken(pilotToken).jti]);assert.equal((await fetch(link)).status,401);
 
- assert.ok(!fs.readFileSync(path.join(dir,'server.log'),'utf8').includes(first.credentials.password));
+ const authLogs=fs.readFileSync(path.join(dir,'server.log'),'utf8');assert.match(authLogs,/reason=PASSWORD_MISMATCH/);assert.ok(!authLogs.includes(first.credentials.password));assert.ok(!authLogs.includes(refreshedMqtt.password));
+ const diagnosticResponse=await fetch(base+'/api/diagnostics/export',{headers});assert.equal(diagnosticResponse.status,200);const diagnosticZip=new(require('adm-zip'))(Buffer.from(await diagnosticResponse.arrayBuffer()));assert.ok(diagnosticZip.getEntry('manifest.json'));const diagnosticText=diagnosticZip.getEntries().filter(e=>e.entryName.endsWith('.jsonl')).map(e=>e.getData().toString()).join('');assert.ok(!diagnosticText.includes(first.credentials.password));assert.ok(!diagnosticText.includes(refreshedMqtt.password));assert.ok(!diagnosticText.includes('runtime-test-password'));assert.ok(diagnosticZip.getEntries().every(e=>!e.entryName.endsWith('.env')));
+ // Persistent RC login: cookie is HttpOnly and only a hash is stored; no password reuse in requests.
+ async function pilotLogin(body,cookie){return fetch(base+'/api/pilot/login',{method:'POST',headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:JSON.stringify(body)});}
+ const remembered=await pilotLogin({username:'runtime-admin',password:'runtime-test-password',ticketId:first.tid,remember:true});assert.equal(remembered.status,200);
+ const rememberedHeader=remembered.headers.getSetCookie().find(c=>c.includes('Max-Age=2592000'));assert.match(rememberedHeader,/HttpOnly/);assert.match(rememberedHeader,/SameSite=Strict/);const saved=rememberedHeader.split(';')[0],raw=saved.split('=')[1];
+ assert.equal((await fetch(base+'/api/pilot/remember',{headers:{Cookie:saved}}).then(r=>r.json())).data.available,true);
+ const [stored]=await db.query('SELECT token_hash FROM pilot_remember_tokens WHERE token_hash=?',[crypto.createHash('sha256').update(raw).digest('hex')]);assert.ok(stored);assert.notEqual(stored.token_hash,raw);
+ const resumed=await pilotLogin({use_saved_login:true,ticketId:first.tid,remember:true},saved);assert.equal(resumed.status,200);const renewed=resumed.headers.getSetCookie().find(c=>c.includes('Max-Age=2592000')).split(';')[0];
+ assert.equal((await fetch(base+'/api/pilot/remember',{headers:{Cookie:saved}}).then(r=>r.json())).data.available,false);
+ assert.equal((await fetch(base+'/api/pilot/remember/forget',{method:'POST',headers:{Cookie:renewed}})).status,200);
+ assert.equal((await pilotLogin({use_saved_login:true,ticketId:first.tid,remember:true},renewed)).status,401);
+ const againSaved=await pilotLogin({username:'runtime-admin',password:'runtime-test-password',ticketId:first.tid,remember:true}),revokedCookie=againSaved.headers.getSetCookie().find(c=>c.includes('Max-Age=2592000')).split(';')[0];
+ await db.query('UPDATE users SET auth_version=auth_version+1 WHERE user_id=?',[user.user_id]);assert.equal((await pilotLogin({use_saved_login:true,ticketId:first.tid,remember:true},revokedCookie)).status,401);
+
 });

@@ -7,7 +7,7 @@
   const GIS = window.GIS;
   const esc = GIS.esc;
 
-  const st = { root: null, map: null, previewLayer: null, profiles: [], tree: null, lastPreview: null, routes: [], tickets: [] };
+  const st = { root: null, map: null, previewLayer: null, profiles: [], tree: null, lastPreview: null, routes: [], tickets: [], manualPoints: [], manualSource: true, picking: false, manualLayer: null };
 
   const fmtTime = s => `${Math.floor(s / 60)} phút ${s % 60} giây`;
 
@@ -25,6 +25,14 @@
     `).join('')).join('');
   }
 
+  function invalidate(){st.lastPreview=null;st.root.querySelector('#gis-fp-create').disabled=true;if(st.previewLayer){st.map.removeLayer(st.previewLayer);st.previewLayer=null;}}
+  function drawManual(){
+    if(st.manualLayer)st.map.removeLayer(st.manualLayer);st.manualLayer=L.featureGroup();
+    st.manualPoints.forEach((p,i)=>L.marker([p.lat,p.lng],{draggable:true}).bindTooltip('Điểm '+(i+1),{permanent:true}).on('dragend',e=>{const point=e.target.getLatLng();p.lat=point.lat;p.lng=point.lng;invalidate();drawManual();}).addTo(st.manualLayer));
+    if(st.manualPoints.length>1)L.polyline(st.manualPoints.map(p=>[p.lat,p.lng]),{color:'#0d6e6e',dashArray:'5 5'}).addTo(st.manualLayer);
+    if(st.root.querySelector('[name=fp-kind]:checked')?.value==='POINTS'&&st.manualSource)st.manualLayer.addTo(st.map);
+    const box=st.root.querySelector('#gis-fp-manual-list');if(box)box.innerHTML=st.manualPoints.length?'<div class="tbl-wrap"><table class="ui-table" data-no-paging><thead><tr><th>Điểm</th><th>Tọa độ</th><th></th></tr></thead><tbody>'+st.manualPoints.map((p,i)=>`<tr><td>${i+1}</td><td>${p.lat.toFixed(6)}<br>${p.lng.toFixed(6)}</td><td><button type="button" class="btn sm" data-fp-move="${i}" data-direction="-1" ${i===0?'disabled':''}>↑</button><button type="button" class="btn sm" data-fp-move="${i}" data-direction="1" ${i===st.manualPoints.length-1?'disabled':''}>↓</button><button type="button" class="btn sm" data-fp-delete="${i}">Xóa</button></td></tr>`).join('')+'</tbody></table></div>':'<p class="gis-empty">Bật Chọn điểm trên bản đồ, rồi bấm ít nhất 2 vị trí. Điểm này là vị trí UAV chụp, không tự suy từ vị trí tài sản.</p>';
+  }
   function renderForm() {
     const kind = st.root.querySelector('[name="fp-kind"]:checked').value;
     const box = st.root.querySelector('#gis-fp-target');
@@ -40,8 +48,9 @@
       </select></div>
       ${ready.length || plantReady ? '' : '<div class="gis-warn">Tuyến quét lưới cần ranh giới khu hoặc nhà máy. Vào <b>Nhà máy & thiết bị kiểm tra</b> → chọn khu → <b>Vẽ ranh giới</b> → Lưu.</div>'}`;
     } else {
-      box.innerHTML = `<div class="field"><span class="gis-field-label">Tài sản (dùng các điểm chụp ảnh đã khai báo)</span><div class="gis-tgt-list">${targetList()}</div></div>`;
+      box.innerHTML = `<div class="gis-row"><label class="gis-check"><input type="radio" name="fp-source" value="manual" ${st.manualSource?'checked':''}> Chọn trực tiếp trên bản đồ</label><label class="gis-check"><input type="radio" name="fp-source" value="assets" ${!st.manualSource?'checked':''}> Điểm tài sản có sẵn</label></div>`+(st.manualSource?`<div class="gis-row"><button class="btn" id="gis-fp-pick" type="button" aria-pressed="${st.picking}">${st.picking?'Dừng chọn điểm':'Chọn điểm trên bản đồ'}</button><button class="btn" id="gis-fp-clear" type="button">Xóa các điểm</button></div><div class="gis-grid3"><label>Độ cao (m)<input class="input" id="gis-fp-alt" type="number" min="2" max="500" value="30"></label><label>Gimbal (°)<input class="input" id="gis-fp-pitch" type="number" min="-90" max="35" value="-90"></label><label>Dừng (s)<input class="input" id="gis-fp-hover" type="number" min="0" max="120" value="2"></label></div><p class="faint">Độ cao so với điểm cất cánh. Mỗi điểm: tới vị trí → chỉnh camera → dừng → chụp → điểm tiếp theo; tốc độ và lens lấy từ hồ sơ chụp.</p><div id="gis-fp-manual-list"></div>`:`<div class="field"><span class="gis-field-label">Chọn ngăn lộ / DCL có điểm chụp đã khai báo</span><div class="gis-tgt-list">${targetList()}</div></div>`);
     }
+    drawManual();
     st.root.querySelector('#gis-fp-profile').innerHTML = profileOptions(kind) || '<option value="">Chưa có hồ sơ kiểu này</option>';
   }
 
@@ -55,6 +64,7 @@
       if (val.startsWith('plant:')) body.plant_id = val.slice(6);
       else body.area_id = val;
     }
+    else if(st.manualSource)body.points=st.manualPoints.map(p=>({...p,altitude_m:Number(st.root.querySelector('#gis-fp-alt').value),gimbal_pitch:Number(st.root.querySelector('#gis-fp-pitch').value),hover_seconds:Number(st.root.querySelector('#gis-fp-hover').value)}));
     else body.targets = [...st.root.querySelectorAll('.gis-tgt input:checked')].map(i => ({ asset_type: i.dataset.type, asset_id: Number(i.value) }));
     return body;
   }
@@ -100,6 +110,7 @@
   function checkBody(body) {
     if (!body.profile_id) return 'Chưa có hồ sơ chụp phù hợp. Tạo ở tab Hồ sơ chụp.';
     if ('area_id' in body && !body.area_id) return 'Chọn khu pin đã vẽ ranh giới';
+    if(body.points&&body.points.length<2)return 'Bật Chọn điểm trên bản đồ và bấm ít nhất 2 vị trí, rồi Xem trước.';
     if (body.targets && !body.targets.length) return 'Tick chọn ít nhất 1 ngăn lộ hoặc dao cách ly';
     return null;
   }
@@ -175,6 +186,7 @@
     st.map = L.map(st.root.querySelector('#gis-fp-map'), { center, zoom: 17, maxZoom: 22 });
     const sat = (typeof BASEMAPS !== 'undefined' && BASEMAPS.satellite);
     if (sat) L.tileLayer(sat.url, { maxZoom: 22, maxNativeZoom: sat.native || 18, attribution: sat.attr }).addTo(st.map);
+    st.map.on('click',e=>{if(!st.picking||!st.manualSource||st.root.querySelector('[name=fp-kind]:checked')?.value!=='POINTS'||e.originalEvent?.target?.closest('.leaflet-control'))return;if(st.manualPoints.length>=500){GIS.toast('Tối đa 500 điểm mỗi tuyến','error');return;}st.manualPoints.push({lat:e.latlng.lat,lng:e.latlng.lng});invalidate();drawManual();});
     GIS.attachMap(st.map, { kind: 'solar', visible: ['areas', 'strings', 'substations', 'disconnectors', 'photo_points'] });
   }
 
@@ -219,7 +231,9 @@
           const res = await GIS.run(() => GIS.api('POST', `/api/flight-plans/${id}/tickets`, { ticket_id: sel.value }), 'Đã gán đường bay vào phiếu');
           if (res) loadRoutes();
         });
-        root.querySelector('#gis-fp-target').addEventListener('change', () => { st.root.querySelector('#gis-fp-create').disabled = true; });
+        root.querySelector('#gis-fp-target').addEventListener('change',e=>{invalidate();if(e.target.name==='fp-source'){st.manualSource=e.target.value==='manual';st.picking=false;renderForm();}});
+        root.querySelector('#gis-fp-target').addEventListener('input',invalidate);
+        root.querySelector('#gis-fp-target').addEventListener('click',e=>{if(e.target.id==='gis-fp-pick'){st.picking=!st.picking;e.target.setAttribute('aria-pressed',String(st.picking));e.target.textContent=st.picking?'Dừng chọn điểm':'Chọn điểm trên bản đồ';}if(e.target.id==='gis-fp-clear'){st.manualPoints=[];invalidate();drawManual();}if(e.target.dataset.fpDelete!==undefined){st.manualPoints.splice(Number(e.target.dataset.fpDelete),1);invalidate();drawManual();}if(e.target.dataset.fpMove!==undefined){const i=Number(e.target.dataset.fpMove),j=i+Number(e.target.dataset.direction);if(j>=0&&j<st.manualPoints.length){[st.manualPoints[i],st.manualPoints[j]]=[st.manualPoints[j],st.manualPoints[i]];invalidate();drawManual();}}});
         root.querySelector('#gis-fp-profile').addEventListener('change', () => { st.root.querySelector('#gis-fp-create').disabled = true; });
         await initMap();
       }
@@ -233,7 +247,7 @@
         st.tickets.map(t => `<option value="${t.ticket_id}">${esc(t.ticket_code)} – ${esc(t.ticket_name)}</option>`).join('');
       st.profiles = profiles ? profiles.data : [];
       st.tree = tree ? tree.data : null;
-      renderForm();
+      if(!st.root.querySelector('#gis-fp-target').childElementCount)renderForm();else{const select=st.root.querySelector('#gis-fp-profile'),selected=select.value,kind=st.root.querySelector('[name=fp-kind]:checked').value;select.innerHTML=profileOptions(kind)||'<option value="">Chưa có hồ sơ kiểu này</option>';if([...select.options].some(o=>o.value===selected))select.value=selected;}
       loadRoutes();
       setTimeout(() => st.map.invalidateSize(), 60);
     }

@@ -6,7 +6,7 @@ const v=require('../utils/validate');
 const router=express.Router();let onChanged=()=>{};router.setOnUserChanged=fn=>{onChanged=fn;};
 router.use(authenticateToken,(req,res,next)=>req.user.role==='ADMIN'?next():res.status(403).json({code:403,message:'Chỉ quản trị viên được quản lý tài khoản'}));
 const ROLES=['ADMIN','ENGINEER','OPERATOR','VIEWER'],PERMISSIONS=['tasks:read','tasks:write','assets:read','media:write','alerts:write','reports:read'];
-const PUBLIC_COLUMNS='user_id,username,full_name,email,phone,role,status,unit_id,must_change_password,last_login';
+const PUBLIC_COLUMNS='user_id,username,full_name,email,phone,role,status,unit_id,must_change_password,last_login,all_operation_scopes';
 async function scopes(conn,uid,ids){
     if(!Array.isArray(ids)||ids.length>100)throw new v.ValidationError('Danh sách nhà máy không hợp lệ');
     const unique=[...new Set(ids.map(x=>v.parseId(x,'nhà máy')))];await conn.execute('DELETE FROM user_plant_scopes WHERE user_id=?',[uid]);
@@ -22,6 +22,7 @@ router.post('/users',asyncHandler(async(req,res)=>{
     const hash=await bcrypt.hash(passwordInput(b.password),12),role=v.oneOf(b.role,ROLES,'vai trò'),unit=v.isBlank(b.unit_id)?null:v.parseId(b.unit_id,'đơn vị');
     const id=await withTransaction(async conn=>{
         const [r]=await conn.execute("INSERT INTO users (username,password_hash,full_name,email,phone,role,unit_id,must_change_password) VALUES (?,?,?,?,?,?,?,1)",[name,hash,v.requiredString(b.full_name,'họ tên',100),email(b.email),v.optionalString(b.phone,'điện thoại',20),role,unit]);
+        if(b.all_operation_scopes!==undefined){if(typeof b.all_operation_scopes!=='boolean'||(b.all_operation_scopes&&role!=='OPERATOR'))throw new v.ValidationError('Quyền toàn bộ nghiệp vụ chỉ áp dụng cho OPERATOR');await conn.execute('UPDATE users SET all_operation_scopes=? WHERE user_id=?',[b.all_operation_scopes?1:0,r.insertId]);}
         await scopes(conn,r.insertId,b.plant_ids||[]);return r.insertId;
     });ok(res,{user_id:id});
 }));
@@ -35,6 +36,8 @@ router.put('/users/:id',asyncHandler(async(req,res)=>{
         const unit=b.unit_id===undefined?u.unit_id:v.isBlank(b.unit_id)?null:v.parseId(b.unit_id,'đơn vị');
         await conn.execute('UPDATE users SET full_name=?,email=?,phone=?,role=?,status=?,unit_id=?,auth_version=auth_version+1 WHERE user_id=?',
             [b.full_name===undefined?u.full_name:v.requiredString(b.full_name,'họ tên',100),b.email===undefined?u.email:email(b.email),b.phone===undefined?u.phone:v.optionalString(b.phone,'điện thoại',20),role,status,unit,id]);
+        if(b.all_operation_scopes!==undefined){if(typeof b.all_operation_scopes!=='boolean'||(b.all_operation_scopes&&role!=='OPERATOR'))throw new v.ValidationError('Quyền toàn bộ nghiệp vụ chỉ áp dụng cho OPERATOR');await conn.execute('UPDATE users SET all_operation_scopes=? WHERE user_id=?',[b.all_operation_scopes?1:0,id]);}
+        if(role!=='OPERATOR')await conn.execute('UPDATE users SET all_operation_scopes=0 WHERE user_id=?',[id]);
         if(b.plant_ids!==undefined)await scopes(conn,id,b.plant_ids);
         await conn.execute('DELETE FROM user_sessions WHERE user_id=?',[id]);
     });onChanged(id);ok(res,{user_id:id});

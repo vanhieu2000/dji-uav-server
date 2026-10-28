@@ -128,7 +128,7 @@ async function planPoints(profile, targets) {
         expanded.flatMap(t => [t.asset_type, t.asset_id])
     );
     if (rows.length > MAX_POINTS) throw new v.ValidationError(`Quá ${MAX_POINTS} điểm chụp trên 1 tuyến, hãy chia nhỏ`);
-    if (rows.length < 2) throw new v.ValidationError('Tuyến điểm cần ít nhất 2 điểm chụp ảnh. Khai báo điểm chụp ở Cài đặt tài sản.');
+    if (rows.length < 2) throw new v.ValidationError('Tuyến điểm cần ít nhất 2 điểm chụp ảnh. Thêm điểm trong Nhà máy & thiết bị kiểm tra hoặc chuyển sang Chọn trực tiếp trên bản đồ.');
     const points = rows.map(r => ({
         lat: r.latitude, lng: r.longitude, altitude_m: r.altitude_m, gimbal_pitch: r.gimbal_pitch,
         aircraft_heading: r.aircraft_heading, zoom_factor: r.zoom_factor, hover_seconds: r.hover_seconds,
@@ -156,11 +156,18 @@ async function planPoints(profile, targets) {
     };
 }
 
+function planManualPoints(profile,raw){
+ if(!Array.isArray(raw)||raw.length<2||raw.length>MAX_POINTS)throw new v.ValidationError(`Chọn từ 2 đến ${MAX_POINTS} điểm trên bản đồ rồi xem trước.`);
+ const points=raw.map((p,i)=>{if(!p||typeof p!=='object'||Array.isArray(p))throw new v.ValidationError('Điểm chụp không hợp lệ');return {lat:v.requiredNumber(p.lat,'vĩ độ',{min:-90,max:90}),lng:v.requiredNumber(p.lng,'kinh độ',{min:-180,max:180}),altitude_m:v.requiredNumber(p.altitude_m,'độ cao so với điểm cất cánh',{min:2,max:500}),gimbal_pitch:v.requiredNumber(p.gimbal_pitch,'góc camera',{min:-90,max:35}),aircraft_heading:v.optionalNumber(p.aircraft_heading,'hướng máy bay',{min:-180,max:180}),hover_seconds:v.requiredNumber(p.hover_seconds,'thời gian dừng',{min:0,max:120}),label:'MAP_'+(i+1)};});
+ const plan=pointsPlan(points,{speedMps:profile.speed_mps,hoverSeconds:profile.hover_seconds,photosPerPoint:profile.photos_per_point,preserveOrder:true});
+ return {kind:'POINTS',targets:[],plan,geometry:{max_speed_mps:Number(profile.speed_mps)},stats:plan.stats,warnings:[...plan.warnings,'Điểm chọn trên bản đồ giữ đúng thứ tự. Kiểm tra tọa độ, độ cao so với điểm cất cánh và vật cản trên Pilot 2 trước khi bay.'],geojson:{path:{type:'LineString',coordinates:points.map(p=>[p.lng,p.lat])},points:points.map(p=>({...p}))}};
+}
+
 async function buildPlan(body) {
     const profile = await loadProfile(body && body.profile_id);
     const result = profile.route_kind === 'GRID'
         ? (v.isBlank(body.plant_id) ? await planGrid(profile, body.area_id, body.polygon) : await planPlant(profile, body.plant_id))
-        : await planPoints(profile, body.targets);
+        : (body.points!==undefined?planManualPoints(profile,body.points):await planPoints(profile, body.targets));
     if (profile.time_window_start && profile.time_window_end) {
         result.warnings.push(`Chỉ bay trong khung giờ ${profile.time_window_start.slice(0, 5)}–${profile.time_window_end.slice(0, 5)}`);
     }

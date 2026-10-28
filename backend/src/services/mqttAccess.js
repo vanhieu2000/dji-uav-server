@@ -6,7 +6,7 @@ async function credentials(sessionId,user){
  return {username:'pilot:'+sessionId,password};
 }
 async function principal(id){
- const [s]=await query(`SELECT p.*,u.status,u.role,u.unit_id,u.auth_version AS current_auth_version FROM pilot_sessions p
+ const [s]=await query(`SELECT p.*,u.status,u.role,u.unit_id,u.all_operation_scopes,u.auth_version AS current_auth_version FROM pilot_sessions p
   JOIN users u ON p.user_id=u.user_id JOIN user_sessions s ON p.auth_session_id=s.session_id
   WHERE p.session_id=? AND p.ended_at IS NULL AND s.expires_at>NOW() AND u.status='ACTIVE'`,[id]);
  if(!s||!s.ticket_id||s.auth_version!==s.current_auth_version)return null;
@@ -54,13 +54,34 @@ function serialsAllowed(s, value, depth = 0) {
   }
   return true;
 }
+async function authenticatePilot(username,password,lookup=principal){
+ const name=Buffer.isBuffer(username)?username.toString('utf8'):username;
+ const match=/^pilot:(\d+)$/.exec(typeof name==='string'?name:'');
+ if(!match||!Number.isSafeInteger(Number(match[1])))return {reason:'USERNAME_FORMAT'};
+ const id=Number(match[1]);let session;
+ try{session=await lookup(id);}catch{return {reason:'SESSION_LOOKUP_FAILED',sessionId:id};}
+ if(!session)return {reason:'SESSION_UNAVAILABLE',sessionId:id};
+ if(!/^[a-f0-9]{64}$/.test(session.mqtt_password_hash||''))return {reason:'PASSWORD_HASH_MISSING',sessionId:id};
+ const actual=sha(password||Buffer.alloc(0));
+ if(!crypto.timingSafeEqual(Buffer.from(actual),Buffer.from(session.mqtt_password_hash)))return {reason:'PASSWORD_MISMATCH',sessionId:id};
+ return {session,sessionId:id};
+}
+const authLogTimes=new Map();
+function logAuth(client,result){
+ const id=String(client.id||'?').replace(/[^A-Za-z0-9_.:-]/g,'_').slice(0,100),reason=result.reason||'OK',key=id+':'+reason,now=Date.now();
+ if(now-(authLogTimes.get(key)||0)<15000)return;
+ if(authLogTimes.size>=1000)authLogTimes.delete(authLogTimes.keys().next().value);authLogTimes.set(key,now);
+ console[reason==='OK'?'log':'warn'](`[MQTT Auth] ${reason==='OK'?'OK':'DENY'} reason=${reason} client=${id} session=${result.sessionId||'-'}`);
+}
 function configure(broker){
  brokers.add(broker);
  const internal={username:'server-'+crypto.randomUUID(),password:crypto.randomBytes(32).toString('hex')};
  broker.authenticate=(client,username,password,callback)=>{
   if(username===internal.username&&password?.toString()===internal.password){client.uavInternal=true;return callback(null,true);}
-  const match=/^pilot:(\d+)$/.exec(username||'');if(!match)return callback(null,false);
-  principal(Number(match[1])).then(s=>{const actual=sha(password||Buffer.alloc(0));if(!s||!s.mqtt_password_hash||!crypto.timingSafeEqual(Buffer.from(actual),Buffer.from(s.mqtt_password_hash)))return callback(null,false);client.uavSessionId=s.session_id;client.uavScope=s;callback(null,true);}).catch(()=>callback(null,false));
+  authenticatePilot(username,password).then(result=>{
+   logAuth(client,result);if(!result.session)return callback(null,false);
+   client.uavSessionId=result.session.session_id;client.uavScope=result.session;callback(null,true);
+  }).catch(()=>callback(null,false));
  };
  broker.authorizePublish=(client,packet,callback)=>{
   if(!client||client.uavInternal)return callback(null);
@@ -89,4 +110,4 @@ function configure(broker){
  const timer=setInterval(async()=>{for(const client of Object.values(broker.clients))if(!client.uavInternal){let s=null;try{s=await principal(client.uavSessionId);}catch(e){}if(!s)client.close();else client.uavScope=s;}},10000);timer.unref();broker.on('closed',()=>{clearInterval(timer);brokers.delete(broker);});
  return internal;
 }
-module.exports={configure,credentials,principal,topicAllowed,serialsAllowed,bindTopology,revoke};
+module.exports={configure,credentials,principal,topicAllowed,serialsAllowed,bindTopology,authenticatePilot,revoke};

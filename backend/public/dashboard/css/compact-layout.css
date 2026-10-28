@@ -90,3 +90,11 @@ aside>.nav{overflow:hidden!important;margin-bottom:8px;scrollbar-width:none}
 .map-left-toolbar{top:var(--map-controls-top,90px)!important}
 #device-readiness summary{display:none}
 @media(max-height:500px){#device-readiness summary{display:list-item;cursor:pointer;font-weight:600;font-size:12px}#device-readiness details[open]{max-height:calc(100dvh - 100px);overflow:auto}.map-left-toolbar{display:grid;grid-template-columns:repeat(3,36px);width:130px!important;gap:4px!important}}
+#account-admin-root{display:grid;gap:12px}#account-admin-root .card{padding:16px}#account-admin-root h2{font-size:16px;margin:0 0 12px}.aa-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.aa-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.aa-form>label{display:grid;gap:5px;font-size:12px}.aa-form .actions,.aa-plants{grid-column:1/-1}.aa-plants{border:1px solid var(--line);border-radius:8px;padding:12px}.aa-plants>div{display:flex;flex-wrap:wrap;gap:12px}.aa-check{display:flex;align-items:center;gap:6px}.aa-form input,.aa-form select{min-width:0;width:100%}.aa-form input[type=checkbox]{width:auto}.aa-form small{color:var(--ink3)}[data-aa-status]{color:var(--brand);margin:0;overflow-wrap:anywhere}
+@media(max-width:800px){.aa-form{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:450px){.aa-form{grid-template-columns:1fr}.aa-heading{flex-wrap:wrap}}
+aside>.nav{overflow-y:auto!important;overflow-x:hidden!important;scrollbar-width:none}aside>.nav::-webkit-scrollbar{display:none}
+
+.aa-form>.aa-check{display:flex;align-items:center;grid-column:1/-1}.aa-form>.aa-check input{width:auto}
+aside .nav-btn[hidden]{display:none!important}
+#gis-fp-manual-list table{min-width:0;width:100%;table-layout:fixed}#gis-fp-manual-list th:first-child{width:35px}#gis-fp-manual-list th:last-child{width:105px}#gis-fp-manual-list td,#gis-fp-manual-list th{padding:5px;font-size:11px}#gis-fp-manual-list .btn{padding:4px 6px;min-width:0;min-height:32px;font-size:11px;margin:1px}#gis-fp-manual-list td:last-child{white-space:nowrap}
+@media(max-width:700px){#gis-fp-manual-list .btn{min-height:44px}}

@@ -27,3 +27,6 @@ deploy/secrets/
 backups/
 *.uavbackup
 deploy/certs/
+
+# Generated source archive revision (embedded in release ZIP only)
+/release-info.json

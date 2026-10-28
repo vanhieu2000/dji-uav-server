@@ -42,3 +42,9 @@ Tổng quan và Báo cáo giữ biểu đồ/thống kê/sự cố trực tiếp
 Sidebar mở từng nhóm. Chỉ khi chiều cao thực sự không đủ, danh mục nhóm mở trong dialog để giữ mọi liên kết có thể truy cập. Dialog bản ghi hỗ trợ Đóng, Escape và chạm nền ngoài. Các kiểm thử kiểm tra cả vị trí/không chồng lấn, thay vì chỉ kiểm tra kích thước viewport.
 
 Chỉ trên màn hình cực thấp (<500px), khối trạng thái/quyền UAV trên bản đồ có disclosure thu gọn để không phủ kín bản đồ. Desktop giữ đầy đủ controls; khối này không áp dụng cho bộ lọc/form ở các trang nghiệp vụ.
+
+## Cập nhật sidebar và điểm chụp thủ công
+
+Các nhóm cây sidebar mở/đóng độc lập bằng chính tiêu đề nhóm; chuyển focus hoặc resize không tự thu nhóm khác. Khi nhiều nhóm mở, nav cuộn bằng chuột/touch; không hiện thanh cuộn ngang. Tab Quản lý tài khoản và Cài đặt chung chỉ ADMIN thấy; operator có Tài khoản cá nhân để đổi mật khẩu.
+
+Lập đường bay → Chụp tại điểm → Chọn trực tiếp trên bản đồ → bật Chọn điểm trên bản đồ → bấm ít nhất2 vị trí. Marker có thể kéo để sửa vị trí; bảng điểm cho đổi thứ tự và xóa. Độ cao so với điểm cất cánh, góc camera và thời gian dừng đặt cạnh controls; tốc độ/lens lấy từ Hồ sơ chụp POINTS. Xem trước rồi Tạo KMZ. Sửa điểm/tham số sẽ khóa Tạo tới khi xem trước lại. Tuyến thủ công giữ đúng thứ tự chọn, không tự tối ưu nearest-neighbor. Đây là vị trí UAV chụp, không tự suy ra khoảng cách an toàn hay chiều cao vật cản; KMZ vẫn do phi công kiểm tra/vận hành trong Pilot 2. Điểm có sẵn theo tài sản vẫn là lựa chọn riêng.

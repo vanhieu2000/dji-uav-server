@@ -3,6 +3,7 @@ const access=require('./authorization');
 async function eventAllowed(user,event){
     if(user.role==='ADMIN')return true;
     if(user.must_change_password)return false;
+    if(access.allScopes(user))return !['settings_updated','db_status'].includes(event.type);
     if(['raw_mqtt','services_reply','settings_updated','client_connected','gateway_status','rc_osd','device_event','db_status'].includes(event.type))return false;
     let ticketId=event.ticket_id||event.data?.ticket_id;
     if(!ticketId && event.type==='vision_result'&&event.data?.job_id){

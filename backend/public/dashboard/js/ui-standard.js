@@ -23,7 +23,7 @@
   });
  }
  function tableTools(t){
-  if(t.dataset.noPaging)return;
+  if(t.hasAttribute('data-no-paging'))return;
   if(t.closest('#task-list,#insight-alerts,#report-issue-table,.ui-file-preview,.leaflet-pane,.leaflet-control'))return;
   let st=tables.get(t);
   const rows=[...t.querySelectorAll('tbody>tr')].filter(r=>r.querySelector('td')&&!r.querySelector('td[colspan]'));

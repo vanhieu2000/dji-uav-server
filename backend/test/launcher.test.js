@@ -32,7 +32,7 @@ test('one-click: initialize in path with spaces, start, reuse without reset, sto
  log=fs.openSync(path.join(data,'test.log'),'w');launcher=spawn(process.execPath,['scripts/start-local.js'],{cwd:backend,env,stdio:['ignore',log,log]});launcher.on('exit',()=>exited=true);
  const stateFile=path.join(data,'local-launcher.json');let state,ready=false;
  for(let n=0;n<300;n++){if(exited)throw Error('Launcher exited: '+fs.readFileSync(path.join(data,'test.log'),'utf8'));try{state=JSON.parse(fs.readFileSync(stateFile,'utf8'));ready=await running(state);if(ready)break;}catch(e){}await new Promise(r=>setTimeout(r,50));}
- assert.equal(ready,true);assert.ok(fs.existsSync(path.join(data,'password')));
+ assert.equal(ready,true);assert.ok(fs.existsSync(path.join(data,'password')));assert.ok(fs.existsSync(path.join(data,'operator-password.txt')));const [[operator]]=await c.query('SELECT role,all_operation_scopes,must_change_password,password_hash FROM `'+database+"`.users WHERE username='operator'");assert.equal(operator.role,'OPERATOR');assert.equal(operator.all_operation_scopes,1);assert.equal(operator.must_change_password,1);
  const [[admin]]=await c.query('SELECT password_hash FROM `'+database+"`.users WHERE username='launcher-admin'");
  await c.query('INSERT INTO `'+database+"`.plants (plant_code,plant_name) VALUES ('KEEP','Giữ nguyên')");
  const again=spawnSync(process.execPath,['scripts/start-local.js'],{cwd:backend,env,encoding:'utf8',timeout:15000});assert.equal(again.status,0,again.stderr);assert.match(again.stdout,/Server đang chạy/);assert.equal(JSON.parse(fs.readFileSync(stateFile,'utf8')).pid,state.pid);
@@ -42,5 +42,5 @@ test('one-click: initialize in path with spaces, start, reuse without reset, sto
  // A full restart also keeps the existing administrator and data (not just a second click).
  exited=false;launcher=spawn(process.execPath,['scripts/start-local.js'],{cwd:backend,env,stdio:['ignore',log,log]});launcher.on('exit',()=>exited=true);ready=false;
  for(let n=0;n<300;n++){if(exited)throw Error('Restart exited: '+fs.readFileSync(path.join(data,'test.log'),'utf8'));try{const next=JSON.parse(fs.readFileSync(stateFile,'utf8'));if(await running(next)){ready=true;break;}}catch(e){}await new Promise(r=>setTimeout(r,50));}
- assert.equal(ready,true);const [[restarted]]=await c.query('SELECT password_hash FROM `'+database+"`.users WHERE username='launcher-admin'");assert.equal(restarted.password_hash,admin.password_hash);const [[saved]]=await c.query('SELECT COUNT(*) AS n FROM `'+database+'`.plants');assert.equal(saved.n,1);
+ assert.equal(ready,true);const [[restarted]]=await c.query('SELECT password_hash FROM `'+database+"`.users WHERE username='launcher-admin'");assert.equal(restarted.password_hash,admin.password_hash);const [[sameOperator]]=await c.query('SELECT password_hash FROM `'+database+"`.users WHERE username='operator'");assert.equal(sameOperator.password_hash,operator.password_hash);const [[saved]]=await c.query('SELECT COUNT(*) AS n FROM `'+database+'`.plants');assert.equal(saved.n,1);
 });

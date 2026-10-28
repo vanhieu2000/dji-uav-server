@@ -158,3 +158,11 @@ Cửa sổ chạy in ba địa chỉ chính xác theo IP/cổng thực: SERVER S
 PC, điện thoại và RC cần cùng LAN, không bật AP/client isolation hoặc dùng guest Wi-Fi tách thiết bị. Cho phép Node.js/các cổng thực được in qua Windows Firewall trên mạng Private; không tắt firewall toàn bộ. Live cần thêm cổng RTMP/FLV cấu hình; auto upload cần endpoint S3_PUBLIC_ENDPOINT mà RC truy cập được. Các biến MQTT_PUBLIC_URL/RTMP_PUBLIC_BASE_URL/MEDIA_HTTP_BASE_URL nếu đã đặt thủ công không được trỏlocalhost; để trống để dùng địa chỉ mặc định từ HOST_IP. MYSQL_HOST/S3_STS_ENDPOINT nội bộ vẫn có thể dùng127.0.0.1.
 
 Bản đồ Google vệ tinh trở lại mặc định trên ba màn bản đồ. Chỉ chuyển offline khi bạn bấm chọn; ghi nhớ lựa chọn riêng mỗi màn. Ô ảnh lỗi không tự biến thành lưới giả hoặc tự đổi provider. Badge phản ánh tải ảnh trong trình duyệt, không suy ra tình trạng UAV. `/api/map/status` là phép thử OSM từ server (`scope=server-osm-probe`, `affects_basemap=false`), không quyết định chế độ bản đồ trên trình duyệt. Wi-Fi không có Internet vẫn nhận được UAV qua LAN nhưng cần bộ tile offline thực nếu muốn xem ảnh nền; lưới kỹ thuật không phải ảnh vệ tinh đã lưu.
+
+## Operator, điểm chụp thủ công và log
+
+Bản này tự tạo `operator` riêng khi chưa có, mật khẩu khởi tạo ở `backend/data/operator-password.txt` (mỗi PC khác nhau). Tài khoản đã có được giữ nguyên. Đăng nhập Web đổi mật khẩu một lần trước khi đăng nhập RC. Theo yêu cầu tạm thời, riêng operator bootstrap có toàn bộ phạm vi nghiệp vụ nhưng không có quyền Cài đặt chung/Quản lý tài khoản. Admin có tab riêng trên sidebar để quản lý hoặc thu hẹp phạm vi; xem ACCOUNTS_AND_SCOPES.md.
+
+Pilot có Ghi nhớ đăng nhập30 ngày và Quên tài khoản đã lưu; không lưu password dạng rõ trong trình duyệt. Khi broker báo not authorized, bản mới nạp lại thing module và ghi reason code; cập nhật, thoát Cloud Service rồi đăng nhập lại.
+
+Planner có chọn điểm trực tiếp trên map, kéo/sắp thứ tự/xóa, đặt thông số chụp và xuất KMZ theo thứ tự đã chọn. Xem GIAO_DIEN_VA_DIEU_HUONG.md. Nhật ký tự ghi trong backend/data/logs; khi lỗi bấm XUAT_LOG.bat, gửi ZIP ở backend/data/diagnostics. Admin có thể tải log từ console Web; log thô không tự đẩy Git. Chi tiết LOG_CHAN_DOAN.md.

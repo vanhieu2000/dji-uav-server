@@ -29,7 +29,7 @@ async function ensureAdmin(db,env=process.env){
 async function main(){
  if(Number(process.versions.node.split('.')[0])<24)throw Error('Cần cài Node.js 24 LTS rồi bấm lại file CHAY_LOCAL.bat');
  const envFile=path.join(ROOT,'.env');if(!fs.existsSync(envFile))throw Error('Chưa có .env; bấm CHAY_LOCAL.bat để nhập cấu hình lần đầu');
- process.loadEnvFile(envFile);if(process.env.NODE_ENV==='production')throw Error('File này chỉ dành cho local; dùng bộ triển khai production riêng');process.env.HOST_IP=resolveHost({configured:process.env.HOST_IP,mode:process.env.LOCAL_NETWORK_MODE||'lan'});fs.mkdirSync(DATA,{recursive:true});const stateFile=path.join(DATA,'local-launcher.json'),lockFile=path.join(DATA,'local-launcher.lock'),signature=fingerprint();
+ process.loadEnvFile(envFile);require('../src/services/diagnostics').install();if(process.env.NODE_ENV==='production')throw Error('File này chỉ dành cho local; dùng bộ triển khai production riêng');process.env.HOST_IP=resolveHost({configured:process.env.HOST_IP,mode:process.env.LOCAL_NETWORK_MODE||'lan'});fs.mkdirSync(DATA,{recursive:true});const stateFile=path.join(DATA,'local-launcher.json'),lockFile=path.join(DATA,'local-launcher.lock'),signature=fingerprint();
  let state=readJson(stateFile);
  if(await running(state)){if(state.signature!==signature)throw Error('Code/cấu hình đã đổi. Đóng cửa sổ server cũ rồi bấm CHAY_LOCAL.bat lại.');const url=urls(state.host||process.env.HOST_IP,state.port,state.mqtt).dashboard;console.log('Server đang chạy: '+url);openBrowser(url);return;}
  let lock;
@@ -52,7 +52,7 @@ async function main(){
   if(!installed){console.log('[1/4] Cài thư viện theo package-lock...');await npmInstall();fs.writeFileSync(stamp,lockHash);}else console.log('[1/4] Thư viện đã sẵn sàng.');
   require('../src/services/runtimeEnv').load();const db=require('../src/config/db');
   console.log('[2/4] Kiểm tra MySQL, chuẩn bị DB an toàn...');
-  try{await require('./setup-local').setupLocal(db.dbConfig);if(!await db.testConnection())throw Error('Không kết nối được MySQL. Kiểm tra dịch vụ MySQL và MYSQL_* trong .env');console.log('[3/4] Kiểm tra tài khoản Web...');await ensureAdmin(db);}finally{await db.closePool();}
+  try{await require('./setup-local').setupLocal(db.dbConfig);if(!await db.testConnection())throw Error('Không kết nối được MySQL. Kiểm tra dịch vụ MySQL và MYSQL_* trong .env');console.log('[3/4] Kiểm tra tài khoản Web...');await ensureAdmin(db);const operator=await require('./create-operator').ensureOperator(db);if(operator.created)console.log('Đã tạo '+operator.username+' (OPERATOR toàn bộ nghiệp vụ, không quản trị tài khoản/cài đặt). Mật khẩu ban đầu: '+operator.passwordFile+'; admin có thể thu hẹp phạm vi trong Quản lý tài khoản.');}finally{await db.closePool();}
   const requested=portNumber(process.env.PORT,8080),port=await freePort(requested),mqtt=await freePort(portNumber(process.env.MQTT_PORT,1883),[port]);instance=crypto.randomUUID();
   if(port!==requested)console.log('Cổng '+requested+' đang dùng; chuyển Web sang '+port+'.');
   console.log('[4/4] Khởi động server, chờ DB/MQTT sẵn sàng...');

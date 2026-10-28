@@ -7,7 +7,7 @@ const OPTIONS={algorithms:['HS256'],audience:'dji-uav',issuer:'dji-uav-server'};
 const router=express.Router();let onRevoked=()=>{};
 router.setOnRevoked=fn=>{onRevoked=fn;};
 const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
-const publicUser=u=>({user_id:u.user_id,username:u.username,full_name:u.full_name,role:u.role,email:u.email,phone:u.phone,unit_id:u.unit_id,auth_version:u.auth_version||0,must_change_password:!!u.must_change_password});
+const publicUser=u=>({user_id:u.user_id,username:u.username,full_name:u.full_name,role:u.role,email:u.email,phone:u.phone,unit_id:u.unit_id,auth_version:u.auth_version||0,all_operation_scopes:Number(u.all_operation_scopes)===1,must_change_password:!!u.must_change_password});
 function tokenOf(req){
     const get=name=>typeof req.get==='function'?req.get(name):req.headers[name];
     const auth=get('authorization');if(auth)return /^Bearer\s+(.+)$/i.exec(auth)?.[1]||null;

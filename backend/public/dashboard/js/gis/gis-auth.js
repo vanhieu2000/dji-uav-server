@@ -20,7 +20,7 @@
  }
  let resetToken=new URLSearchParams(location.hash.slice(1)).get('reset_token');
  if(resetToken){history.replaceState(null,'',location.pathname);form('reset');return;}
- api('me').then(user=>{window.UAV_USER=user;if(user.must_change_password)return form('change',user);if(user.role!=='ADMIN'&&!location.pathname.startsWith('/m')){location.replace('/m/');return;}overlay.remove();
+ api('me').then(user=>{window.UAV_USER=user;document.querySelectorAll('[data-admin-only]').forEach(el=>el.hidden=user.role!=='ADMIN');requestAnimationFrame(()=>window.fitCompactNavigation?.());if(user.must_change_password)return form('change',user);if(location.pathname.endsWith('/accounts.html')&&user.role!=='ADMIN'){location.replace('/dashboard/');return;}if(user.role!=='ADMIN'&&!(user.role==='OPERATOR'&&user.all_operation_scopes)&&!location.pathname.startsWith('/m')){location.replace('/m/');return;}overlay.remove();if(user.role!=='ADMIN'&&document.querySelector('#view-account-admin.active,#view-admin.active'))window.switchView?.('account');
  if(document.getElementById('account-name')){document.getElementById('account-name').textContent=user.full_name||user.username;document.getElementById('account-email').textContent=user.email||user.role;document.getElementById('account-avatar').textContent=(user.full_name||user.username||'?').slice(0,2).toUpperCase();}
  const profile=document.getElementById('account-profile');
  if(profile){

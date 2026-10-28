@@ -16,6 +16,7 @@ try {
 }
 
 require('./src/services/runtimeEnv').load();
+const diagnostics=require('./src/services/diagnostics');diagnostics.install();
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
@@ -114,6 +115,7 @@ const configuredHost=process.env.HOST_IP||systemConfig.host_ip||'auto';
 const HOST_IP=configuredHost==='auto'?require('./src/services/localNetwork').resolveHost({configured:'auto'}):configuredHost;
 
 app.use(require('./src/middleware/transportSecurity').securityHeaders);
+app.use(diagnostics.http);
 app.use(require('./src/middleware/transportSecurity').originPolicy);
 app.use(require('./src/middleware/transportSecurity').rateLimit);
 app.use(express.json({ limit: '50mb' }));
@@ -198,6 +200,16 @@ app.get('/api/health', (req, res) => {
 // Trạng thái bản đồ Online / Offline
 app.get('/api/map/status', (req, res) => {
   res.json({ code: 0, data: getMapStatus() });
+});
+
+app.post('/api/diagnostics/client',(req,res)=>{
+ const rows=Array.isArray(req.body?.events)?req.body.events.slice(0,10):[];
+ for(const event of rows){const record={user_id:req.user.user_id};for(const key of ['kind','view','action','message'])if(typeof event[key]==='string')record[key]=event[key].slice(0,500);diagnostics.write('browser',record);}
+ res.json({code:0,data:{received:rows.length}});
+});
+app.get('/api/diagnostics/export',async(req,res)=>{
+ if(req.user.role!=='ADMIN')return res.status(403).json({code:403,message:'Chỉ admin được xuất log toàn hệ thống'});
+ try{const bytes=await diagnostics.bundle();res.set({'Content-Type':'application/zip','Content-Disposition':'attachment; filename="uav-diagnostics-'+new Date().toISOString().slice(0,10)+'.zip"','Cache-Control':'no-store'});res.send(bytes);}catch{res.status(503).json({code:503,message:'Không xuất được log trên máy chủ'});}
 });
 
 // Lấy danh sách gói tin MQTT thô và xóa nhật ký cho Live Debug Console
@@ -538,6 +550,7 @@ function registerMqttEvents(client) {
         log: logItem
       });
 
+      diagnostics.mqtt(topic,data);
       // 2. Phân loại và xử lý từng topic thực tế
       handleDjiMqttMessage(topic, data).catch(e=>console.warn('[MQTT] Không xử lý được gói tin:',e.code||e.name));
     } catch (e) {
@@ -846,7 +859,7 @@ mediaUploadRouter.setOnIngested((media) => {
 app.get('/api/pilot/tickets', async (req, res) => {
   try {
     const all = await listActiveTickets();
-    const tickets = (!req.user || req.user.role === 'ADMIN') ? all : all.filter(t => (req.user.plant_ids || []).includes(t.plant_id) && req.user.unit_id != null && t.unit_id === req.user.unit_id);
+    const tickets = (!req.user || require('./src/services/authorization').allScopes(req.user)) ? all : all.filter(t => (req.user.plant_ids || []).includes(t.plant_id) && req.user.unit_id != null && t.unit_id === req.user.unit_id);
     res.json({
       code: 0,
       data: tickets.map(t => ({
@@ -862,6 +875,13 @@ app.get('/api/pilot/tickets', async (req, res) => {
   }
 });
 
+app.get('/api/pilot/remember',async(req,res)=>{
+ try{const u=await require('./src/services/pilotRemember').user(req);res.json({code:0,data:{available:!!u,username:u?.username||null}});}catch(e){sendDbError(res,e);}
+});
+app.post('/api/pilot/remember/forget',async(req,res)=>{
+ try{await require('./src/services/pilotRemember').forget(req,res);res.json({code:0,data:{}});}catch(e){sendDbError(res,e);}
+});
+
 // 1.0 Endpoint đăng nhập Pilot 2: kiểm tra tài khoản và phiếu trong MySQL
 app.post('/api/pilot/login', loginLimit, async (req, res) => {
   const { username, password, ticketId, rc_sn: rcSn, aircraft_sn: aircraftSn } = req.body || {};
@@ -870,13 +890,14 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
   let auth;
   let ticket;
   try {
-    auth = await verifyLogin(username, password);
+    auth = req.body.use_saved_login===true ? await require('./src/services/pilotRemember').authenticate(req) : await verifyLogin(username, password);
     if (!auth.ok) {
       return res.status(auth.status).json({ code: auth.status, message: auth.message });
     }
     if(auth.user.must_change_password)return res.status(428).json({code:428,message:'Đổi mật khẩu trên Web trước khi kết nối Pilot'});
     const actor=await userForToken(auth.token);
     if(!actor)return res.status(401).json({code:401,message:'Phiên không hợp lệ'});
+    req.user=actor;
     if (!ticketId || String(ticketId).trim() === '') {
       return res.status(400).json({ code: 400, message: 'Vui lòng chọn phiếu kiểm tra để kết nối phiên bay.' });
     }
@@ -925,6 +946,7 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
     timestamp: new Date().toLocaleTimeString()
   });
 
+  try{if(req.body.remember===true)await require('./src/services/pilotRemember').save(req,res,auth.user);else await require('./src/services/pilotRemember').forget(req,res);}catch(e){return sendDbError(res,e);}
   const firstRoute = ticketRouteList[0] || null;
   res.json({
     code: 0,
@@ -934,6 +956,7 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
       workspace_id: systemConfig.workspace_id,
       ticket_id: ticket.ticket_id,
       pilot_session_id: sessionId,
+      remembered: req.body.remember===true,
       upload_prefix: `media/${uploadNamespace}/`,
       assigned_ticket: `${ticket.ticket_code} - ${ticket.ticket_name}`,
       user: auth.user,
@@ -1496,7 +1519,7 @@ app.all(['/storage/api/v1/workspaces/:workspace_id/sts','/media/api/v1/workspace
 
 // D6. Danh sách ảnh cho Pilot 2 Media Library
 app.get(['/media/api/v1/workspaces/:workspace_id/files', '/manage/api/v1/workspaces/:workspace_id/files'], (req, res) => {
-  const list = memoryStore.mediaFiles.filter(m=>req.pilotSession?m.ticket_id===req.pilotSession.ticket_id:req.user.role==='ADMIN').map(m => ({
+  const list = memoryStore.mediaFiles.filter(m=>req.pilotSession?m.ticket_id===req.pilotSession.ticket_id:require('./src/services/authorization').allScopes(req.user)).map(m => ({
     id: String(m.media_id),
     name: m.file_name,
     file_url: `http://${HOST_IP}:${PORT}${m.file_url}`,

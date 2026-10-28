@@ -165,6 +165,11 @@
         <input type="password" id="password" autocomplete="current-password" required>
       </div>
 
+      <div class="form-group" style="border:1px solid #c1d8d2;border-radius:8px;padding:10px">
+        <label style="display:flex;align-items:center;gap:8px"><input id="rememberLogin" type="checkbox" style="width:auto;height:auto"> Ghi nhớ đăng nhập trên RC này (30 ngày)</label>
+        <small style="display:block;margin-top:6px;color:#526b6c">Dùng trên thiết bị cá nhân. Không lưu mật khẩu dạng rõ.</small>
+        <button type="button" id="forgetLogin" class="btn" style="margin-top:8px;display:none">Quên tài khoản đã lưu / Đổi tài khoản</button>
+      </div>
       <div class="form-group">
         <label for="ticketSelect">Phiếu Kiểm Tra Hiện Tại</label>
         <select id="ticketSelect" required>
@@ -247,6 +252,14 @@
       } catch (e) {}
     }
 
+    let useSavedLogin=false;
+    const passwordInput=document.getElementById('password'),usernameInput=document.getElementById('username'),rememberInput=document.getElementById('rememberLogin'),forgetButton=document.getElementById('forgetLogin');
+    function savedMode(enabled){useSavedLogin=enabled;passwordInput.value='';passwordInput.disabled=enabled;passwordInput.required=!enabled;passwordInput.placeholder=enabled?'Đã lưu đăng nhập — không cần nhập lại':'';usernameInput.readOnly=enabled;forgetButton.style.display=enabled?'block':'none';}
+    async function forgetSaved(){const r=await fetch('/api/pilot/remember/forget',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(!r.ok)throw Error('Không xóa được đăng nhập đã lưu');savedMode(false);rememberInput.checked=false;}
+    forgetButton.onclick=()=>forgetSaved().catch(e=>{statusBox.textContent=e.message;});
+    rememberInput.onchange=()=>{if(!rememberInput.checked&&useSavedLogin)forgetSaved().catch(e=>{statusBox.textContent=e.message;});};
+    fetch('/api/pilot/remember').then(r=>r.json()).then(r=>{if(r.code===0&&r.data.available&&!usernameInput.value&&!passwordInput.value){usernameInput.value=r.data.username;rememberInput.checked=true;savedMode(true);}}).catch(()=>{});
+
     // Kiểm tra và nhận diện DJI JSBridge an toàn
     const isDjiBridge = typeof window !== 'undefined' && !!(window.djiBridge);
     if (isDjiBridge) {
@@ -309,7 +322,7 @@
         const res = await fetch('/api/pilot/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password, ticketId, rc_sn: rcSn, aircraft_sn: aircraftSn })
+          body: JSON.stringify({ username, ...(useSavedLogin?{use_saved_login:true}:{password}), remember:rememberInput.checked, ticketId, rc_sn: rcSn, aircraft_sn: aircraftSn })
         });
         const data = await res.json();
 
@@ -320,6 +333,7 @@
 
           if (!isDjiBridge) throw Error('Mở trang này trong DJI Pilot 2 để kết nối thiết bị; trình duyệt thường chỉ kiểm tra được đăng nhập.');
           const cfg=data.data;
+          if(cfg.remembered){rememberInput.checked=true;savedMode(true);}
           PilotBridge.call('platformVerifyLicense',cfg.license.appId,cfg.license.appKey,cfg.license.appLicense);
           if(!PilotBridge.connected(PilotBridge.call('platformIsVerified')))throw Error('License DJI chưa được xác nhận.');
           const identity={rc_sn:PilotBridge.serial('platformGetRemoteControllerSN'),aircraft_sn:PilotBridge.serial('platformGetAircraftSN')};
@@ -329,9 +343,11 @@
           document.getElementById('rcSnText').textContent=identity.rc_sn;document.getElementById('aircraftSnText').textContent=identity.aircraft_sn||'Chờ topology';document.getElementById('wsText').textContent=cfg.assigned_ticket;document.getElementById('mqttHostText').textContent=cfg.mqtt.host;
           addLog('Tay điều khiển: '+escapeHtml(identity.rc_sn)+' · Máy bay: '+escapeHtml(identity.aircraft_sn||'Chờ topology'));
           PilotBridge.load('api',{host:location.origin,token:cfg.token});
+          PilotBridge.call('apiSetToken',cfg.token);
           PilotBridge.call('platformSetWorkspaceId',cfg.workspace_id);
           PilotBridge.call('platformSetInformation','Giám sát UAV',cfg.workspace_name,cfg.assigned_ticket);
-          PilotBridge.load('thing',{...cfg.mqtt,connectCallback:'connectCallback'});
+          PilotBridge.freshThing(cfg.mqtt);
+          addLog('✓ Đã nạp lại broker và tài khoản MQTT của phiên hiện tại; không dùng cấu hình lưu cũ.');
           PilotBridge.load('liveshare',{videoPublishType:'video-demand-aux-manual',statusCallback:'liveStatusCallback'});
           PilotBridge.load('media',{autoUploadPhoto:true,autoUploadPhotoType:0,autoUploadVideo:false});
           PilotBridge.call('mediaSetAutoUploadPhoto',true);PilotBridge.call('mediaSetUploadPhotoType',0);
@@ -344,6 +360,7 @@
           else connectionTimer=setTimeout(()=>{statusBox.className='status-box error';statusBox.textContent='Chưa có xác nhận MQTT sau 20 giây. Kiểm tra IP/cổng, firewall và log broker.';connectBtn.disabled=false;connectBtn.innerText='THỬ LẠI';},20000);
 
         } else {
+          if(useSavedLogin&&res.status===401){savedMode(false);rememberInput.checked=false;}
           statusBox.className = "status-box error";
           statusBox.innerHTML = `<strong>Lỗi kết nối:</strong> ${escapeHtml(data.message)}`;
           connectBtn.disabled = false;

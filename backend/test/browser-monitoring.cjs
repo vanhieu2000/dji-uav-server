@@ -10,7 +10,7 @@ const path=require('path');const req=require('module').createRequire(path.resolv
  await page.route('**/*',async route=>{const u=new URL(route.request().url());
   if(u.host!==new URL(base).host){if(['script','stylesheet','font'].includes(route.request().resourceType()))externalLibraries.push(u.hostname);if(u.pathname.endsWith('leaflet.js'))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(req.resolve('leaflet/dist/leaflet.js'))});if(u.pathname.endsWith('leaflet.css'))return route.fulfill({contentType:'text/css',body:fs.readFileSync(req.resolve('leaflet/dist/leaflet.css'))});return route.fulfill({status:200,body:''});}
   if(u.pathname.startsWith('/api/')){
-   if(route.request().method()!=='GET')commands.push(u.pathname);
+   if(route.request().method()!=='GET'&&u.pathname!=='/api/diagnostics/client')commands.push(u.pathname);
    let data=[];
    if(u.pathname==='/api/workspace/context')data={plants:[]};
    if(u.pathname==='/api/auth/me')data={user_id:1,role:'ADMIN',username:'fixture-admin'};

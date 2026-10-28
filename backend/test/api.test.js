@@ -386,6 +386,12 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal(ptRoute.body.data.route_kind, 'POINTS');
         assert.equal(ptRoute.body.data.plan.stats.point_count, 2);
 
+        const manualPoints=[{lat:11.85,lng:107,altitude_m:30,gimbal_pitch:-90,hover_seconds:2},{lat:11.86,lng:107,altitude_m:35,gimbal_pitch:-45,hover_seconds:4},{lat:11.8501,lng:107,altitude_m:30,gimbal_pitch:-90,hover_seconds:1}];
+        const manual=await api('POST','/api/flight-plans/preview',{profile_id:pts.profile_id,points:manualPoints});assert.equal(manual.status,200);assert.deepEqual(manual.body.data.geojson.path.coordinates,manualPoints.map(p=>[p.lng,p.lat]));
+        assert.equal((await api('POST','/api/flight-plans/preview',{profile_id:pts.profile_id,points:[null,null]})).status,400);
+        const manualRoute=await api('POST','/api/flight-plans',{profile_id:pts.profile_id,points:manualPoints,route_name:'Điểm thủ công theo thứ tự'});assert.equal(manualRoute.status,200);
+        const manualZip=new AdmZip(Buffer.from(await fetch(app.base+manualRoute.body.data.kmz_url).then(r=>r.arrayBuffer()))),wpml=manualZip.readAsText('wpmz/waylines.wpml');assert.match(wpml,/reachPoint/);assert.match(wpml,/hover/);assert.match(wpml,/takePhoto/);assert.match(wpml,/relativeToStartPoint/);
+        await api('DELETE','/api/flight-plans/'+manualRoute.body.data.route_id);
         const list = await api('GET', '/api/flight-plans');
         assert.equal(list.body.data.length, 2);
         assert.equal((await api('DELETE', `/api/flight-plans/${route.route_id}`)).status, 200);

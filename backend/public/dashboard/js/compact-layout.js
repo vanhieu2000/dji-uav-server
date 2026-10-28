@@ -34,10 +34,6 @@
   const positionControls=bar=>{const height=bar.getBoundingClientRect().height;if(height>0)(bar.closest('.mapbox')||bar.closest('.page-view'))?.style.setProperty('--map-controls-top',(bar.offsetTop+height+8)+'px');};
   const observer=new ResizeObserver(entries=>entries.forEach(({target})=>positionControls(target)));
   document.querySelectorAll('.map-osd-topbar').forEach(bar=>{observer.observe(bar);positionControls(bar);});
-  const groups=[...document.querySelectorAll('aside .nav-tree')],nav=document.querySelector('aside>.nav');
-  function fit(){const active=document.querySelector('.nav-btn.on')?.closest('details');groups.forEach(g=>{g.open=g===active;});if(nav.scrollHeight>nav.clientHeight+2&&active)active.open=false;}
-  window.fitCompactNavigation=fit;
-  groups.forEach(g=>g.querySelector('summary').onclick=e=>{e.preventDefault();const open=!g.open;groups.forEach(x=>x.open=false);if(!open)return;g.open=true;if(nav.scrollHeight>nav.clientHeight+2){g.open=false;const menu=document.createElement('div');menu.className='compact-menu';g.querySelectorAll('.nav-btn').forEach(link=>{const b=document.createElement('button');b.type='button';b.className='btn';b.textContent=link.textContent;b.onclick=()=>{closeAll();window.switchView(link.dataset.target);};menu.append(b);});document.body.append(menu);reveal(menu,g.querySelector('summary').textContent);const d=menu.closest('dialog');d.addEventListener('close',()=>menu.remove(),{once:true});}});
-  requestAnimationFrame(fit);window.addEventListener('resize',()=>{fit();normalize();});
+  window.fitCompactNavigation=()=>document.querySelector('aside .nav-btn.on')?.scrollIntoView({block:'nearest',inline:'nearest'});
  });
 })();

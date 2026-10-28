@@ -52,3 +52,25 @@ RTH/Fly-to từ Web trả410 và không phát lệnh suy đoán; RTH trên toolb
 Đã thử bằng test Node/MySQL, broker MQTT thật trên localhost với UAV/camera giả lập và Chromium với API/Bridge giả lập. Chưa nghiệm thu trên Mavic 3T/Pilot 2/MinIO thật. Log gửi đối chiếu cần có thời điểm, phiên bản Pilot/firmware, method/result/tid/bid; che mật khẩu/JWT/access secret/license.
 
 Các thao tác chưa hỗ trợ không giả báo thành công: Fly-and-capture không tự chụp sau một lệnh bay thất bại; Zoom shutter chưa kiểm chứng bị khóa. Bỏ các khung camera nhiệt/zoom mô phỏng và tab3 camera; một cửa sổ phát kênh thật được chọn từ capability. Dừng phát live gửi lệnh stop và chờ reply, khác với chỉ ẩn cửa sổ xem.
+
+## RC báo MQTT `not authorized`
+
+Trong Aedes, dòng này là CONNECT bị từ chối xác thực, trước ACL topic. RC đã tới broker; không xử lý bằng cách tắt mật khẩu/ACL. Native thing module có thể vẫn giữ thông tin của lần đăng nhập trước. Trang Pilot mới kiểm tra module đang nạp, gọi thingDisconnect và platformUnloadComponent('thing'), nạp broker/credentials mới và đối chiếu cấu hình đọc lại khi SDK hỗ trợ. API token cũng được cập nhật bằng apiSetToken; không log token/mật khẩu.
+
+Cập nhật code, đóng server cũ và chạy lại CHAY_WIFI.bat. Trên RC thoát Cloud Service về màn hình Pilot, mở lại URL PILOT 2 và đăng nhập lại; không chỉ bấm retry trên màn hình cũ. Tài khoản đăng nhập Web/RC giữ nguyên; thông tin MQTT riêng do server tự cấp theo phiên, không nhập mật khẩu MySQL/Web trực tiếp vào MQTT.
+
+Nếu tiếp tục lỗi, gửi dòng `[MQTT Auth] DENY reason=... client=... session=...`:
+
+- USERNAME_FORMAT: RC không gửi username MQTT dạng pilot:<id>, thường cấu hình cũ.
+- SESSION_UNAVAILABLE: phiên đã kết thúc/hết hạn, tài khoản hoặc phạm vi không còn hợp lệ; đăng nhập lại để tạo phiên mới.
+- PASSWORD_MISMATCH: credentials RC không khớp phiên hiện tại; ngắt module cũ và đăng nhập lại.
+- PASSWORD_HASH_MISSING: phiên cũ chưa có credentials, tạo phiên đăng nhập mới.
+- SESSION_LOOKUP_FAILED: không kiểm tra được phiên trong DB; kiểm tra kết nối/migration MySQL.
+
+Log được giới hạn tần suất và không chứa username thô, mật khẩu, JWT hoặc payload cấu hình. Chưa xác nhận nguyên nhân trên RC thực nếu chỉ có dòng `not authorized`; reason mới giúp phân biệt. Kiểm thử có broker localhost từ chối credentials cũ và chấp nhận credentials mới, cùng fixture Bridge đã nạp module cũ.
+
+## Operator và ghi nhớ đăng nhập RC
+
+Bản mới tự tạo `operator` khi chạy launcher trên PC nếu chưa tồn tại. Mật khẩu khởi tạo riêng: `backend/data/operator-password.txt`; đăng nhập Web và đổi trước khi dùng RC. Operator tạm được toàn bộ phạm vi nghiệp vụ theo yêu cầu, nhưng không có quyền cài đặt/quản lý tài khoản. Admin có thể thu hẹp trong tab Quản lý tài khoản.
+
+Trên trang đăng nhập Pilot chọn **Ghi nhớ đăng nhập trên RC này (30 ngày)**. Trình duyệt giữ cookie opaque HttpOnly; DB chỉ lưu SHA256 token, không lưu mật khẩu dạng rõ hoặc mật khẩu trong localStorage. Lần sau vẫn chọn phiếu và kết nối nhưng không cần nhập lại mật khẩu. Nút Quên tài khoản đã lưu/Đổi tài khoản xóa cookie và token server. Đổi mật khẩu, khóa tài khoản, sửa quyền/phạm vi hoặc hết hạn làm token không còn dùng được. Dùng cùng IP/hostname khi mở lại (cookie thuộc origin; đổi IP cần đăng nhập lại).

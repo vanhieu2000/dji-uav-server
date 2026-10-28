@@ -98,6 +98,18 @@ test('production gate: tài khoản, phiên, phân quyền và phạm vi',async 
   const read=await call('/api/open/v1/external-tasks/PMIS-TEST',key);assert.equal(read.json.data.ticket.revision,1);
   await call('/api/admin/api-keys/'+issued.json.data.key_id,adminToken,{},'DELETE');assert.equal((await call('/api/open/v1/tasks',key)).status,401);
  });
+ await t.test('operator toàn bộ nghiệp vụ vẫn không quản trị tài khoản/cài đặt, có thể thu hẹp lại',async()=>{
+  const created=await call('/api/admin/users',adminToken,{username:'wide-operator-test',password,full_name:'Operator',role:'OPERATOR',all_operation_scopes:true});assert.equal(created.status,200);const id=created.json.data.user_id;
+  const initial=(await call('/api/auth/login',null,{username:'wide-operator-test',password})).json.data.token;
+  assert.equal((await call('/api/auth/change-password',initial,{old_password:password,new_password:'wide-operator-new-password'})).status,200);
+  const wide=(await call('/api/auth/login',null,{username:'wide-operator-test',password:'wide-operator-new-password'})).json.data.token;
+  assert.equal((await call('/api/solar/plants',wide)).status,200);assert.ok((await call('/api/workspace/tasks',wide)).json.data.some(t=>t.ticket_id===otherTask));
+  assert.equal((await call('/api/admin/users',wide)).status,403);assert.equal((await call('/api/diagnostics/export',wide)).status,403);assert.equal((await call('/api/settings',wide)).status,403);
+  assert.equal((await call('/api/admin/users/'+id,wide,{role:'ADMIN'},'PUT')).status,403);
+  await call('/api/admin/users/'+id,adminToken,{all_operation_scopes:false,unit_id:unit,plant_ids:[plant]},'PUT');assert.equal((await call('/api/auth/me',wide)).status,401);
+  const narrow=(await call('/api/auth/login',null,{username:'wide-operator-test',password:'wide-operator-new-password'})).json.data.token;
+  assert.equal((await call('/api/solar/plants',narrow)).status,403);assert.ok(!(await call('/api/workspace/tasks',narrow)).json.data.some(t=>t.ticket_id===otherTask));
+ });
  await t.test('khóa/đổi phạm vi thu hồi ngay phiên; không khóa admin cuối',async()=>{
   assert.equal((await call('/api/admin/users/'+operator,adminToken,{status:'LOCKED'},'PUT')).status,200);
   assert.equal((await call('/api/auth/me',operatorToken)).status,401);

@@ -39,7 +39,25 @@ test('MQTT: unknown serials cannot learn from arbitrary topics or wildcard subsc
  assert.equal(serialsAllowed(s,{device_sn:'OTHER'}),false);assert.equal(serialsAllowed(s,{battery:{sn:'BAT1234'}}),true);
 });
 test('Bridge: plain and wrapped getters, setup error, false callback never accepted',()=>{
- const vm=require('vm'),fs=require('fs');const box={window:{}};vm.runInNewContext(fs.readFileSync(require('path').join(__dirname,'../public/pilot-login/bridge.js'),'utf8'),box);const p=box.window.PilotBridge;
+ const vm=require('vm'),fs=require('fs');const box={window:{}};vm.runInNewContext(fs.readFileSync(require('path').join(__dirname,'../public/pilot-login/bridge.js'),'utf8'),box);vm.runInNewContext('Object.hasOwn=undefined',box);const p=box.window.PilotBridge;
  assert.equal(p.value('RC1234'),'RC1234');assert.equal(p.value('{"code":0,"data":true}'),true);assert.equal(p.connected(false),false);assert.equal(p.connected('{"code":1}'),false);assert.equal(p.connected('{"code":0,"data":true}'),true);assert.throws(()=>p.value('{"code":5}'));
  box.window.djiBridge={platformGetRemoteControllerSN:()=> 'RC1234'};assert.equal(p.serial('platformGetRemoteControllerSN'),'RC1234');
+});
+test('MQTT CONNECT diagnostics distinguish cached credentials without accepting invalid sessions',async()=>{
+ const crypto=require('crypto'),{authenticatePilot}=require('../src/services/mqttAccess'),password='test-only-fresh-password';
+ const session={session_id:42,mqtt_password_hash:crypto.createHash('sha256').update(password).digest('hex')};
+ assert.equal((await authenticatePilot('admin',password,async()=>session)).reason,'USERNAME_FORMAT');
+ assert.equal((await authenticatePilot('pilot:42',password,async()=>null)).reason,'SESSION_UNAVAILABLE');
+ assert.equal((await authenticatePilot('pilot:42','old-password',async()=>session)).reason,'PASSWORD_MISMATCH');
+ assert.equal((await authenticatePilot(Buffer.from('pilot:42'),Buffer.from(password),async()=>session)).session,session);
+ assert.equal((await authenticatePilot('pilot:42',password,async()=>{throw Error('DB fixture');})).reason,'SESSION_LOOKUP_FAILED');
+});
+test('Bridge reconnect replaces loaded MQTT module and rejects retained username',()=>{
+ const vm=require('vm'),fs=require('fs'),calls=[];let loaded=true,active={host:'tcp://old:1883',username:'old'};
+ const bridge={platformIsComponentLoaded:()=>loaded,thingDisconnect:()=>{calls.push('disconnect');return '{"code":0}';},platformUnloadComponent:()=>{calls.push('unload');loaded=false;return '{"code":0}';},platformLoadComponent:(name,raw)=>{calls.push('load');loaded=true;active=JSON.parse(raw);return '{"code":0}';},thingGetConfigs:()=>JSON.stringify(active)};
+ const box={window:{djiBridge:bridge}};vm.runInNewContext(fs.readFileSync(require('path').join(__dirname,'../public/pilot-login/bridge.js'),'utf8'),box);
+ box.window.PilotBridge.freshThing({host:'tcp://new:1884',username:'pilot:42',password:'test-password'});
+ assert.deepEqual(calls,['disconnect','unload','load']);assert.equal(active.username,'pilot:42');assert.equal(active.host,'tcp://new:1884');
+ bridge.platformLoadComponent=()=>{active={host:'tcp://new:1884',username:'old'};loaded=true;return '{"code":0}';};
+ assert.throws(()=>box.window.PilotBridge.freshThing({host:'tcp://new:1884',username:'pilot:43',password:'test-next'}),/MQTT cũ/);
 });
