@@ -166,3 +166,43 @@ Bản này tự tạo `operator` riêng khi chưa có, mật khẩu khởi tạo
 Pilot có Ghi nhớ đăng nhập30 ngày và Quên tài khoản đã lưu; không lưu password dạng rõ trong trình duyệt. Khi broker báo not authorized, bản mới nạp lại thing module và ghi reason code; cập nhật, thoát Cloud Service rồi đăng nhập lại.
 
 Planner có chọn điểm trực tiếp trên map, kéo/sắp thứ tự/xóa, đặt thông số chụp và xuất KMZ theo thứ tự đã chọn. Xem GIAO_DIEN_VA_DIEU_HUONG.md. Nhật ký tự ghi trong backend/data/logs; khi lỗi bấm XUAT_LOG.bat, gửi ZIP ở backend/data/diagnostics. Admin có thể tải log từ console Web; log thô không tự đẩy Git. Chi tiết LOG_CHAN_DOAN.md.
+
+## Bật đồng bộ ảnh gốc trên Wi-Fi local
+MQTT chỉ chuyển telemetry. Pilot 2 tải JPEG qua S3/MinIO; `Storage: chưa cấu hình` đồng nghĩa chưa thể tải ảnh tự động.
+1. Cài và mở Docker Desktop (Linux containers). Giữ nguyên MySQL hiện tại.
+2. Chạy `CAI_DAT_KHO_ANH.bat` tại thư mục gốc. Script chỉ khởi động MinIO riêng, tạo bucket private,
+   kiểm tra STS/PUT/GET rồi mới cập nhật các biến S3 trong `.env`. Không đổi DB hoặc tài khoản web.
+3. Khi script báo đạt, cho phép TCP9000 qua Windows Firewall mạng Private, cùng IP Wi-Fi với RC.
+4. Dừng server cũ và chạy `CHAY_WIFI.bat`; thoát Cloud Service trên RC rồi đăng nhập lại để lấy STS mới.
+5. Bật tự tải ảnh gốc trong Pilot 2, chụp một JPEG và kiểm tra ảnh đúng phiếu trên web.
+   Ảnh đã chụp trước đó có thể cần chọn tải thủ công trong thư viện Pilot 2.
+Không cần cấp quyền điều khiển camera từ web để chụp bằng nút tay cầm rồi tải ảnh.
+MinIO giữ ảnh trong Docker volume riêng; không chạy `docker compose ... down -v` hoặc xóa volume.
+Khóa lưu ở `backend/data/` (không lên Git); không xóa chúng hoặc thay bằng mật khẩu mẫu.
+Console MinIO chỉ mở trên máy local tại127.0.0.1:9001. API9000 mở trên đúng IP LAN, không public Internet.
+Đổi IP Wi-Fi cần cập nhật endpoint S3 cho RC; không dùng localhost/127.0.0.1 làm endpoint tải ảnh của RC.
+Nếu đã có S3 khác, script từ chối ghi đè. Cấu hình nhà máy/production dùng HTTPS theo `OPERATIONS.md`.
+Kiểm tra STS/PUT/GET không thay thế nghiệm thu ảnh thật từ Mavic 3T; cần xem callback/ảnh nhận thành công.
+
+## Một UAV dùng chung và độ trễ live
+Mặc định `UAV_DEVICE_MODE=single`: tự chọn khi đúng một UAV ONLINE trong phạm vi, dùng chung lựa chọn cho các chức năng.
+Khi mở rộng, đặt `UAV_DEVICE_MODE=multi` rồi khởi động lại để chọn từng UAV rõ ràng.
+Có thể đặt `UAV_DEFAULT_SN=<serial>` để cố định UAV mặc định; không chọn nhầm nếu serial đó chưa online.
+Lựa chọn thiết bị không tự phát lệnh bay/chụp và không bỏ qua quyền cấp trên RC.
+Trình phát FLV tắt stash buffer đúng tham số config, không lazy-load và đuổi sát live edge khi video tích lũy hơn1 giây.
+Các thay đổi này giảm buffer trình duyệt, chưa chứng minh độ trễ đầu cuối; Pilot encode, GOP, Wi-Fi và relay vẫn gây trễ.
+Nên dùng Wi-Fi ổn định, H.264/720p khi băng thông hạn chế. Muốn mức dưới1 giây ổn định cần đánh giá transport WebRTC riêng;
+không thể suy ra đã đồng bộ thời gian thực chỉ từ cấu hình FLV. Ảnh JPEG gốc vẫn cần truyền toàn file và callback.
+
+## Lưu ảnh gốc vào thư mục trên máy tính
+Ảnh từ Pilot 2 sau khi tải lên kho ảnh và gửi callback được chép nguyên bản về `backend/uploads/media/`.
+Muốn lưu trên ổ riêng, tạo/chọn thư mục rồi thêm vào `.env` ở gốc dự án:
+```
+MEDIA_DIR="D:/UAV/AnhGoc"
+```
+Dùng đường dẫn tuyệt đối, dấu `/` trên Windows; ổ phải còn dung lượng và tài khoản chạy server phải có quyền ghi.
+Dừng server cũ rồi chạy `CHAY_WIFI.bat` lại. Hệ thống tự tạo thư mục còn thiếu, ảnh mới lưu tại đó;
+URL web vẫn là `/uploads/media/...`, không công khai đường dẫn ổ đĩa. Tên file có thể thêm mã tránh trùng.
+Đổi MEDIA_DIR không tự di chuyển ảnh cũ; nếu DB đã có ảnh, sao chép nguyên các file hiện có sang thư mục mới trước khi đổi.
+Đây là ảnh truyền qua Pilot 2 Media Upload, không phải phần mềm duyệt/kéo file trực tiếp từ bộ nhớ RC.
+Chỉ cấu hình MEDIA_DIR chưa đủ nếu STS vẫn 503: cần hoàn tất cấu hình kho ảnh để Pilot tải lên được.

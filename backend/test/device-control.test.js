@@ -30,7 +30,7 @@ test('control HTTP: no fallback target, authorization, ordered photo ACKs, revok
  client=false;assert.equal((await post('photo')).status,503);client=true;
  assert.equal((await post('live',{device_sn:'UAV1234',action:'start',video_id:'UAV1234/67-0-0/wide-0'})).status,400);
  assert.equal((await post('live',{device_sn:'UAV1234',action:'start',video_id:'UAV1234/67-0-0/real-index'})).status,200);assert.match(calls.at(-1).d.url,/fixture-grant/);
- assert.equal((await post('rth')).status,410);const n=calls.length;assert.equal((await post('media-sync')).body.data.sync_command_sent,false);assert.equal(calls.length,n);
+ assert.equal((await post('rth')).status,410);const n=calls.length;const sync=await post('media-sync');assert.equal(sync.status,503);assert.equal(sync.body.data.sync_command_sent,false);assert.match(sync.body.message,/CAI_DAT_KHO_ANH/);assert.equal(calls.length,n);
 });
 test('MQTT: unknown serials cannot learn from arbitrary topics or wildcard subscriptions',()=>{
  const {topicAllowed,serialsAllowed}=require('../src/services/mqttAccess');

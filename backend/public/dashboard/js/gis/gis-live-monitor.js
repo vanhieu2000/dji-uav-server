@@ -5,6 +5,7 @@
   const esc = GIS.esc;
   const devices = new Map(), photos = new Map(), maps = new Map();
   let selected = null, ticketId = '', photoCursor = 0, generation = 0, loading = false, mounted = false;
+  let deviceMode='single',defaultDevice=null,configLoaded=false;
   let onSelect = () => {}, streams = [], currentPath = null;
   const finite = x => x != null && Number.isFinite(Number(x));
   const position = d => finite(d.lat) && finite(d.lng) && Math.abs(d.lat) <= 90 && Math.abs(d.lng) <= 180;
@@ -50,6 +51,9 @@
   function renderDevices() {
     const box = document.getElementById('uav-live-devices'); if (!box) return;
     const rows = [...devices.values()].filter(visible);
+    if(configLoaded&&deviceMode==='single'&&!selected){const online=rows.filter(d=>d.status==='ONLINE'||d.status==='IN_FLIGHT');const chosen=defaultDevice?online.find(d=>d.device_sn===defaultDevice):online.length===1?online[0]:null;if(chosen){selected=chosen.device_sn;onSelect(selected);}}
+    const selector=document.getElementById('uav-monitor-target');
+    if(selector){selector.innerHTML='<option value="">Chọn UAV để xem thông số</option>'+rows.map(d=>`<option value="${esc(d.device_sn)}">${esc(d.device_sn)} · ${esc(d.status||'Chưa rõ')}</option>`).join('');selector.value=selected||'';}
     box.innerHTML = rows.length ? rows.map(d => `<button class="btn sm ${d.device_sn === selected ? 'primary' : ''}" data-sn="${esc(d.device_sn)}">
       ${esc(d.device_sn)} · ${esc(d.status || 'ONLINE')} · ${d.battery == null ? '–' : esc(d.battery) + '%'}</button>`).join(' ')
       : '<span class="faint">Chưa có UAV kết nối trong phạm vi đã chọn.</span>';
@@ -154,6 +158,7 @@
     playbackUrl: () => streams.find(s=>s.streamPath===currentPath)?.flv_url || null,
     mount(callback) {
       if (mounted) return; mounted = true; onSelect = callback;
+      const selector=document.getElementById('uav-monitor-target');if(selector)selector.addEventListener('change',()=>select(selector.value));
       document.getElementById('uav-live-devices').addEventListener('click', e => {
         const b = e.target.closest('[data-sn]'); if (b) select(b.dataset.sn);
       });
@@ -175,7 +180,7 @@
       GIS.api('GET', '/api/tickets').then(r => {
         document.getElementById('uav-live-ticket').innerHTML = '<option value="">Tất cả phiếu</option>' + r.data.map(t => `<option value="${t.ticket_id}">${esc(t.ticket_code)} – ${esc(t.ticket_name)}</option>`).join('');
       }).catch(() => {});
-      catchUp(); setInterval(catchUp, 5000);
+      GIS.api('GET','/api/monitoring/config').then(r=>{deviceMode=r.data?.device_mode==='multi'?'multi':'single';defaultDevice=r.data?.default_device_sn||null;configLoaded=true;}).catch(()=>{}).finally(catchUp);setInterval(catchUp, 5000);
     }
   };
 })();

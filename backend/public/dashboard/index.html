@@ -382,7 +382,7 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
         <div class="overview-primary">
           <section class="card overview-live-card">
             <div class="card-head"><div><h2>Giám sát trực tiếp</h2><p class="muted">Chọn phiếu và kênh live để theo dõi chuyến bay.</p></div><div class="r"><span class="tag off" id="dash-drone-badge">UAV: OFFLINE</span></div></div>
-            <div class="overview-live-filters"><label class="field">Phiếu kiểm tra<select class="input" id="uav-live-ticket"><option value="">Tất cả phiếu</option></select></label><label class="field">Kênh livestream<select class="input" id="uav-live-stream"><option value="">Chọn phiếu để xem kênh live</option></select></label></div>
+            <div class="overview-live-filters"><label class="field">Chọn UAV<select class="input" id="uav-monitor-target"><option value="">Chọn UAV để xem thông số</option></select></label><label class="field">Phiếu kiểm tra<select class="input" id="uav-live-ticket"><option value="">Tất cả phiếu</option></select></label><label class="field">Kênh livestream<select class="input" id="uav-live-stream"><option value="">Chọn phiếu để xem kênh live</option></select></label></div>
             <div class="overview-live-stage" id="dashboard-live-stage"><div id="dashboard-live-placeholder"><span class="live-empty-icon" aria-hidden="true">▷</span><b>Chưa có luồng trực tiếp</b><p>Chọn kênh đang phát từ DJI Pilot 2.</p></div></div>
             <div class="overview-telemetry"><div>Độ cao<b id="hud-alt-dash">-- m</b></div><div>Tốc độ<b id="hud-spd-dash">-- m/s</b></div><div>Pin<b id="hud-bat-dash">--%</b></div><div>Nhiệt cao nhất<b id="hud-th-dash">-- °C</b></div></div>
             <div id="uav-live-devices"></div><div class="overview-live-footer"><span class="muted" id="uav-photo-count">Chưa nhận dữ liệu ảnh</span><button class="btn sm" onclick="switchView('control-manual')">Mở buồng lái</button></div>
@@ -1683,7 +1683,7 @@ async function captureLiveSnapshot(){
 }
 
 async function triggerMediaSync(){
-  toast('Đang yêu cầu DJI Pilot 2 đồng bộ ảnh từ thẻ nhớ Drone...');
+  toast('Đang kiểm tra điều kiện tải ảnh gốc từ Pilot 2...');
   try{
     const res = await fetch('/api/control/media-sync', {
       method: 'POST',
@@ -1692,7 +1692,7 @@ async function triggerMediaSync(){
     });
     const d = await res.json();
     if(res.ok && d.code === 0){
-      toast('✓ ' + (d.message || 'Đã gửi lệnh đồng bộ!'));
+      toast(d.message || 'Bật tải ảnh gốc trong DJI Pilot 2; chưa xác nhận ảnh đã nhận.');
       setTimeout(loadInitialMedia, 2000);
     } else {
       toast('⚠️ ' + (d.message || 'Chưa gửi được lệnh đồng bộ'));
@@ -2516,6 +2516,7 @@ async function manualStartLive(){
 
 }
 function stopFlvLivePlayer(){
+  clearInterval(gLiveEdgeTimer);gLiveEdgeTimer=null;
   if(gFlvPlayer){ try { gFlvPlayer.destroy(); } catch(e){} gFlvPlayer = null; }
   const video = document.getElementById('manual-live-video');
   if(video){ video.pause(); video.style.display = 'none'; }
@@ -2528,8 +2529,10 @@ function stopFlvLivePlayer(){
    TRÌNH PHÁT VIDEO LIVE STREAM FLV (PORT 8000 / LIVE / M3T_LIVE)
    =================================================================== */
 let gFlvPlayer = null;
+let gLiveEdgeTimer=null;
 
 function startFlvLivePlayer(streamPath, playbackUrl){
+  clearInterval(gLiveEdgeTimer);gLiveEdgeTimer=null;
   const videoEl = document.getElementById('manual-live-video');
   const placeholderEl = document.getElementById('manual-live-placeholder');
   const badgeEl = document.getElementById('manual-stream-badge');
@@ -2560,16 +2563,26 @@ function startFlvLivePlayer(streamPath, playbackUrl){
       type: 'flv',
       isLive: true,
       url: flvUrl,
-      hasAudio: false,
-      enableStashBuffer: false
+      hasAudio: false
     }, {
       enableWorker: false,
+      enableStashBuffer: false,
       lazyLoad: false,
-      autoCleanupSourceBuffer: true
+      autoCleanupSourceBuffer: true,
+      autoCleanupMaxBackwardDuration: 10,
+      autoCleanupMinBackwardDuration: 3
     });
 
     gFlvPlayer.attachMediaElement(videoEl);
     gFlvPlayer.load();
+    videoEl.muted=true;videoEl.playsInline=true;videoEl.playbackRate=1;
+    // Keep close to the buffered live edge; this measures browser buffer, not RC-to-Web latency.
+    gLiveEdgeTimer=setInterval(()=>{
+      if(videoEl.paused||videoEl.seeking||!videoEl.buffered.length)return;
+      const end=videoEl.buffered.end(videoEl.buffered.length-1),gap=end-videoEl.currentTime;
+      if(gap>1.0){videoEl.currentTime=Math.max(videoEl.buffered.start(videoEl.buffered.length-1),end-0.25);videoEl.playbackRate=1;}
+      else videoEl.playbackRate=gap>0.4?1.05:1;
+    },250);
 
     videoEl.style.display = 'block';
     const dashPh = document.getElementById('dashboard-live-placeholder');

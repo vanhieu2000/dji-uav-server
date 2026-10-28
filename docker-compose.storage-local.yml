@@ -1,0 +1,16 @@
+# Local Wi-Fi storage only; keeps the existing Windows MySQL/backend.
+services:
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address :9001
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${UAV_MINIO_USER:?Run CAI_DAT_KHO_ANH.bat}
+      MINIO_ROOT_PASSWORD: ${UAV_MINIO_PASSWORD:?Run CAI_DAT_KHO_ANH.bat}
+    ports:
+      - '${UAV_STORAGE_IP}:9000:9000'
+      - '127.0.0.1:9001:9001'
+    volumes:
+      - images:/data
+volumes:
+  images:

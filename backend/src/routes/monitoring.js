@@ -5,6 +5,7 @@ const v = require('../utils/validate');
 
 function createRouter({ monitoring }) {
     const router = express.Router();
+    router.get('/config',(req,res)=>ok(res,{device_mode:process.env.UAV_DEVICE_MODE==='multi'?'multi':'single',default_device_sn:process.env.UAV_DEFAULT_SN||null}));
     router.get('/devices', asyncHandler(async (req, res) => {
         const ticket = v.isBlank(req.query.ticket_id) ? null : v.parseId(req.query.ticket_id, 'phiếu kiểm tra');
         const rows = await query(`SELECT d.device_sn, d.device_name, d.gateway_sn, d.last_latitude AS lat,

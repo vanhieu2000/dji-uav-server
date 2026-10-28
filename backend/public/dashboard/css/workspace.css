@@ -21,7 +21,7 @@
 .overview-primary,.overview-secondary{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start;margin-bottom:16px}
 .overview-primary>.card,.overview-secondary>.card,.report-charts>.card{min-width:0;overflow:hidden}
 .overview-live-card .card-head p,.overview-secondary .card-head p{font-size:12px;margin-top:5px}
-.overview-live-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin-bottom:12px}
+.overview-live-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px}
 .overview-live-filters select{min-width:0;text-overflow:ellipsis}
 .overview-live-stage{position:relative;width:100%;aspect-ratio:16/9;max-height:480px;background:#10282e;border-radius:10px;overflow:hidden;display:grid;place-items:center;color:#daeae8}
 #dashboard-live-placeholder{text-align:center;padding:20px;font-size:13px;max-width:100%}

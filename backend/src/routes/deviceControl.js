@@ -58,7 +58,7 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
   const row=(await monitoring.streams(t.session.ticket_id)).find(r=>r.device_sn===t.sn);
   ok(res,{...result,playback_url:row?streamAccess.playback(row,req.user).flv_url:null,streamPath:stream.streamPath,channel:stream.channel,publisher_confirmed:false},'Pilot đã phản hồi lệnh live. Trạng thái phát được xác nhận riêng khi có publisher.');
  }));
- router.post('/media-sync',(req,res)=>res.json({code:0,message:'Ảnh gốc được tải bằng Media File Upload của Pilot 2. Bật tự tải ảnh gốc hoặc chọn tải thủ công trong thư viện Pilot; không phát lệnh media_files_sync không được xác nhận.',data:{strategy:'pilot-native-upload',sync_command_sent:false}}));
+ router.post('/media-sync',(req,res)=>{if(!require('../services/objectStorage').readiness().configured)return res.status(503).json({code:503,message:'Chưa cấu hình kho ảnh. Chạy CAI_DAT_KHO_ANH.bat (cần Docker Desktop), khởi động lại server rồi đăng nhập lại Pilot 2.',data:{sync_command_sent:false}});return res.json({code:0,message:'Ảnh gốc được tải bằng Media File Upload của Pilot 2. Bật tự tải ảnh gốc hoặc chọn tải thủ công trong thư viện Pilot; không phát lệnh media_files_sync không được xác nhận.',data:{strategy:'pilot-native-upload',sync_command_sent:false}});});
  router.post(['/rth','/fly-to','/flyto'],(req,res)=>res.status(410).json({code:410,message:'Điều khiển chuyển động chưa được kiểm chứng theo DRC trên thiết bị này. Thực hiện trên Pilot 2; không phát lệnh suy đoán.'}));
  return router;
 }
