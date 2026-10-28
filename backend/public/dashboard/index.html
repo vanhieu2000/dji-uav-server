@@ -140,8 +140,8 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
 
 /* KHÔNG GIAN BẢN ĐỒ FULL-HEIGHT VÀ FLOATING CONTROLS */
 .map-workspace{flex:1;height:100%;width:100%;display:grid;grid-template-columns:minmax(0,1fr) 380px;position:relative;overflow:hidden;transition:grid-template-columns .25s ease}
-.map-workspace.panel-collapsed{grid-template-columns:minmax(0,1fr) 0px !important}
-#real-gis-map,#real-gis-map-sub,#real-gis-map-manual{width:100%;height:100% !important;min-height:100%;z-index:1}
+#real-gis-map,#real-gis-map-sub,#real-gis-map-manual{width:100%;height:100% !important;min-height:100%;z-index:1;background-color:#0d1527 !important;background-image:linear-gradient(rgba(56,189,248,0.08) 1px, transparent 1px),linear-gradient(90deg, rgba(56,189,248,0.08) 1px, transparent 1px) !important;background-size:32px 32px !important}
+.leaflet-container{background-color:#0d1527 !important}
 
 .floating-map-bar{position:absolute;top:12px;left:14px;right:14px;z-index:500;display:flex;align-items:center;justify-content:space-between;pointer-events:none;gap:10px}
 .floating-pill{pointer-events:auto;background:rgba(16,36,42,0.88);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:6px 12px;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,0.3);display:flex;align-items:center;gap:10px}
@@ -1355,24 +1355,54 @@ function switchView(viewName){
 let droneMarker = null;
 let manualDroneMarker = null;
 
+let gTileErrorCounts = { solar: 0, substation: 0, manual: 0 };
+let gBasemapOfflineFallbackNotified = false;
+
 function setBasemap(type, target){
- const cfg = BASEMAPS[type] || BASEMAPS.google_hybrid;
+ const cfg = BASEMAPS[type] || BASEMAPS.offline;
+ const netStatusEl = document.getElementById('topbar-net-status');
+ if (netStatusEl) {
+   if (type === 'offline') {
+     netStatusEl.innerHTML = '<span class="dot" style="background:#00f2fe"></span>Sơ đồ Ngoại Tuyến';
+   } else {
+     netStatusEl.innerHTML = '<span class="dot"></span>Bản đồ vệ tinh';
+   }
+ }
+ function createLayer(map, tgtKey) {
+   const layer = L.tileLayer(cfg.url, {
+     maxZoom: 22,
+     maxNativeZoom: cfg.native || 19,
+     attribution: cfg.attr,
+     errorTileUrl: '/tiles/0/0/0.png'
+   });
+   layer.on('tileerror', function() {
+     gTileErrorCounts[tgtKey] = (gTileErrorCounts[tgtKey] || 0) + 1;
+     if (gTileErrorCounts[tgtKey] >= 3 && type !== 'offline') {
+       if (!gBasemapOfflineFallbackNotified) {
+         gBasemapOfflineFallbackNotified = true;
+         toast('📡 Mất kết nối Internet: Đã tự động kích hoạt Bản đồ Lưới Kỹ thuật Ngoại tuyến');
+       }
+       setTimeout(() => setBasemap('offline', tgtKey), 100);
+     }
+   });
+   return layer.addTo(map);
+ }
  if(!target || target === 'solar'){
   if(gMap){
    if(gBaseLayerSolar) gMap.removeLayer(gBaseLayerSolar);
-   gBaseLayerSolar = L.tileLayer(cfg.url, { maxZoom: 22, maxNativeZoom: cfg.native || 19, attribution: cfg.attr }).addTo(gMap);
+   gBaseLayerSolar = createLayer(gMap, 'solar');
   }
  }
  if(!target || target === 'substation'){
   if(gMapSub){
    if(gBaseLayerSub) gMapSub.removeLayer(gBaseLayerSub);
-   gBaseLayerSub = L.tileLayer(cfg.url, { maxZoom: 22, maxNativeZoom: cfg.native || 19, attribution: cfg.attr }).addTo(gMapSub);
+   gBaseLayerSub = createLayer(gMapSub, 'substation');
   }
  }
  if(!target || target === 'manual'){
   if(gMapManual){
    if(gBaseLayerManual) gMapManual.removeLayer(gBaseLayerManual);
-   gBaseLayerManual = L.tileLayer(cfg.url, { maxZoom: 22, maxNativeZoom: cfg.native || 19, attribution: cfg.attr }).addTo(gMapManual);
+   gBaseLayerManual = createLayer(gMapManual, 'manual');
   }
  }
 }
@@ -1381,7 +1411,7 @@ function initSolarMap(){
  if(gMap) return;
  gMap = L.map('real-gis-map', { center: [11.831200, 106.591300], zoom: 17, zoomControl: false });
  L.control.zoom({ position: 'topright' }).addTo(gMap);
- setBasemap('satellite', 'solar');
+ setBasemap('offline', 'solar');
 
  // Lớp tài sản thật từ CSDL (khu vực, chuỗi, tấm pin, bất thường...) + tâm theo nhà máy
  if(window.GIS){
@@ -1438,7 +1468,7 @@ function initSubstationMap(){
  if(gMapSub) return;
  gMapSub = L.map('real-gis-map-sub', { center: [11.832600, 106.592600], zoom: 18, zoomControl: false });
  L.control.zoom({ position: 'topright' }).addTo(gMapSub);
- setBasemap('satellite', 'substation');
+ setBasemap('offline', 'substation');
 
  if(window.GIS){
   // Trạm đầu tiên có tọa độ làm tâm; chưa có thì theo nhà máy
@@ -1456,7 +1486,7 @@ function initManualMap(){
  if(gMapManual) return;
  gMapManual = L.map('real-gis-map-manual', { center: [11.831200, 106.591300], zoom: 17, zoomControl: false });
  L.control.zoom({ position: 'topright' }).addTo(gMapManual);
- setBasemap('satellite', 'manual');
+ setBasemap('offline', 'manual');
  setTimeout(()=>{ if(gMapManual) gMapManual.invalidateSize(); }, 200);
 
  // Lớp tài sản thật (khu vực, dao cách ly, bất thường) thay cho dữ liệu mẫu
@@ -1605,12 +1635,20 @@ function copyAllConsoleLogs(){
  }
 }
 
+function getAuthHeaders() {
+  const token = localStorage.getItem('uav_token') || localStorage.getItem('token') || '';
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+  };
+}
+
 async function flyDroneToPoint(lat, lng){
  toast(`Đang gửi lệnh điều hướng Mavic 3T bay đến tọa độ [${lat.toFixed(5)}, ${lng.toFixed(5)}]...`);
  try{
   const res = await fetch('/api/control/flyto', {
    method: 'POST',
-   headers: { 'Content-Type': 'application/json' },
+   headers: getAuthHeaders(),
    body: JSON.stringify({
     device_sn: gSelectedDroneSn,
     latitude: lat,
@@ -1663,7 +1701,7 @@ async function triggerPhoto(mode){
   try {
     const res = await fetch('/api/control/photo', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ mode: m, device_sn: gSelectedDroneSn })
     });
     const d = await res.json();
@@ -1698,7 +1736,7 @@ async function captureLiveSnapshot(){
 
     const res = await fetch('/api/media/snapshot', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         image_base64: base64,
         mode: gCurrentCamMode || 'wide',
@@ -1722,7 +1760,7 @@ async function triggerMediaSync(){
   try{
     const res = await fetch('/api/control/media-sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ device_sn: gSelectedDroneSn })
     });
     const d = await res.json();
@@ -2495,7 +2533,7 @@ async function manualSetGimbal(pitch){
   try{
     const res = await fetch('/api/control/gimbal', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ device_sn: gSelectedDroneSn, pitch: pitch })
     });
     const d = await res.json();
@@ -2515,7 +2553,7 @@ async function manualSendRth(){
   try{
     const res = await fetch('/api/control/rth', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ device_sn: gSelectedDroneSn })
     });
     const d = await res.json();

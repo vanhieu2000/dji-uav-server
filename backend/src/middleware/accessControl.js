@@ -2,7 +2,14 @@
 const {authenticateToken}=require('../routes/auth');
 const {query}=require('../config/db');
 const PUBLIC_AUTH=new Set(['/api/auth/login','/api/auth/forgot-password','/api/auth/reset-password','/api/pilot/login','/api/pilot/tickets','/api/pilot/log']);
-function protectedPath(p){return /^\/(api|wayline|manage|storage|media|dji-media|uploads|tiles)(\/|$)/.test(p);}
+function protectedPath(p){
+    // Cho phép công khai và thiết bị truy cập: Bản đồ tiles, file ảnh uploads, S3 giả lập DJI, STS token và lệnh điều khiển
+    if(/^\/(tiles|uploads|dji-media)(\/|$)/.test(p)) return false;
+    if(/^\/(storage|media)\/api\/v1\/workspaces\/[^/]+\/(sts|storage-configs|upload-callback|files\/upload|files|fast-upload|files\/tiny-fingerprints)/.test(p)) return false;
+    if(/^\/media(\/|$)/.test(p)) return false;
+    if(/^\/api\/control(\/|$)/.test(p)) return false;
+    return /^\/(api|wayline|manage)(\/|$)/.test(p);
+}
 function accessControl(req,res,next){
     if(!protectedPath(req.path)||PUBLIC_AUTH.has(req.path)||req.path==='/api/health'||req.path==='/api/vision/results'||/^\/api\/vision\/jobs\/[a-f0-9-]+\/input$/.test(req.path))return next();
     if(req.method==='GET'&&req.query.sig)return require('../services/signedDownloads').verify(req).then(valid=>valid?next():res.status(401).json({code:401,message:'Link tải không hợp lệ hoặc đã hết hạn'})).catch(()=>res.status(403).json({code:403,message:'Không có quyền tải'}));

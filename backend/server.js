@@ -242,8 +242,40 @@ app.use('/pilot-login', express.static(path.join(__dirname, 'public', 'pilot-log
 app.use('/m',express.static(path.join(__dirname,'public','mobile')));
 app.use('/dashboard', express.static(path.join(__dirname, 'public', 'dashboard')));
 // Bản đồ nền nhà máy (thư mục có thể đổi bằng BASEMAP_TILES_DIR)
-app.use('/tiles/basemaps', express.static(basemapsRouter.TILES_ROOT, { fallthrough: false }));
+app.use('/tiles/basemaps', express.static(basemapsRouter.TILES_ROOT, { fallthrough: true }));
 app.use('/tiles', express.static(path.join(__dirname, 'tiles')));
+
+// Bộ sinh ô lưới bản đồ kỹ thuật ngoại tuyến tự động (Dynamic Tactical Grid Tile Engine)
+// Không bao giờ để bản đồ bị 404 hay đen màn hình khi thiết bị chạy ngoại tuyến trong Wi-Fi nội bộ
+app.get('/tiles/:z/:x/:y.png', (req, res) => {
+  const { z, x, y } = req.params;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+    <rect width="256" height="256" fill="#0d1527"/>
+    <defs>
+      <pattern id="smallGrid" width="32" height="32" patternUnits="userSpaceOnUse">
+        <path d="M 32 0 L 0 0 0 32" fill="none" stroke="rgba(56, 189, 248, 0.08)" stroke-width="0.8"/>
+      </pattern>
+      <pattern id="grid" width="128" height="128" patternUnits="userSpaceOnUse">
+        <rect width="128" height="128" fill="url(#smallGrid)"/>
+        <path d="M 128 0 L 0 0 0 128" fill="none" stroke="rgba(56, 189, 248, 0.22)" stroke-width="1.2"/>
+      </pattern>
+    </defs>
+    <rect width="256" height="256" fill="url(#grid)" />
+    <!-- Tọa độ và thước tâm đo đạc -->
+    <circle cx="128" cy="128" r="3" fill="rgba(0, 242, 254, 0.5)"/>
+    <line x1="118" y1="128" x2="138" y2="128" stroke="rgba(0, 242, 254, 0.4)" stroke-width="1"/>
+    <line x1="128" y1="118" x2="128" y2="138" stroke="rgba(0, 242, 254, 0.4)" stroke-width="1"/>
+    <rect x="1" y="1" width="254" height="254" fill="none" stroke="rgba(56, 189, 248, 0.16)" stroke-width="1" stroke-dasharray="4 4"/>
+    <text x="8" y="246" fill="rgba(148, 163, 184, 0.5)" font-family="Consolas, monospace" font-size="9.5" font-weight="bold">Z:${z} [${x}, ${y}]</text>
+  </svg>`;
+  res.set({
+    'Content-Type': 'image/svg+xml',
+    'Cache-Control': 'public, max-age=86400',
+    'Access-Control-Allow-Origin': '*'
+  });
+  res.send(svg);
+});
+
 app.use('/uploads/waylines',express.static(routeLibrary.WAYLINE_DIR));
 app.use('/uploads/media',express.static(mediaUploadRouter.MEDIA_DIR));
 app.use('/uploads', (req, res, next) => {

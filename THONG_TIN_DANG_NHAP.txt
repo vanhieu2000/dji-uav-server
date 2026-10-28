@@ -1,0 +1,46 @@
+================================================================================
+                    THÔNG TIN ĐĂNG NHẬP HỆ THỐNG DJI UAV SERVER
+================================================================================
+
+1. ĐĂNG NHẬP TRÊN WEB DASHBOARD (MÁY TÍNH / TRÌNH DUYỆT):
+--------------------------------------------------------------------------------
+- Địa chỉ truy cập: 
+  + Trên máy tính chạy server: http://127.0.0.1:8080/dashboard/
+  + Từ thiết bị khác cùng mạng: http://10.20.28.101:8080/dashboard/
+
+- Danh sách tài khoản đăng nhập Web:
+  * Tài khoản Quản trị (Admin):
+    - Tên đăng nhập: admin
+    - Mật khẩu: Admin@123
+    - Quyền hạn: Toàn quyền quản trị hệ thống, quản lý tài sản, phiếu kiểm tra, bản đồ, xem báo cáo.
+
+  * Tài khoản Vận hành (Operator):
+    - Tên đăng nhập: operator
+    - Mật khẩu: Pilot@123
+    - Quyền hạn: Xem nhiệm vụ, giám sát chuyến bay, tải ảnh kiểm tra.
+
+
+2. ĐĂNG NHẬP TRÊN TAY CẦM DJI PILOT 2 (REMOTE CONTROLLER / RC):
+--------------------------------------------------------------------------------
+- Điều kiện: Tay cầm DJI RC và Máy tính phải bắt CHUNG một mạng Wi-Fi.
+- Trên app DJI Pilot 2:
+  Vào mục "Cloud Service" -> Chọn "Open Platform" (Nền tảng mở / 自建云平台)
+- Nhập chính xác đường link máy chủ:
+  http://10.20.28.101:8080/pilot-login
+
+- Thông tin đăng nhập trên RC:
+  * Tên đăng nhập: operator
+  * Mật khẩu: Pilot@123
+  * Chọn Phiếu kiểm tra: Chọn một phiếu đang mở (Ví dụ: PKT-PIN-2026-001 hoặc PKT-DCL-2026-002)
+  * Bấm: "KẾT NỐI VÀO MÁY CHỦ"
+
+
+3. LƯU Ý KHI CHUYỂN DỰ ÁN SANG MÁY TÍNH KHÁC HOẶC ĐỔI MẠNG WI-FI:
+--------------------------------------------------------------------------------
+- Mỗi khi đổi mạng Wi-Fi, địa chỉ IP của máy tính có thể thay đổi.
+- Bạn chỉ cần xem IP Wi-Fi mới của máy tính (bằng lệnh ipconfig).
+- Mở file .env ở thư mục gốc và cập nhật dòng:
+  HOST_IP=<địa_chỉ_IP_mới_của_máy_tính>
+- Sau đó khởi động lại server bằng cách chạy file CHAY_LOCAL.bat.
+- Toàn bộ tài khoản 'admin' và 'operator' ở trên vẫn giữ nguyên không bao giờ bị mất!
+================================================================================
