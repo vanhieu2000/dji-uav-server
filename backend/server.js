@@ -366,6 +366,7 @@ function setupRtmpServer() {
   const streamAccess=require('./src/services/streamAccess');
   const rtmpPort = Number(process.env.RTMP_PORT || systemConfig.rtmp_port || 1935);
   const nmsConfig = {
+    store: { path: process.env.LIVE_STATE_DIR || path.join(__dirname, 'data', 'live-state') },
     auth: { play:true,publish:true,secret:streamAccess.secret },
     webadmin: { enable: false },
     rtmp: {
