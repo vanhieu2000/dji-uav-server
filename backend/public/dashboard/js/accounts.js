@@ -1,0 +1,32 @@
+(()=>{
+ const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let users=[],permissions=[];
+ async function api(path,body,method){const r=await fetch(path,{method:method||(body?'POST':'GET'),headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const j=await r.json();if(!r.ok)throw Error(j.message);return j.data;}
+ async function run(fn){try{$('#message').textContent='';await fn();}catch(e){$('#message').textContent=e.message;}}
+ const options=(rows,id,label)=>'<option value="">Chưa gán</option>'+rows.map(r=>`<option value="${esc(r[id])}">${esc(r[label])}</option>`).join('');
+ async function load(){
+  const [us,units,ctx,ps,ds,cat,settings]=await Promise.all(['/api/admin/users','/api/admin/units','/api/workspace/context','/api/admin/permissions','/api/workspace/devices','/api/admin/catalog','/api/admin/settings'].map(p=>api(p)));
+  users=us;permissions=ps;$('#api-key [name=user_id]').innerHTML=options(us.filter(u=>u.role!=='ADMIN'&&u.status==='ACTIVE'&&!u.must_change_password),'user_id','username');await keyList();$('#users').innerHTML=us.map(u=>`<tr><td>${esc(u.username)}</td><td>${esc(u.full_name)}</td><td>${esc(u.role)}</td><td>${esc(units.find(x=>x.unit_id===u.unit_id)?.unit_name)}</td><td>${esc(u.status)}</td><td><button data-user="${u.user_id}">Sửa</button></td></tr>`).join('');
+  $('#units-list').textContent=units.map(x=>`${x.unit_id}: ${x.unit_code} — ${x.unit_name}`).join(' · ');
+  document.querySelectorAll('[name=unit_id]').forEach(el=>el.innerHTML=options(units,'unit_id','unit_name'));
+  document.querySelectorAll('[name=plant_id],[name=plant_ids]').forEach(el=>el.innerHTML=options(ctx.plants,'plant_id','plant_name'));
+  $('#device-scope [name=sn]').innerHTML=options(ds,'device_sn','device_sn');
+  $('#catalog-list').textContent=cat.map(c=>`${c.catalog_type}/${c.code}: ${c.label} (${c.enabled?'Bật':'Tắt'})`).join(' · ');
+  const f=$('#settings');f.media_retention_days.value=settings.find(x=>x.setting_key==='media_retention_days')?.setting_value??0;f.max_media_storage_gb.value=settings.find(x=>x.setting_key==='max_media_storage_gb')?.setting_value??0;f.audit_retention_days.value=settings.find(x=>x.setting_key==='audit_retention_days')?.setting_value??365;renderPermissions();
+ }
+ function renderPermissions(){const role=$('#permissions').role.value;$('#permission-checks').innerHTML=['tasks:read','tasks:write','assets:read','media:write','alerts:write','reports:read'].map(p=>`<label><input type="checkbox" value="${p}" ${permissions.some(x=>x.role===role&&x.permission===p)?'checked':''}>${p}</label>`).join('');}
+ $('#permissions').role.onchange=renderPermissions;
+ $('#permissions').onsubmit=e=>{e.preventDefault();run(async()=>{await api('/api/admin/permissions/'+e.target.role.value,{permissions:[...$('#permission-checks').querySelectorAll(':checked')].map(x=>x.value)},'PUT');await load();});};
+ $('#users').onclick=e=>{const id=e.target.dataset.user;if(!id)return;const u=users.find(x=>String(x.user_id)===id),f=$('#user-form');for(const k of ['username','full_name','email','phone','role','status','unit_id'])f.elements[k].value=u[k]??'';f.elements.id.value=id;f.username.disabled=true;f.password.value='';f.password.required=false;for(const o of f.plant_ids.options)o.selected=u.plant_ids.includes(Number(o.value));};
+ $('#new-user').onclick=()=>{const f=$('#user-form');f.reset();f.elements.id.value='';f.username.disabled=false;f.password.required=true;};
+ $('#user-form').onsubmit=e=>{e.preventDefault();const f=e.target;run(async()=>{const id=f.elements.id.value,b={};for(const k of ['username','full_name','email','phone','role','status'])b[k]=f.elements[k].value;b.unit_id=Number(f.unit_id.value)||null;b.plant_ids=[...f.plant_ids.selectedOptions].map(x=>Number(x.value)).filter(Boolean);if(!id)b.password=f.password.value;await api('/api/admin/users'+(id?'/'+id:''),b,id?'PUT':'POST');$('#new-user').click();await load();});};
+ $('#reset-pass').onclick=()=>run(async()=>{const f=$('#user-form');if(!f.elements.id.value)throw Error('Chọn tài khoản cần đặt lại');await api('/api/admin/users/'+f.elements.id.value+'/password',{password:f.password.value});f.password.value='';$('#message').textContent='Đã đặt lại; người dùng phải đổi mật khẩu khi đăng nhập.';});
+ $('#units-form').onsubmit=e=>{e.preventDefault();const f=e.target;run(async()=>{const id=f.elements.id.value;await api('/api/admin/units'+(id?'/'+id:''),{unit_code:f.code.value,unit_name:f.label.value},id?'PUT':'POST');f.reset();await load();});};
+ $('#device-scope').onsubmit=e=>{e.preventDefault();const f=e.target;run(async()=>{await api('/api/admin/devices/'+encodeURIComponent(f.sn.value)+'/scope',{plant_id:Number(f.plant_id.value)||null,unit_id:Number(f.unit_id.value)||null},'PUT');$('#message').textContent='Đã lưu phạm vi UAV';});};
+ $('#catalog').onsubmit=e=>{e.preventDefault();const f=e.target;run(async()=>{await api('/api/admin/catalog',{catalog_type:f.type.value,code:f.code.value,label:f.label.value,enabled:f.enabled.checked});await load();});};
+ $('#settings').onsubmit=e=>{e.preventDefault();const b={};for(const x of e.target.querySelectorAll('input'))b[x.name]=Number(x.value);run(async()=>{await api('/api/admin/settings',b,'PUT');$('#message').textContent='Đã lưu cấu hình';});};
+ $('#audit').onclick=()=>run(async()=>{$('#audit-list').textContent=(await api('/api/admin/audit')).map(x=>`${x.created_at} | ${x.user_id??'anonymous'} | ${x.method} ${x.path} | ${x.status_code}`).join('\n');});
+ async function keyList(){const rows=await api('/api/admin/api-keys');$('#api-key-list').innerHTML=rows.map(k=>`<p>${esc(k.label)} · user #${k.user_id} · hạn ${esc(k.expires_at)} · ${k.revoked_at?'Đã thu hồi':`<button data-key="${esc(k.key_id)}">Thu hồi</button>`}</p>`).join('');}
+ $('#api-key').onsubmit=e=>{e.preventDefault();const f=e.target;run(async()=>{const d=await api('/api/admin/api-keys',{user_id:Number(f.user_id.value),label:f.label.value,expires_days:Number(f.days.value),plant_ids:f.plants.value.split(',').map(x=>Number(x.trim())),permissions:f.permissions.value.split(',').map(x=>x.trim())});$('#new-api-key').value=d.token;await keyList();});};
+ $('#api-key-list').onclick=e=>{if(e.target.dataset.key)run(async()=>{await api('/api/admin/api-keys/'+e.target.dataset.key,{},'DELETE');await keyList();});};
+ run(load);
+})();

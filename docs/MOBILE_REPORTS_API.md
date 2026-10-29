@@ -1,0 +1,13 @@
+# Điện thoại, báo cáo và API tích hợp
+
+`/m/` dùng cùng tài khoản/phạm vi E. OPERATOR/ENGINEER có quyền tạo phiếu theo nhà máy được giao; VIEWER chỉ đọc. Bản đồ Leaflet nội bộ không phụ thuộc CDN: lớp pin/DCL/mối nối/UAV; tìm tài sản đã tải, GPS có vòng sai số, hướng theo Bắc thật và khoảng cách đường thẳng. Định vị cần HTTPS và quyền trình duyệt. Không dùng khoảng cách này thay tuyến đi an toàn. Dữ liệu không có GPS không tạo vị trí giả. Lớp pin tối đa 5000 mục; thông báo rõ khi giới hạn.
+
+Phiếu: tạo pin/DCL, phạm vi, xem ảnh/Vision/nhiệt, ảnh gốc JPEG và R-JPEG tải qua `/api/workspace/tasks/:id/photos`. Kiểm tra quyền trước khi đọc multipart. Không có phân tích nhiệt từ ảnh điện thoại không radiometric. IndexedDB lưu ảnh chờ theo user ID và task ID; chỉ xóa sau created/duplicate, giữ file khi lỗi, tuần tự gửi lại khi có mạng; server vẫn kiểm tra quyền lại mỗi upload. Không tự chuyển ảnh trùng của phiếu khác. Shell service worker không cache API/ảnh riêng tư; không cung cấp đăng nhập offline. Ảnh xếp hàng còn tồn tại sau reload, cần đăng nhập lại khi online. Dữ liệu trên thiết bị cần bảo vệ bằng khóa thiết bị; xóa dữ liệu trình duyệt sẽ mất ảnh chưa gửi.
+
+Word/PDF: `/api/workspace/tasks/:id/report.docx|pdf`, có ảnh gốc, vị trí/chất lượng/GPS thiếu, phát hiện/model/xác nhận, số đo nhiệt, người phụ trách và ô ký **chưa ký**. Phụ lục tối đa 100 ảnh đầu (nêu trong báo cáo); danh sách dữ liệu bao gồm toàn bộ ảnh. PDF cần font Unicode DejaVu Sans (Docker có cài); không giả chữ ký hay dùng HTML đổi đuôi file. Link cả dashboard và mobile. `/statistics?days=30` lọc đơn vị/nhà máy và kỳ SQL.
+
+API mở: `/openapi.json`, Bearer `uavk_...`; ADMIN cấp một lần ở trang quản trị cho tài khoản dịch vụ không ADMIN đã đổi mật khẩu, scope/key không vượt user, hết hạn tối đa 365 ngày, SHA256 DB, thu hồi và 120 request/phút/key. Khóa chỉ dùng `/api/open/v1`, không dùng legacy/điều khiển UAV. Khi mật khẩu/quyền/user thay đổi, key cũ hết hiệu lực.
+
+Đồng bộ chung: PUT `/api/open/v1/external-tasks/:externalId` (namespace theo user dịch vụ, giữ khi xoay khóa), gửi lại cùng payload không tạo trùng. Sửa cần revision vừa GET; conflict 409, không ghi đè thay đổi của kỹ sư. GET phiếu/kết quả/thống kê/báo cáo để hệ thống ngoài kéo lại. Không có adapter PMIS cụ thể vì chưa có endpoint, schema, mapping tài sản hay chứng thực PMIS từ chủ hệ thống.
+
+Kiểm chứng: 71 test Node/MySQL đạt (0 skip), kiểm tra JPEG thật/dedup, DOCX có ảnh nhúng và văn bản tiếng Việt, PDF signature, cross-scope denied, API key/idempotency/revision/revoke. Chromium mobile 390px kiểm tra GPS fixture, bản đồ, ảnh lỗi tồn tại qua reload, retry và không gửi ảnh user khác. Chưa nghiệm thu GPS ngoài trời, Android/iOS thật, Word/Acrobat và SMTP/PMIS thực.

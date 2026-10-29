@@ -1,3 +1,5 @@
+> **Tài liệu cũ trước phần E/H/I.** Cổng, auth, mật khẩu và storage bên dưới có thể đã đổi. Dùng [README hiện tại](README.md) và [hướng dẫn vận hành](docs/OPERATIONS.md); không dùng hướng dẫn cũ để mở dịch vụ production.
+
 # 🚀 HƯỚNG DẪN ĐÓNG GÓI VÀ CÀI ĐẶT SERVER UAV NHANH NHẤT
 
 Tài liệu này hướng dẫn cách đưa toàn bộ hệ thống Server điều khiển UAV & phân tích ảnh nhiệt sang máy chủ (Server vật lý, VPS Cloud, hoặc máy tính trạm).

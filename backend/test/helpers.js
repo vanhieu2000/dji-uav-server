@@ -12,6 +12,7 @@ if (!/test/i.test(TEST_DB)) throw new Error('Tên CSDL test phải chứa "test"
 
 // Phải đặt trước khi nạp src/config/db.js
 process.env.MYSQL_DATABASE = TEST_DB;
+process.env.JWT_SECRET = require('crypto').randomBytes(32).toString('hex');
 process.env.BASEMAP_TILES_DIR = path.join(require('os').tmpdir(), `uav-test-tiles-${process.pid}`);
 process.env.WAYLINE_DIR = path.join(require('os').tmpdir(), `uav-test-waylines-${process.pid}`);
 process.env.MEDIA_DIR = path.join(require('os').tmpdir(), `uav-test-media-${process.pid}`, 'media');
@@ -87,18 +88,25 @@ async function startTestApp() {
     app.use('/api/substation', require('../src/routes/substation'));
     app.use('/api/assets', require('../src/routes/assets'));
     app.use('/api/basemaps', require('../src/routes/basemaps'));
+    app.use('/api/teams', require('../src/routes/teams'));
     app.use('/api/tickets', require('../src/routes/tickets'));
     app.use('/api/capture-profiles', require('../src/routes/captureProfiles'));
     app.use('/api/flight-plans', require('../src/routes/flightPlans'));
     app.use('/api/coverage', require('../src/routes/coverage'));
+    const monitoring = require('../src/services/liveMonitoring').createMonitoring({ query: require('../src/config/db').query });
+    app.use('/api/monitoring', require('../src/routes/monitoring').createRouter({ monitoring }));
+    app.use('/api/vision', require('../src/routes/vision'));
+    app.use('/api/ai', require('../src/routes/ai_bridge'));
+    app.use('/api/insights', require('../src/routes/insights'));
+    app.use('/api/reports', require('../src/routes/reports'));
     app.use('/api/flights', require('../src/routes/flights'));
     app.use('/api/datasets', require('../src/routes/datasets'));
     const server = await new Promise(resolve => {
         const s = app.listen(0, '127.0.0.1', () => resolve(s));
     });
     const base = `http://127.0.0.1:${server.address().port}`;
-    async function api(method, url, body) {
-        const init = { method, headers: {} };
+    async function api(method, url, body, headers = {}) {
+        const init = { method, headers: { ...headers } };
         if (body instanceof FormData) {
             init.body = body;
         } else if (body !== undefined) {
@@ -112,4 +120,11 @@ async function startTestApp() {
     return { server, base, api, close: () => new Promise(r => server.close(r)) };
 }
 
-module.exports = { TEST_DB, rootConfig, mysqlAvailable, resetTestDatabase, dropTestDatabase, startTestApp, fakeDjiJpeg };
+async function adminHeaders(){
+    const db=require('../src/config/db');
+    await db.query("INSERT IGNORE INTO users (user_id,username,password_hash,full_name,role) VALUES (1,'fixture-admin','not-a-runtime-password','Fixture Admin','ADMIN')");
+    const [user]=await db.query('SELECT * FROM users WHERE user_id=1');
+    return {Authorization:'Bearer '+await require('../src/routes/auth').issueToken(user)};
+}
+
+module.exports = { adminHeaders, TEST_DB, rootConfig, mysqlAvailable, resetTestDatabase, dropTestDatabase, startTestApp, fakeDjiJpeg };

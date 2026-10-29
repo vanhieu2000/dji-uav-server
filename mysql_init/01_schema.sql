@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 -- ==========================================================
 -- Hệ Thống Quản Lý UAV & Kiểm Tra Năng Lượng Mặt Trời / Dao Cách Ly
 -- Database Schema: dji_uav_management (18 Bảng Chuẩn Hoàn Chỉnh)

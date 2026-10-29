@@ -1,0 +1,10 @@
+THÔNG TIN CHẠY VÀ ĐĂNG NHẬP LOCAL
+
+1. Chạy CHAY_LOCAL.bat và dùng URL mà cửa sổ server in ra.
+2. Tài khoản tạo mới mặc định: local-admin (có thể đổi BOOTSTRAP_ADMIN_USER trong .env).
+3. Mật khẩu Web ban đầu được tạo riêng trên máy, lưu ở backend/data/local-admin-password.txt.
+   Nếu đã đổi mật khẩu Web, dùng mật khẩu mới; launcher không đặt lại tài khoản hiện có.
+4. Mật khẩu MySQL, mật khẩu Web và license DJI là các thông tin khác nhau.
+   Giữ chúng trên máy trong .env hoặc file bí mật; không đưa mật khẩu thực vào Git.
+5. Kết nối Mavic 3T dùng địa chỉ IP LAN của PC, đúng cổng launcher và phiên Pilot 2.
+   Hướng dẫn: docs/CHAY_LOCAL.md và docs/MAVIC_3T_LOCAL_TEST.md.

@@ -33,15 +33,17 @@
     add('device_sn', '#gis-fh-sn'); add('ticket_id', '#gis-fh-ticket'); add('from', '#gis-fh-from'); add('to', '#gis-fh-to');
     const res = await GIS.run(() => GIS.api('GET', `/api/flights?${qs}`));
     const rows = res ? res.data : [];
+    st.root.style.setProperty('--fh-list-height',rows.length?(Math.min(3,rows.length)*50+170)+'px':'110px');
     f.querySelector('#gis-fh-list').innerHTML = rows.length ? `<div class="tbl-wrap"><table>
-      <thead><tr><th>Bắt đầu</th><th>Máy bay</th><th>Phiếu</th><th class="num">Thời gian</th><th class="num">Ảnh</th><th>Kết thúc</th></tr></thead>
+      <thead><tr><th>Bắt đầu</th><th>Máy bay</th><th>Phiếu</th><th class="num">Thời gian</th><th class="num">Ảnh</th><th>Kết thúc</th><th></th></tr></thead>
       <tbody>${rows.map(r => `<tr data-id="${r.flight_session_id}" class="gis-fh-row">
         <td>${esc(dt(r.started_at))}</td>
-        <td><code>${esc(r.device_sn)}</code></td>
+        <td class="fh-device" title="${esc(r.device_sn)}"><code>${esc(r.device_sn)}</code></td>
         <td>${r.ticket_code ? esc(r.ticket_code) : '<span class="faint">–</span>'}</td>
         <td class="num">${r.ended_at ? esc(dur(r.duration_s)) : '<span class="tag ok">Đang bay</span>'}</td>
         <td class="num">${esc(r.photo_count)}</td>
         <td>${r.end_reason ? `<span class="tag ${r.end_reason === 'LANDED' ? 'ok' : 'warn'}">${esc(REASON[r.end_reason] || r.end_reason)}</span>` : ''}</td>
+        <td><button type="button" class="btn sm">Chi tiết</button></td>
       </tr>`).join('')}</tbody></table></div>`
       : '<div class="gis-empty">Chưa có chuyến bay nào. Chuyến bay được ghi tự động khi máy bay cất cánh trong lúc kết nối với server.</div>';
   }
@@ -144,7 +146,7 @@
     }
   }
 
-  async function openFlight(id) {
+  async function openFlight(id, details = false) {
     const req = ++st.reqId;
     const res = await GIS.run(() => GIS.api('GET', `/api/flights/${id}`));
     if (!res || req !== st.reqId) return;
@@ -152,6 +154,7 @@
     st.root.querySelectorAll('.gis-fh-row').forEach(r => r.classList.toggle('on', Number(r.dataset.id) === id));
     drawFlight(res.data);
     renderDetail(res.data);
+    if(details){const detail=st.root.querySelector('#gis-fh-detail');GIS.Compact?.reveal(detail,'Chi tiết chuyến bay');detail.closest('dialog')?.addEventListener('close',()=>{detail.hidden=true;},{once:true});}
   }
 
   GIS.FlightHistory = {
@@ -180,10 +183,10 @@
         root.querySelector('#gis-fh-filter').addEventListener('submit', e => { e.preventDefault(); loadList(); });
         root.querySelector('#gis-fh-list').addEventListener('click', e => {
           const row = e.target.closest('tr[data-id]');
-          if (row) openFlight(Number(row.dataset.id));
+          if (row) openFlight(Number(row.dataset.id),Boolean(e.target.closest('button')));
         });
         const plant = await GIS.getPlant();
-        const center = plant && plant.center_lat != null ? [plant.center_lat, plant.center_lng] : [11.8312, 106.5913];
+        const center = plant && plant.center_lat != null ? [plant.center_lat, plant.center_lng] : [16.0, 108.0];
         st.map = L.map(root.querySelector('#gis-fh-map'), { center, zoom: 17, maxZoom: 22 });
         const sat = (typeof BASEMAPS !== 'undefined' && BASEMAPS.satellite);
         if (sat) L.tileLayer(sat.url, { maxZoom: 22, maxNativeZoom: sat.native || 18, attribution: sat.attr }).addTo(st.map);

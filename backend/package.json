@@ -5,22 +5,48 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test --test-concurrency=1 test/unit.test.js test/api.test.js",
-    "migrate": "node src/db/migrate.js"
+    "test": "node --test --test-concurrency=1 test/unit.test.js test/device-control.test.js test/diagnostics.test.js test/local-storage.test.js test/api.test.js test/security.test.js test/production.test.js test/setup.test.js test/launcher.test.js",
+    "migrate": "node src/db/migrate.js",
+    "test:browser": "node test/browser-monitoring.cjs",
+    "admin:create": "node scripts/create-admin.js",
+    "test:mobile": "node test/browser-mobile.cjs",
+    "setup:local": "node scripts/setup-local.js",
+    "vendor:sync": "node scripts/vendor-ui.js",
+    "local": "node scripts/start-local.js",
+    "test:auth": "node test/browser-auth.cjs",
+    "test:workspace": "node test/browser-workspace.cjs",
+    "test:pilot": "node test/browser-pilot.cjs",
+    "test:accounts": "node test/browser-accounts.cjs",
+    "test:live": "node test/browser-live.cjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1156.0",
+    "@aws-sdk/client-sts": "3.1156.0",
     "adm-zip": "^0.6.1",
     "aedes": "^0.51.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
+    "docx": "9.14.0",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "mqtt": "^5.10.4",
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.12.0",
     "node-media-server": "^4.4.3",
+    "nodemailer": "10.2.1",
+    "pdfkit": "0.20.2",
     "ws": "^8.18.1",
     "yauzl": "3.4.0",
     "yazl": "3.3.1"
+  },
+  "devDependencies": {
+    "@e965/xlsx": "0.20.3",
+    "@geoman-io/leaflet-geoman-free": "2.20.4",
+    "flv.js": "1.6.2",
+    "leaflet": "1.9.4",
+    "playwright-core": "1.64.1"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
   }
 }

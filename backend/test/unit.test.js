@@ -326,11 +326,140 @@ test('flights.thin giữ điểm đầu, cuối và giới hạn số điểm', 
     assert.deepEqual(thin([1, 2], 5000), [1, 2]);
 });
 
-test('channelForTicket: kênh live riêng theo mã phiếu, giữ kênh đã đặt', () => {
-    const { channelForTicket } = require('../src/services/ticketService');
-    assert.equal(channelForTicket({ ticket_code: 'PKT-PIN-2026-001' }), 'pkt_pkt-pin-2026-001');
-    assert.equal(channelForTicket({ ticket_code: 'Phiếu A/1' }), 'pkt_phi_u_a_1');
-    assert.equal(channelForTicket({ ticket_code: 'X', livestream_channel: 'kenh_rieng' }), 'kenh_rieng');
-    assert.equal(channelForTicket({ ticket_code: 'A1', livestream_channel: 'm3t_live' }), 'pkt_a1');
-    assert.equal(channelForTicket({}), 'm3t_live');
+test('giám sát: kênh riêng theo phiếu/UAV, không dùng mã phiếu làm đường dẫn', () => {
+    const { channelFor, hmsItems } = require('../src/services/liveMonitoring');
+    assert.notEqual(channelFor(1, 'UAV-A'), channelFor(1, 'UAV-B'));
+    assert.notEqual(channelFor(1, 'UAV-A'), channelFor(2, 'UAV-A'));
+    assert.equal(channelFor(1, 'UAV-A'), channelFor(1, 'UAV-A'));
+    assert.throws(() => channelFor(0, '../bad'));
+    assert.deepEqual(hmsItems({ list: [{ code: '123', level: 2, message: 'Pin yếu' }, {}, null] }),
+        [{ code: '123', level: 2, message: 'Pin yếu', device_sn: null }]);
+});
+
+test('giám sát: publisher đúng kênh/phiên; không nhầm HTTP accepted thành STREAMING', async () => {
+    const { createMonitoring, channelFor } = require('../src/services/liveMonitoring');
+    const row = { stream_id: 1, ticket_id: 2, device_sn: 'UAV-A', channel: channelFor(2, 'UAV-A') };
+    const events = [];
+    const m = createMonitoring({ query: async () => [row], onEvent: e => events.push(e) });
+    assert.equal((await m.streams(2))[0].status, 'STOPPED');
+    await m.publisherEvent('start', { id: 'pub1', streamPath: '/live/' + row.channel });
+    assert.equal((await m.streams(2))[0].status, 'STREAMING');
+    await m.publisherEvent('start', { id: 'pub2', streamPath: '/live/' + row.channel });
+    await m.publisherEvent('stop', { id: 'pub2', streamPath: '/live/' + row.channel });
+    assert.equal((await m.streams(2))[0].status, 'STREAMING');
+    await m.publisherEvent('stop', { id: 'pub1', streamPath: '/live/' + row.channel });
+    assert.equal((await m.streams(2))[0].status, 'STOPPED');
+    assert.deepEqual(events.map(e => e.type), ['stream_started', 'stream_stopped']);
+    assert.equal(await m.publisherEvent('start', { id: 'x', streamPath: '/live/m3t_live' }), null);
+});
+
+test('live capability lấy video_index đã báo cáo, không dựng wide/thermal giả', () => {
+    const { videoIds } = require('../src/services/liveCapabilities');
+    assert.deepEqual(videoIds(null), []);
+    assert.deepEqual(videoIds({ device_list: [{ sn: 'UAV-A', camera_list: [{ camera_index: '67-0-0', video_list: [{ video_index: 'normal-0' }] }] }] }), ['UAV-A/67-0-0/normal-0']);
+});
+
+test('dashboard: tất cả script inline và module mới parse được', () => {
+    const vm = require('vm');
+    const html = fs.readFileSync(path.join(__dirname, '../public/dashboard/index.html'), 'utf8');
+    let count = 0;
+    for (const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
+        if (m[1].trim()) { new vm.Script(m[1]); count++; }
+    }
+    assert.ok(count > 0);
+    new vm.Script(fs.readFileSync(path.join(__dirname, '../public/dashboard/js/gis/gis-live-monitor.js'), 'utf8'));
+});
+
+test('Vision contract: bbox, nguồn ảnh, model version, ngưỡng cấu hình', () => {
+    const { resultInput, severity, legacyType } = require('../src/services/visionContract');
+    const body = { contract_version:'2.0',job_id:require('crypto').randomUUID(),media_id:1,input_sha256:'a'.repeat(64),result_version:1,model_version:'fixture',status:'SUCCEEDED',detections:[] };
+    assert.equal(resultInput(body).detections.length,0);
+    assert.throws(()=>resultInput({...body,model_version:''}));
+    assert.throws(()=>resultInput({...body,result_version:0}));
+    assert.equal(severity({confidence:1,max_temp_c:100},null),null);
+    assert.equal(severity({confidence:.9,max_temp_c:0},{enabled:1,min_confidence:.8,max_temp_c:0}), 'CRITICAL');
+    assert.equal(legacyType('BYPASS_DIODE'),'HOTSPOT_PANEL');
+});
+
+test('chiếu pixel: không dùng RelativeAltitude thay AGL, không đoán tọa độ khi thiếu RTK/calibration', () => {
+    const { projectPixel } = require('../src/services/imageProjection');
+    const d={bbox:[4,4,2,2],image_width:10,image_height:10};
+    const m={latitude:10,longitude:106,rtk_flag:50,gimbal_pitch:-90,gimbal_yaw:0,gimbal_roll:0,lens:'IR'};
+    const c={confirmed:true,agl_m:30,hfov_deg:60,vfov_deg:50,image_width:10,image_height:10,lens:'IR'};
+    assert.equal(projectPixel(m,d,null),null);
+    assert.equal(projectPixel({...m,rtk_flag:0},d,c),null);
+    assert.equal(projectPixel({...m,gimbal_pitch:0},d,c),null);
+    assert.equal(projectPixel({...m,lens:'WIDE'},d,c),null);
+    const p=projectPixel(m,d,c);assert.equal(p.latitude,10);assert.equal(p.longitude,106);
+    assert.ok(projectPixel(m,{...d,bbox:[8,4,1,2]},c).longitude>106);
+});
+
+test('media assignment: không dùng phiên mới nhất nếu thiếu serial/ngữ cảnh, không chọn giữa hai chuyến', async () => {
+    const {resolveAssignment}=require('../src/services/mediaAssignment');
+    const meta={captured_at:new Date('2026-10-26T10:02:00Z')};
+    let calls=0;
+    const none=await resolveAssignment(async()=>{calls++;return [];},{},meta);
+    assert.equal(calls,0);assert.equal(none.ticketId,null);
+    const ambiguous=await resolveAssignment(async()=>[{flight_session_id:1,ticket_id:1},{flight_session_id:2,ticket_id:2}],{deviceSn:'UAV'},meta);
+    assert.equal(ambiguous.ticketId,null);assert.equal(ambiguous.flightSessionId,null);
+});
+
+test('thermal parser: thiếu SDK không trả nhiệt từ công thức fallback chưa xác minh', () => {
+    const {parseDjiThermalJpeg}=require('../src/services/thermalParser');
+    const file=path.join(__dirname,'fixtures/vision-input.jpg');
+    assert.equal(parseDjiThermalJpeg(file),null);
+});
+
+test('xu hướng nhiệt: nhóm theo chu kỳ, không dự báo khi nhiệt giảm/thiếu thời gian', () => {
+    const {linearTrend}=require('../src/services/temperatureHistory');
+    const p=(id,date,temp)=>({history_id:id,ticket_id:id,captured_at:date,max_temp_c:temp});
+    const result=linearTrend([p(1,'2026-10-01',60),p(2,'2026-10-02',80)],100);
+    assert.equal(result.cycles,2);assert.equal(result.slope_c_per_day,20);assert.equal(result.estimated_days_to_threshold,1);
+    assert.equal(linearTrend([p(1,'2026-10-01',80),p(2,'2026-10-02',60)],100).estimated_days_to_threshold,null);
+    assert.equal(linearTrend([p(1,'2026-10-01',60),p(2,'2026-10-01',80)],100).slope_c_per_day,null);
+    assert.equal(linearTrend([p(1,'2026-10-01',0)],100).last_temp_c,0);
+    assert.equal(linearTrend([p(1,null,80)],100).cycles,0);
+});
+
+test('NMS v4: trạng thái reconnect và publisher đã được chấp nhận thay phiên cũ', async () => {
+    const {createMonitoring,channelFor}=require('../src/services/liveMonitoring');
+    const channel=channelFor(1,'NATIVE'),row={ticket_id:1,channel};
+    const m=createMonitoring({query:async()=>[row]});let nativeStatus='publishing';
+    await m.publisherEvent('start',{id:'old',streamPath:'/live/'+channel,isPublisher:true,broadcast:{getPublishStatus:()=>nativeStatus}});
+    nativeStatus='reconnecting';assert.equal((await m.streams(1))[0].status,'RECONNECTING');
+    await m.publisherEvent('start',{id:'rejected',streamPath:'/live/'+channel,isPublisher:false});
+    assert.equal((await m.streams(1))[0].status,'RECONNECTING');
+    await m.publisherEvent('start',{id:'resumed',streamPath:'/live/'+channel,isPublisher:true,broadcast:{getPublishStatus:()=> 'publishing'}});
+    await m.publisherEvent('stop',{id:'old',streamPath:'/live/'+channel});
+    assert.equal((await m.streams(1))[0].status,'STREAMING');
+    await m.publisherEvent('stop',{id:'resumed',streamPath:'/live/'+channel});
+    assert.equal((await m.streams(1))[0].status,'STOPPED');
+});
+
+ test('backup AES-GCM: roundtrip và chống archive bị sửa; không ghi đè',async()=>{
+ const fs=require('fs'),os=require('os'),path=require('path'),{archive}=require('../../ops/archive');const root=fs.mkdtempSync(path.join(os.tmpdir(),'uav-backup-test-'));
+ try{const input=path.join(root,'data'),key=path.join(root,'key'),encrypted=path.join(root,'enc'),output=path.join(root,'out');fs.writeFileSync(input,Buffer.alloc(1024*1024,73));fs.writeFileSync(key,require('crypto').randomBytes(32));await archive('encrypt',input,encrypted,key);await archive('decrypt',encrypted,output,key);assert.deepEqual(fs.readFileSync(output),fs.readFileSync(input));await assert.rejects(archive('decrypt',encrypted,output,key));const data=fs.readFileSync(encrypted);data[50]^=1;fs.writeFileSync(encrypted,data);await assert.rejects(archive('decrypt',encrypted,path.join(root,'bad'),key));assert.equal(fs.existsSync(path.join(root,'bad')),false);}finally{fs.rmSync(root,{recursive:true,force:true});}
+ });
+ test('stream grant: audience play không được publish, đúng path/session và thu hồi',()=>{
+ const streams=require('../src/services/streamAccess'),user={user_id:123,session_id:'fixture-session',auth_version:0};const path='/live/ticket_1_0123456789abcdef';
+ const q=streams.mint(path,'play',user),session={id:'fixture-stream',streamPath:path,streamQuery:Object.fromEntries(new URLSearchParams(q))};assert.equal(streams.allow(session,'publish'),false);
+ const next={id:'fixture-stream-2',streamPath:path,streamQuery:Object.fromEntries(new URLSearchParams(q))};assert.equal(streams.allow(next,'play'),true);streams.revoke({user_id:123});assert.equal(streams.allow({...next,streamQuery:Object.fromEntries(new URLSearchParams(q))},'play'),false);
+ });
+ test('log MQTT không lộ STS/token/mật khẩu',()=>{
+ const {redact}=require('../src/middleware/transportSecurity');assert.deepEqual(redact({data:{credentials:{access_key_secret:'SECRET'},token:'SECRET',temperature:34}}),{data:{credentials:'[redacted]',token:'[redacted]',temperature:34}});
+ });
+
+test('Vietnamese text: reverse lossless latin1/CP1252 and preserve clean text',()=>{
+ const {repair,score}=require('../src/services/vietnameseText'),iconv=require('iconv-lite');
+ const expected='Nhà máy điện Mặt Trời Lộc Ninh 1';
+ for(const encoding of ['latin1','win1252']){const source=encoding==='win1252'?'Nhà máy điện Lộc Ninh 1':expected;const bad=iconv.decode(Buffer.from(source),encoding);assert.equal(repair(bad).after,source);assert.equal(score(repair(bad).after),0);}
+ assert.equal(repair(iconv.decode(Buffer.from(expected),'win1252')),null); // undefined CP1252 byte already replaced by U+FFFD
+ const mixed='NhÃ  MÃ¡y Ä\u0090iá»‡n Máº·t Trá»\u009di Lá»™c Ninh 1';assert.equal(repair(mixed).after,'Nhà Máy Điện Mặt Trời Lộc Ninh 1');
+ for(const text of ['ĐÃ KẾT NỐI','Tiếng Việt: Ắ Ằ Ẳ Ẵ Ặ Ấ Ế Ồ Ớ Ừ Ỹ đ','Café — Nguyễn Văn Đức','ASCII 123','https://example.com/a'])assert.equal(repair(text),null);
+ assert.equal(repair('Mất dữ liệu �'),null);assert.ok(score('Mất dữ liệu �'));
+});
+
+test('bundled Vietnamese fonts contain all Vietnamese letters and keep upstream checksums',()=>{
+ const fontkit=require('fontkit'),crypto=require('crypto'),root=path.resolve(__dirname,'../public/dashboard/assets/fonts'),manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.json')));
+ for(const [file,hash]of Object.entries(manifest.sha256)){const bytes=fs.readFileSync(path.join(root,file));assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),hash);const font=fontkit.create(bytes);for(const c of 'ăâđêôơưĂÂĐÊÔƠƯàáảãạèéẻẽẹìíỉĩịòóỏõọùúủũụỳýỷỹỵ'+Array.from({length:90},(_,i)=>String.fromCodePoint(0x1ea0+i)).join(''))assert.ok(font.hasGlyphForCodePoint(c.codePointAt(0)),file+' missing '+c);}
 });

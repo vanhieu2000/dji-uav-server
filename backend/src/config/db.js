@@ -7,6 +7,7 @@ const dbConfig = {
     user: process.env.MYSQL_USER || 'root',
     password: process.env.MYSQL_PASSWORD || '',
     database: process.env.MYSQL_DATABASE || 'dji_uav_management',
+    charset: 'utf8mb4',
     waitForConnections: true,
     connectionLimit: 20,
     queueLimit: 0,

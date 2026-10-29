@@ -23,15 +23,14 @@ const ingest = require('../services/mediaIngest');
 
 const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, '..', '..', 'uploads', 'media');
 const TMP_DIR = path.join(path.dirname(MEDIA_DIR), 'tmp');
-const PARTS_DIR = path.join(TMP_DIR, 's3-parts');
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
-const S3_PATHS = ['/dji-media/*', '/media/*', '/*/media/*', '/uploads/media/*'];
-const UPLOAD_ID_RE = /^[a-f0-9]{32}$/;
 
-[MEDIA_DIR, TMP_DIR, PARTS_DIR].forEach(d => fs.mkdirSync(d, { recursive: true }));
+[MEDIA_DIR, TMP_DIR].forEach(d => fs.mkdirSync(d, { recursive: true }));
 
 const router = express.Router();
 let onIngested = () => {};
+let onUploadEvent = () => {};
+router.setOnUploadEvent = fn => { onUploadEvent = fn; };
 /** server.js đăng ký hàm này để phát WebSocket và cập nhật danh sách ảnh trong bộ nhớ. */
 router.setOnIngested = fn => { onIngested = fn; };
 
@@ -45,104 +44,33 @@ function safeTarget(originalName) {
     return { name, full: path.join(MEDIA_DIR, name) };
 }
 
-async function ingestSaved(localPath, fileName, originalName, extra = {}) {
+function namespaceOf(value) {
+    const m=/(?:^|\/)([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(?:\/|$)/i.exec(value||'');
+    return m?m[1]:null;
+}
+async function recordUpload(result,originalName,extra) {
+    let ticket=extra.ticketId||result.media.ticket_id||null;
+    if(!ticket && extra.uploadNamespace){const rows=await query('SELECT ticket_id FROM pilot_sessions WHERE upload_namespace=?',[extra.uploadNamespace]);ticket=rows[0]?.ticket_id||null;}
+    const [existing]=ticket?await query('SELECT ticket_id FROM inspection_tickets WHERE ticket_id=?',[ticket]):[];
+    if(ticket&&!existing)ticket=null;
+    const note=result.status==='failed'?'Không xử lý được file; cần kiểm tra ảnh gốc':result.status==='duplicate'&&extra.ticketId&&result.media.ticket_id!==extra.ticketId?'Ảnh đã thuộc phiếu khác, không tự chuyển phiếu':null;
+    const r=await query('INSERT INTO media_ingest_events (media_id,ticket_id,original_name,status,note) VALUES (?,?,?,?,?)',
+        [result.media.media_id||null,ticket,String(originalName).slice(0,255),result.status,note]);
+    onUploadEvent({type:'media_ingest',data:{ingest_id:r.insertId,ticket_id:ticket,status:result.status,media_id:result.media.media_id||null,note}});
+}
+async function ingestSaved(localPath,fileName,originalName,extra={}) {
+    let r;
     try {
-        const r = await ingest.ingestFile({ localPath, fileName, originalName, ...extra });
-        if (r.status === 'duplicate') {
-            fs.rm(localPath, { force: true }, () => {}); // bản trùng: giữ bản đã có
-        } else {
-            onIngested(r.media);
-        }
-        return r;
-    } catch (err) {
-        console.error('[Nhận ảnh] Lỗi xử lý', originalName, err.message);
-        return { status: 'failed', error: err.message, media: { file_name: fileName } };
+        r=await ingest.ingestFile({localPath,fileName,originalName,...extra});
+        if(r.status==='duplicate'&&!r.restored)fs.rm(localPath,{force:true},()=>{});
+        else onIngested(r.media);
+    } catch(err){
+        console.error('[Nhận ảnh] Không xử lý được file:',err.code||err.name);
+        r={status:'failed',error:'Không xử lý được ảnh gốc',media:{file_name:fileName}};
     }
+    await recordUpload(r,originalName,extra);
+    return r;
 }
-
-/* ---------------- S3 giả lập ---------------- */
-
-const xmlEsc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
-
-router.post(S3_PATHS, (req, res, next) => {
-    const key = req.path;
-    if (req.query.uploads !== undefined) {
-        const uploadId = crypto.randomBytes(16).toString('hex');
-        fs.mkdirSync(path.join(PARTS_DIR, uploadId), { recursive: true });
-        res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
-<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-  <Bucket>dji-media</Bucket><Key>${xmlEsc(key)}</Key><UploadId>${uploadId}</UploadId>
-</InitiateMultipartUploadResult>`);
-        return;
-    }
-    if (req.query.uploadId) {
-        completeMultipart(req, res).catch(err => {
-            console.error('[S3 ghép phần] Lỗi', err.message);
-            res.status(500).type('application/xml').send(`<Error><Message>${xmlEsc(err.message)}</Message></Error>`);
-        });
-        return;
-    }
-    next();
-});
-
-async function completeMultipart(req, res) {
-    const uploadId = String(req.query.uploadId);
-    if (!UPLOAD_ID_RE.test(uploadId)) throw new Error('UploadId không hợp lệ');
-    const dir = path.join(PARTS_DIR, uploadId);
-    if (!fs.existsSync(dir)) throw new Error('Không tìm thấy phiên tải nhiều phần');
-    const parts = fs.readdirSync(dir).filter(f => /^\d+\.part$/.test(f)).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-    if (!parts.length) throw new Error('Chưa nhận phần nào');
-    const target = safeTarget(req.path);
-    const out = fs.createWriteStream(target.full);
-    for (const p of parts) {
-        await new Promise((resolve, reject) => {
-            const rs = fs.createReadStream(path.join(dir, p));
-            rs.on('error', reject);
-            rs.on('end', resolve);
-            rs.pipe(out, { end: false });
-        });
-    }
-    await new Promise((resolve, reject) => { out.on('error', reject); out.end(resolve); });
-    fs.rmSync(dir, { recursive: true, force: true });
-    await ingestSaved(target.full, target.name, path.basename(req.path), { source: 'CLOUD' });
-    res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
-<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-  <Bucket>dji-media</Bucket><Key>${xmlEsc(req.path)}</Key><ETag>"${crypto.randomBytes(16).toString('hex')}"</ETag>
-</CompleteMultipartUploadResult>`);
-}
-
-router.put(S3_PATHS, (req, res) => {
-    const isPart = req.query.uploadId && req.query.partNumber;
-    let dest;
-    let target = null;
-    if (isPart) {
-        const uploadId = String(req.query.uploadId);
-        const partNo = parseInt(req.query.partNumber, 10);
-        if (!UPLOAD_ID_RE.test(uploadId) || !(partNo >= 1 && partNo <= 10000)) {
-            res.status(400).send('Bad part');
-            return;
-        }
-        const dir = path.join(PARTS_DIR, uploadId);
-        fs.mkdirSync(dir, { recursive: true });
-        dest = path.join(dir, `${partNo}.part`);
-    } else {
-        target = safeTarget(req.path);
-        dest = target.full;
-    }
-    let size = 0;
-    const ws = fs.createWriteStream(dest);
-    req.on('data', chunk => {
-        size += chunk.length;
-        if (size > MAX_FILE_BYTES) { req.destroy(); ws.destroy(); fs.rm(dest, { force: true }, () => {}); }
-    });
-    req.pipe(ws);
-    ws.on('error', err => { if (!res.headersSent) res.status(500).send(err.message); });
-    ws.on('finish', async () => {
-        const etag = `"${crypto.randomBytes(16).toString('hex')}"`;
-        if (!isPart) await ingestSaved(target.full, target.name, path.basename(req.path), { source: 'CLOUD' });
-        res.set({ ETag: etag, 'Access-Control-Expose-Headers': 'ETag' }).status(200).send('');
-    });
-});
 
 /* ---------------- Upload dạng form ---------------- */
 
@@ -159,10 +87,12 @@ router.post([
     '/media/api/v1/workspaces/:workspace_id/files/upload',
     '/manage/api/v1/workspaces/:workspace_id/files/upload',
     '/api/dji/media', '/api/media/upload', '/media/upload'
-], uploadForm.single('file'), asyncHandler(async (req, res) => {
+], require('../services/storageQuota').middleware,uploadForm.single('file'), asyncHandler(async (req, res) => {
     if (!req.file) return res.status(400).json({ code: 400, message: 'Không có file' });
     const t = moveIn(req.file);
-    const r = await ingestSaved(t.full, t.name, req.file.originalname, { source: 'CLOUD' });
+    const token=require('./auth').decodeToken(req.get('x-auth-token')||(req.get('authorization')||'').replace(/^Bearer\s+/i,''));
+    const session=token?.pilot_session_id?(await query('SELECT upload_namespace FROM pilot_sessions WHERE session_id=? AND user_id=?',[token.pilot_session_id,token.user_id]))[0]:null;
+    const r = await ingestSaved(t.full,t.name,req.file.originalname,{source:'CLOUD',uploadNamespace:session?.upload_namespace||namespaceOf(req.path)});
     if (r.status === 'failed') return res.status(500).json({ code: 500, message: 'Không xử lý được ảnh' });
     ok(res, { file_id: String(r.media.media_id), file_url: r.media.file_url, duplicate: r.status === 'duplicate' });
 }));
@@ -171,6 +101,23 @@ router.post([
 
 router.post(['/media/api/v1/workspaces/:workspace_id/upload-callback', '/manage/api/v1/workspaces/:workspace_id/upload-callback'], asyncHandler(async (req, res) => {
     const b = req.body || {};
+    let session = req.pilotSession;
+    if(!session && typeof b.object_key === 'string'){
+      const ns = namespaceOf(b.object_key);
+      if(ns){
+        const rows = await query('SELECT * FROM pilot_sessions WHERE upload_namespace=? AND ended_at IS NULL ORDER BY session_id DESC LIMIT 1', [ns]);
+        if(rows.length) session = rows[0];
+      }
+    }
+    if(session && typeof b.object_key === 'string'){
+      try{
+        const r = await require('../services/objectStorage').receive(session, b.object_key);
+        return ok(res, { media_id: r.media.media_id, status: r.status });
+      }catch(e){
+        console.warn('[Upload Callback] Lỗi nhận ảnh (đã bỏ qua lỗi để giữ phiên ổn định):', e.message);
+        return res.json({ code: 0, message: 'Ảnh đang được xử lý ngầm', data: {} });
+      }
+    }
     const name = b.name || (b.object_key ? path.basename(b.object_key) : null);
     const flightId = b.ext && b.ext.flight_id;
     const n = await ingest.attachFlightId(name, flightId);
@@ -180,7 +127,7 @@ router.post(['/media/api/v1/workspaces/:workspace_id/upload-callback', '/manage/
 
 router.post(['/media/api/v1/workspaces/:workspace_id/fast-upload', '/manage/api/v1/workspaces/:workspace_id/fast-upload'], asyncHandler(async (req, res) => {
     const name = req.body && req.body.name;
-    const rows = name ? await query('SELECT media_id FROM media_files WHERE original_name = ? OR file_name = ? LIMIT 1', [name, name]) : [];
+    const rows = name ? await query('SELECT media_id FROM media_files WHERE (original_name = ? OR file_name = ?)'+(req.pilotSession?' AND ticket_id=?':'')+' LIMIT 1', req.pilotSession?[name,name,req.pilotSession.ticket_id]:[name,name]) : [];
     if (rows.length) return res.json({ code: 0, message: 'success', data: {} });
     // Chưa có: trả mã khác 0 để Pilot 2 tải file thật (theo DJI Cloud API demo)
     res.json({ code: 513000, message: `${name || 'file'} don't exist.`, data: null });
@@ -202,7 +149,7 @@ function receiveFiles(req, res, next) {
     });
 }
 
-router.post('/api/media/import', receiveFiles, asyncHandler(async (req, res) => {
+router.post('/api/media/import',require('../services/storageQuota').middleware, receiveFiles, asyncHandler(async (req, res) => {
     const files = req.files || [];
     try {
         const ticketId = v.parseId(req.body && req.body.ticket_id, 'phiếu kiểm tra');
@@ -234,3 +181,7 @@ router.post('/api/media/import', receiveFiles, asyncHandler(async (req, res) => 
 
 module.exports = router;
 module.exports.MEDIA_DIR = MEDIA_DIR;
+// Tái sử dụng bộ nhận ảnh thật cho endpoint đã kiểm tra phạm vi trước khi đọc multipart.
+module.exports.receiveFiles=receiveFiles;
+module.exports.moveIn=moveIn;
+module.exports.ingestSaved=ingestSaved;

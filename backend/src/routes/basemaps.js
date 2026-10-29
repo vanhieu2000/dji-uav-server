@@ -61,9 +61,11 @@ function removeDir(dir) {
 async function saveBaseMap({ mapCode, mapName, scheme, plantId, stats }) {
     const s = stats.summary(scheme);
     if (!s) throw new v.ValidationError('Không tìm thấy ô ảnh nào. Cấu trúc cần có dạng {z}/{x}/{y}.png');
+    // Chỉ cho phép duy nhất 1 bản đồ tải lên hoạt động: bản đồ mới tải lên sẽ làm mặc định
+    await query('UPDATE base_maps SET is_active = 0');
     const result = await query(
-        `INSERT INTO base_maps (plant_id, map_code, map_name, scheme, tile_ext, min_zoom, max_zoom, bounds_json, tile_count, size_bytes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO base_maps (plant_id, map_code, map_name, scheme, tile_ext, min_zoom, max_zoom, bounds_json, tile_count, size_bytes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [plantId, mapCode, mapName, scheme, s.tile_ext, s.min_zoom, s.max_zoom, JSON.stringify(s.bounds), s.tile_count, s.size_bytes]
     );
     const rows = await query('SELECT * FROM base_maps WHERE map_id = ?', [result.insertId]);
@@ -157,8 +159,8 @@ router.put('/:id', asyncHandler(async (req, res) => {
     await withTransaction(async (conn) => {
         const [rows] = await conn.execute('SELECT map_id, plant_id FROM base_maps WHERE map_id = ?', [id]);
         if (!rows.length) throw new NotFoundError('Không tìm thấy bản đồ nền');
-        // Mỗi nhà máy chỉ 1 bản đồ nền mặc định
-        if (setActive === true) await conn.execute('UPDATE base_maps SET is_active = 0 WHERE plant_id <=> ?', [rows[0].plant_id]);
+        // Chỉ cho phép duy nhất 1 bản đồ nền tải lên được kích hoạt
+        if (setActive === true) await conn.execute('UPDATE base_maps SET is_active = 0');
         if (setActive !== null) f.is_active = setActive ? 1 : 0;
         const cols = Object.keys(f);
         if (!cols.length) throw new v.ValidationError('Không có trường nào để cập nhật');

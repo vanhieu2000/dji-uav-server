@@ -1,0 +1,9 @@
+/* Be Vietnam Pro, SIL Open Font License. Self-hosted; includes Vietnamese glyphs. */
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:400;font-display:swap;src:url('../assets/fonts/BeVietnamPro-Regular.ttf') format('truetype')}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:500;font-display:swap;src:url('../assets/fonts/BeVietnamPro-Medium.ttf') format('truetype')}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:600;font-display:swap;src:url('../assets/fonts/BeVietnamPro-SemiBold.ttf') format('truetype')}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:700;font-display:swap;src:url('../assets/fonts/BeVietnamPro-Bold.ttf') format('truetype')}
+:root{--font-ui:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',sans-serif}
+html body,body button,body input,body select,body textarea,.leaflet-container,.leaflet-tooltip,.leaflet-popup-content,svg text,#account-overlay,#account-overlay input,#account-overlay button{font-family:var(--font-ui)}
+/* Allow room for stacked Vietnamese accents; keep native input controls usable. */
+body{line-height:1.6}button,input,select,textarea{line-height:1.5}h1,h2,h3{line-height:1.4}

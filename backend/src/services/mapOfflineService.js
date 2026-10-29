@@ -14,6 +14,7 @@ let lastCheckTime = null;
 async function checkInternetConnectivity() {
     return new Promise((resolve) => {
         const req = https.get('https://tile.openstreetmap.org/0/0/0.png', { timeout: 3000 }, (res) => {
+            res.resume();
             isOnline = (res.statusCode === 200 || res.statusCode === 304);
             lastCheckTime = new Date();
             resolve(isOnline);
@@ -35,6 +36,9 @@ async function checkInternetConnectivity() {
 // Lấy trạng thái bản đồ hiện tại
 function getMapStatus() {
     return {
+        scope:'server-osm-probe',
+        affects_basemap:false,
+        probe_url:'https://tile.openstreetmap.org/0/0/0.png',
         is_online: isOnline,
         mode: isOnline ? 'ONLINE' : 'OFFLINE',
         last_checked: lastCheckTime,
@@ -61,14 +65,14 @@ function countLocalTiles(dir) {
 // Khởi chạy tiến trình kiểm tra mạng định kỳ mỗi 60 giây
 function startMapHealthCheck(broadcastFn) {
     checkInternetConnectivity().then(online => {
-        console.log(`[Map Service] Trạng thái bản đồ ban đầu: ${online ? 'ONLINE (Đã có Internet)' : 'OFFLINE (Tự động chuyển sang Tile cục bộ)'}`);
+        console.log(`[Map Service] Trạng thái bản đồ ban đầu: ${online ? 'ONLINE (Đã có Internet)' : 'Server không truy cập được OSM; không đổi lớp bản đồ trình duyệt'}`);
     });
 
     setInterval(async () => {
         const prevStatus = isOnline;
         const currentStatus = await checkInternetConnectivity();
         if (prevStatus !== currentStatus) {
-            console.log(`[Map Service] 🔄 Thay đổi mạng bản đồ: ${currentStatus ? 'Đã phục hồi ONLINE' : 'Mất mạng -> Chuyển sang OFFLINE'}`);
+            console.log(`[Map Service] 🔄 Thay đổi mạng bản đồ: ${currentStatus ? 'Đã phục hồi ONLINE' : 'Server không truy cập được OSM; không tự đổi lớp nền'}`);
             if (broadcastFn) {
                 broadcastFn({
                     type: 'map_mode_changed',

@@ -1,13 +1,15 @@
 /**
  * Nhận ảnh vào hệ thống – dùng chung cho mọi đường vào (Giai đoạn A3):
- *   - DJI Pilot 2 tự tải lên trong lúc bay (S3 giả lập / upload multipart)
+ *   - DJI Pilot 2 tự tải lên trong lúc bay (signed upload native / multipart)
  *   - Nhập từ thẻ nhớ qua web
  *   - Quét thư mục ảnh khi khởi động
  * Không gán cứng bất kỳ giá trị nào: vị trí, gimbal, RTK lấy từ XMP trong ảnh;
  * nhiệt độ đọc bằng DJI Thermal SDK; phiếu lấy từ phiên đăng nhập Pilot hoặc người nhập chọn.
  */
 const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
+const { resolveAssignment } = require('./mediaAssignment');
 const { query } = require('../config/db');
 const { readMeta, photoPointFromName } = require('./djiImageMeta');
 
@@ -34,8 +36,8 @@ async function startPilotSession({ user, ticketId, rcSn, aircraftSn }) {
     // Một tay điều khiển chỉ có 1 phiên đang mở
     if (rcSn) await query('UPDATE pilot_sessions SET ended_at = NOW() WHERE ended_at IS NULL AND rc_sn = ?', [rcSn]);
     const r = await query(
-        'INSERT INTO pilot_sessions (user_id, username, ticket_id, rc_sn, aircraft_sn) VALUES (?, ?, ?, ?, ?)',
-        [user && user.user_id ? user.user_id : null, user ? user.username : null, ticketId || null, rcSn || null, aircraftSn || null]
+        'INSERT INTO pilot_sessions (user_id, username, ticket_id, rc_sn, aircraft_sn, upload_namespace) VALUES (?, ?, ?, ?, ?, ?)',
+        [user && user.user_id ? user.user_id : null, user ? user.username : null, ticketId || null, rcSn || null, aircraftSn || null, crypto.randomUUID()]
     );
     return r.insertId;
 }
@@ -47,7 +49,7 @@ async function activeSession(sn) {
     if (sn) { sql += ' AND (aircraft_sn = ? OR rc_sn = ?)'; params.push(sn, sn); }
     const rows = await query(`${sql} ORDER BY session_id DESC LIMIT 1`, params);
     if (rows.length || !sn) return rows[0] || null;
-    return activeSession(null);
+    return null;
 }
 
 /* ---------------- Ghép điểm chụp ---------------- */
@@ -90,20 +92,33 @@ const MEDIA_TYPE = { IR: 'THERMAL_PHOTO', WIDE: 'RGB_PHOTO', ZOOM: 'ZOOM_PHOTO',
  *   routeId, deviceSn, flightId (nếu biết)
  * @returns {Promise<{status: 'created'|'duplicate', media: object}>}
  */
+const ingestChains=new Map();
 async function ingestFile(o) {
-    const stat = fs.statSync(o.localPath);
-    const sha = await sha256File(o.localPath);
-    const dup = await query('SELECT * FROM media_files WHERE sha256 = ? LIMIT 1', [sha]);
-    if (dup.length) return { status: 'duplicate', media: dup[0] };
+    const stat=fs.statSync(o.localPath),sha=await sha256File(o.localPath);
+    const work=(ingestChains.get(sha)||Promise.resolve()).then(()=>ingestUnique(o,sha,stat));
+    const tail=work.then(()=>{},()=>{});ingestChains.set(sha,tail);
+    try{return await work;}finally{if(ingestChains.get(sha)===tail)ingestChains.delete(sha);}
+}
+async function ingestUnique(o,sha,stat){
+    const dup=await query('SELECT * FROM media_files WHERE sha256 = ? LIMIT 1',[sha]);
+    if(dup.length){
+        const m=dup[0];
+        if(!m.file_path_local||!fs.existsSync(m.file_path_local)){
+            await query('UPDATE media_files SET file_path_local=?,file_name=?,file_url=?,file_size=? WHERE media_id=?',[o.localPath,o.fileName,'/uploads/media/'+o.fileName,stat.size,m.media_id]);
+            if(m.ticket_id)await query('UPDATE inspection_tickets SET reconciled_at=NULL WHERE ticket_id=?',[m.ticket_id]);
+            return {status:'duplicate',restored:true,media:{...m,file_path_local:o.localPath,file_name:o.fileName,file_url:'/uploads/media/'+o.fileName,file_size:stat.size}};
+        }
+        return {status:'duplicate',media:m};
+    }
 
     const meta = readMeta(o.localPath, o.originalName || o.fileName);
     let thermal = null;
     if (meta.lens === 'IR') thermal = parseThermal(o.localPath);
 
-    const session = o.ticketId ? null : await activeSession(o.deviceSn || null);
-    const ticketId = o.ticketId || (session ? session.ticket_id : null);
+    const assignment = await resolveAssignment(query, o, meta);
+    const ticketId = assignment.ticketId;
     const pointId = await matchPhotoPoint(o.originalName || o.fileName, meta);
-    const deviceSn = o.deviceSn || (session && session.aircraft_sn) || 'UNKNOWN';
+    const deviceSn = assignment.deviceSn;
 
     const row = {
         ticket_id: ticketId,
@@ -137,7 +152,9 @@ async function ingestFile(o) {
         flight_id: o.flightId || null,
         route_id: o.routeId || null,
         photo_point_id: pointId,
-        pilot_session_id: session ? session.session_id : null,
+        pilot_session_id: assignment.pilotSessionId,
+        flight_session_id: assignment.flightSessionId,
+        assignment_status: assignment.status,
         meta_json: JSON.stringify({ ...meta, captured_at: meta.captured_at ? meta.captured_at.toISOString() : null })
     };
     const cols = Object.keys(row);
@@ -145,6 +162,7 @@ async function ingestFile(o) {
         `INSERT INTO media_files (${cols.map(c => `\`${c}\``).join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
         cols.map(c => row[c])
     );
+    if (ticketId) await query('UPDATE inspection_tickets SET reconciled_at=NULL WHERE ticket_id=?',[ticketId]);
     return { status: 'created', media: { media_id: r.insertId, ...row, meta_json: undefined } };
 }
 
@@ -160,7 +178,11 @@ async function backfillLegacy() {
     let missing = 0;
     const LENS_FROM_TYPE = { THERMAL_PHOTO: 'IR', RGB_PHOTO: 'WIDE', ZOOM_PHOTO: 'ZOOM' };
     for (const r of rows) {
-        const file = r.file_path_local;
+        let file = r.file_path_local;
+        if(!file&&r.file_name&&path.basename(r.file_name)===r.file_name){
+            const candidate=path.join(process.env.MEDIA_DIR||path.resolve(__dirname,'../../uploads/media'),r.file_name);
+            if(fs.existsSync(candidate)&&fs.statSync(candidate).isFile()){file=candidate;await query('UPDATE media_files SET file_path_local=? WHERE media_id=?',[candidate,r.media_id]);}
+        }
         if (!file || !fs.existsSync(file)) {
             await query(
                 `UPDATE media_files SET latitude = NULL, longitude = NULL, altitude = NULL, max_temperature = NULL, has_hotspot = 0,

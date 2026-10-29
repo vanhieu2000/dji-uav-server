@@ -182,7 +182,7 @@ function gridPlan(o) {
  * Tuyến điểm: đi qua các điểm chụp ảnh, sắp theo điểm gần nhất (bắt đầu từ start hoặc điểm đầu tiên).
  * @param {Array<{lat,lng,altitude_m,gimbal_pitch,...}>} points
  */
-function pointsPlan(points, { start = null, speedMps = 4, hoverSeconds = 0, photosPerPoint = 1 } = {}) {
+function pointsPlan(points, { start = null, speedMps = 4, hoverSeconds = 0, photosPerPoint = 1, preserveOrder = false } = {}) {
     if (!Array.isArray(points) || !points.length) throw new Error('Chưa có điểm chụp ảnh nào cho các tài sản đã chọn');
     const origin = centroid(points);
     const proj = makeProjection(origin);
@@ -194,6 +194,7 @@ function pointsPlan(points, { start = null, speedMps = 4, hoverSeconds = 0, phot
         let bi = 0;
         let bd = Infinity;
         rest.forEach((r, i) => {
+            if(preserveOrder&&i>0)return;
             const d = Math.hypot(r.xy.x - cur.x, r.xy.y - cur.y);
             if (d < bd) { bd = d; bi = i; }
         });
@@ -202,8 +203,8 @@ function pointsPlan(points, { start = null, speedMps = 4, hoverSeconds = 0, phot
         ordered.push(n.p);
         cur = n.xy;
     }
-    const perPoint = (Number(hoverSeconds) || 0) + POINT_OVERHEAD_SECONDS + (Number(photosPerPoint) || 1) * SECONDS_PER_PHOTO;
-    const seconds = dist / (Number(speedMps) || 4) + ordered.length * perPoint + TAKEOFF_LANDING_SECONDS;
+    const captureSeconds=ordered.reduce((sum,p)=>sum+Number(p.hover_seconds??hoverSeconds??0)+POINT_OVERHEAD_SECONDS+(Number(photosPerPoint)||1)*SECONDS_PER_PHOTO,0);
+    const seconds=dist/(Number(speedMps)||4)+captureSeconds+TAKEOFF_LANDING_SECONDS;
     const warnings = [];
     if (seconds > USABLE_BATTERY_SECONDS) warnings.push(`Cần khoảng ${Math.ceil(seconds / USABLE_BATTERY_SECONDS)} pin`);
     return {

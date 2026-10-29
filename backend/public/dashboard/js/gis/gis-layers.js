@@ -250,6 +250,8 @@
     });
 
     const layerControl = L.control.layers(null, overlays, { position: 'topright', collapsed: true }).addTo(map);
+    map.uavLayerControl = layerControl;
+    if (GIS.LiveMonitor) GIS.LiveMonitor.addMap(map);
     createSearchControl(ctl).addTo(map);
 
     const hintEl = L.DomUtil.create('div', 'gis-map-hint', map.getContainer());

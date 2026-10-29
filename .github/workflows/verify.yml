@@ -1,0 +1,66 @@
+name: Verify UAV backend
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_USER: uav_ci
+      MYSQL_PASSWORD: ci-fixture-password-only
+      TEST_MYSQL_DATABASE: dji_uav_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core ffmpeg
+      - name: Start native MySQL for isolated tests
+        run: |
+          sudo systemctl start mysql
+          sudo mysql -e "CREATE USER IF NOT EXISTS 'uav_ci'@'127.0.0.1' IDENTIFIED BY 'ci-fixture-password-only'; GRANT ALL PRIVILEGES ON *.* TO 'uav_ci'@'127.0.0.1';"
+      - run: npm ci
+        working-directory: backend
+      - run: npm test
+        working-directory: backend
+      - run: npm audit --omit=dev
+        working-directory: backend
+  browsers:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+        working-directory: backend
+      - run: npx playwright-core install --with-deps ${{ matrix.engine }}
+        working-directory: backend
+      - run: |
+          export CHROMIUM_PATH="$(node -e "console.log(require('playwright-core').chromium.executablePath())")"
+          npm run test:browser
+          npm run test:mobile
+          npm run test:auth
+          npm run test:workspace
+        working-directory: backend
+        env:
+          BROWSER_ENGINE: ${{ matrix.engine }}
+
+  windows-launcher-syntax:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Windows PowerShell launcher
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'ops/start-local.ps1'), [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }

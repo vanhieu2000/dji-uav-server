@@ -25,8 +25,13 @@ const paths = suffix => BASES.map(b => b + suffix);
 
 /** Phiên Pilot của người gửi request (theo token), không có thì phiên mới nhất còn mở. */
 async function sessionOf(req) {
+    if(req.pilotSession)return req.pilotSession;
     const user = decodeToken(req.get('x-auth-token') || (req.get('authorization') || '').replace(/^Bearer\s+/i, ''));
     const base = 'SELECT * FROM pilot_sessions WHERE ended_at IS NULL AND started_at > NOW() - INTERVAL 12 HOUR';
+    if(user && user.pilot_session_id){
+        const rows=await query('SELECT * FROM pilot_sessions WHERE session_id=? AND user_id=? AND ended_at IS NULL',[user.pilot_session_id,user.user_id]);
+        return rows[0]||null;
+    }
     if (user && user.user_id) {
         const rows = await query(`${base} AND user_id = ? ORDER BY session_id DESC LIMIT 1`, [user.user_id]);
         if (rows.length) return rows[0];
@@ -56,7 +61,7 @@ router.get(paths(''), asyncHandler(async (req, res) => {
     const session = await sessionOf(req);
     let rows = session && session.ticket_id ? await ticketRoutes.routesOfTicket(session.ticket_id) : [];
     const scope = rows.length ? `phiếu ${session.ticket_id}` : 'cả thư viện';
-    if (!rows.length) {
+    if (!rows.length && !req.pilotSession) {
         rows = await query('SELECT route_id, route_uuid, route_name, created_at, updated_at FROM flight_routes WHERE route_uuid IS NOT NULL ORDER BY route_id DESC LIMIT 500');
     }
     const key = String(req.query.key || '').trim().toLowerCase();
@@ -83,7 +88,9 @@ router.get(paths('/:wayline_id/url'), asyncHandler(async (req, res) => {
     const r = await routeLibrary.findRoute(req.params.wayline_id);
     if (!r || !fs.existsSync(routeLibrary.kmzPath(r))) return notFound(res);
     // URL tĩnh kết thúc bằng .kmz để trình tải của Pilot 2 nhận đúng loại file
-    const url = `${req.protocol}://${req.get('host')}/uploads/waylines/${encodeURIComponent(r.kmz_file_name)}`;
+    const filePath='/uploads/waylines/'+encodeURIComponent(r.kmz_file_name);
+    const signed=req.user?require('../services/signedDownloads').sign(filePath,req.user):filePath;
+    const url = `${req.protocol}://${req.get('host')}${signed}`;
     if (req.query.format === 'json') {
         return res.json({ code: 0, message: 'success', data: { url, md5: r.kmz_md5 || routeLibrary.md5File(routeLibrary.kmzPath(r)) } });
     }
@@ -95,7 +102,7 @@ router.get(paths('/:wayline_id/download'), asyncHandler(async (req, res) => {
     if (!r) return notFound(res);
     const file = routeLibrary.kmzPath(r);
     if (!fs.existsSync(file)) return notFound(res);
-    res.set({ 'Content-Type': 'application/vnd.google-earth.kmz', 'Access-Control-Allow-Origin': '*' });
+    res.set({ 'Content-Type': 'application/vnd.google-earth.kmz' });
     res.download(file, r.kmz_file_name);
 }));
 

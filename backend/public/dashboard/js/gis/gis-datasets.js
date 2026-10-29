@@ -7,6 +7,7 @@
   const GIS = window.GIS;
   const esc = GIS.esc;
   const st = { root: null };
+  let previewRequest=0;
 
   function params() {
     const q = new URLSearchParams();
@@ -22,7 +23,10 @@
   }
 
   async function preview() {
-    const res = await GIS.run(() => GIS.api('GET', `/api/datasets/preview?${params()}`));
+    if(!st.root.querySelector('input[name="ds-lens"]:checked')){st.root.querySelector('#gis-ds-download').hidden=true;GIS.toast('Chọn ít nhất một camera để xuất ảnh.','error');return;}
+    const snapshot=params(),request=++previewRequest;
+    const res = await GIS.run(() => GIS.api('GET', `/api/datasets/preview?${snapshot}`));
+    if(request!==previewRequest||snapshot!==params())return;
     const box = st.root.querySelector('#gis-ds-preview');
     const dl = st.root.querySelector('#gis-ds-download');
     if (!res) { dl.hidden = true; return; }
@@ -37,7 +41,7 @@
         <dt>Chất lượng vị trí</dt><dd>${Object.entries(d.by_quality).map(([k, n]) => `${esc(k)}: ${esc(n)}`).join(' · ') || '--'}</dd>
       </dl>`;
     dl.hidden = !d.count;
-    dl.href = `/api/datasets/export?${params()}`;
+    dl.href = `/api/datasets/export?${snapshot}`;
   }
 
   GIS.Datasets = {
@@ -70,7 +74,7 @@
             </section>
           </div>`;
         root.querySelector('#gis-ds-check').addEventListener('click', preview);
-        root.addEventListener('change', () => { st.root.querySelector('#gis-ds-download').hidden = true; });
+        root.addEventListener('change', () => { previewRequest++;st.root.querySelector('#gis-ds-download').hidden = true; });
       }
       const [tickets, tree] = await Promise.all([
         GIS.run(() => GIS.api('GET', '/api/tickets')),

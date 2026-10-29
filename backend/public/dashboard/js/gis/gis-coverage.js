@@ -113,7 +113,7 @@
         root.querySelector('#gis-cv-check').addEventListener('click', check);
         root.querySelector('#gis-cv-fill').addEventListener('click', fill);
         const plant = await GIS.getPlant();
-        const center = plant && plant.center_lat != null ? [plant.center_lat, plant.center_lng] : [11.8312, 106.5913];
+        const center = plant && plant.center_lat != null ? [plant.center_lat, plant.center_lng] : [16.0, 108.0];
         st.map = L.map(root.querySelector('#gis-cv-map'), { center, zoom: 17, maxZoom: 22 });
         const sat = (typeof BASEMAPS !== 'undefined' && BASEMAPS.satellite);
         if (sat) L.tileLayer(sat.url, { maxZoom: 22, maxNativeZoom: sat.native || 18, attribution: sat.attr }).addTo(st.map);

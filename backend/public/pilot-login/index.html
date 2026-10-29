@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DJI Pilot 2 - Cloud Connection Portal</title>
+  <title>DJI Pilot 2 - Cổng Kết Nối Máy Bay Mavic 3T</title>
+  <link rel="icon" type="image/x-icon" href="/dashboard/assets/rtc-logo.ico">
+  <link rel="apple-touch-icon" href="/dashboard/assets/rtc-logo.png">
+  <link rel="stylesheet" href="/dashboard/css/rtc-brand.css">
+  <link rel="stylesheet" href="/dashboard/css/fonts.css">
   <style>
     * {
       box-sizing: border-box;
@@ -12,8 +16,8 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
     body {
-      background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
-      color: #c9d1d9;
+      background: #edf5f3;
+      color: #244d4e;
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -21,22 +25,21 @@
       padding: 16px;
     }
     .card {
-      background: rgba(22, 27, 34, 0.85);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(48, 54, 61, 0.8);
+      background: #ffffff;
+      border: 1px solid #c1d8d2;
       border-radius: 16px;
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 12px 32px rgba(13, 70, 60, 0.12);
       width: 100%;
       max-width: 460px;
       padding: 28px 24px;
     }
     .header {
       text-align: center;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
     .badge {
       display: inline-block;
-      background: #238636;
+      background: #0d6e6e;
       color: #ffffff;
       font-size: 11px;
       font-weight: 700;
@@ -47,44 +50,44 @@
       margin-bottom: 8px;
     }
     h2 {
-      color: #f0f6fc;
+      color: #173b3e;
       font-size: 20px;
       font-weight: 600;
       margin-bottom: 6px;
     }
     .subtitle {
       font-size: 13px;
-      color: #8b949e;
+      color: #526b6c;
     }
     .form-group {
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
     label {
       display: block;
       font-size: 12px;
       font-weight: 600;
-      color: #8b949e;
+      color: #526b6c;
       margin-bottom: 6px;
       text-transform: uppercase;
       letter-spacing: 0.3px;
     }
     input, select {
       width: 100%;
-      background: #0d1117;
-      border: 1px solid #30363d;
+      background: #ffffff;
+      border: 1px solid #b5cfca;
       border-radius: 8px;
-      color: #f0f6fc;
+      color: #173b3e;
       padding: 12px 14px;
       font-size: 14px;
       outline: none;
       transition: border-color 0.2s;
     }
     input:focus, select:focus {
-      border-color: #58a6ff;
+      border-color: #0b6262;
     }
     .btn {
       width: 100%;
-      background: #1f6feb;
+      background: #0d6e6e;
       color: #ffffff;
       border: none;
       border-radius: 8px;
@@ -96,50 +99,47 @@
       margin-top: 10px;
     }
     .btn:hover {
-      background: #388bfd;
+      background: #095656;
     }
     .btn:active {
       transform: scale(0.98);
     }
     .status-box {
-      margin-top: 18px;
+      margin-top: 16px;
       padding: 12px 14px;
       border-radius: 8px;
       font-size: 13px;
-      background: rgba(56, 139, 253, 0.1);
-      border: 1px solid rgba(56, 139, 253, 0.3);
-      color: #58a6ff;
       display: none;
     }
     .status-box.success {
-      background: rgba(35, 134, 54, 0.15);
-      border-color: rgba(35, 134, 54, 0.4);
-      color: #3fb950;
+      background: rgba(35, 134, 54, 0.12);
+      border: 1px solid rgba(35, 134, 54, 0.4);
+      color: #246244;
       display: block;
     }
     .status-box.error {
-      background: rgba(248, 81, 73, 0.15);
-      border-color: rgba(248, 81, 73, 0.4);
-      color: #f85149;
+      background: rgba(248, 81, 73, 0.12);
+      border: 1px solid rgba(248, 81, 73, 0.4);
+      color: #a62e38;
       display: block;
     }
     .log-container {
       margin-top: 16px;
-      background: #090d13;
-      border: 1px solid #21262d;
+      background: #f0f6f4;
+      border: 1px solid #c1d8d2;
       border-radius: 6px;
       padding: 10px;
       font-family: Consolas, monospace;
       font-size: 11px;
-      color: #8b949e;
+      color: #526b6c;
       max-height: 120px;
       overflow-y: auto;
     }
     .footer-info {
       text-align: center;
-      margin-top: 18px;
+      margin-top: 16px;
       font-size: 11px;
-      color: #6e7681;
+      color: #526b6c;
     }
   </style>
 </head>
@@ -147,6 +147,7 @@
 
   <div class="card">
     <div class="header">
+      <img class="rtc-logo" style="width:60px;height:60px;margin:0 auto 12px;display:block;" src="/dashboard/assets/rtc-logo.png" alt="RTC">
       <div class="badge">DJI Cloud API Platform</div>
       <h2>Trung Tâm Giám Sát UAV M3T</h2>
       <div class="subtitle">Đồng bộ Đường bay • Ảnh chụp • Livestream • Vị trí</div>
@@ -163,6 +164,13 @@
         <input type="password" id="password" autocomplete="current-password" required>
       </div>
 
+      <div class="form-group" style="border:1px solid #c1d8d2;border-radius:8px;padding:10px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0;text-transform:none;">
+          <input id="rememberLogin" type="checkbox" style="width:auto;height:auto"> Ghi nhớ đăng nhập trên RC này (30 ngày)
+        </label>
+        <button type="button" id="forgetLogin" class="btn" style="margin-top:8px;display:none;padding:8px;font-size:12px;background:#8c959f;">Quên tài khoản đã lưu / Đổi tài khoản</button>
+      </div>
+
       <div class="form-group">
         <label for="ticketSelect">Phiếu Kiểm Tra Hiện Tại</label>
         <select id="ticketSelect" required>
@@ -173,19 +181,23 @@
       <button type="submit" class="btn" id="connectBtn">KẾT NỐI VÀO MÁY CHỦ</button>
     </form>
 
-    <!-- THẺ TRẠNG THÁI KẾT NỐI THÀNH CÔNG (CHẠY NGẦM KHÔNG HỦY PHIÊN) -->
-    <div id="connectedCard" style="display:none; background: rgba(35, 134, 54, 0.15); border: 1px solid #238636; border-radius: 12px; padding: 18px; margin-top: 16px; text-align: center;">
+    <!-- THẺ TRẠNG THÁI KẾT NỐI THÀNH CÔNG -->
+    <div id="connectedCard" style="display:none; background: rgba(35, 134, 54, 0.12); border: 1px solid #238636; border-radius: 12px; padding: 18px; margin-top: 16px; text-align: center;">
       <div style="font-size: 32px; margin-bottom: 8px;">🟢</div>
-      <h3 style="color: #3fb950; margin-bottom: 6px;">ĐÃ KẾT NỐI CLOUD SERVER THÀNH CÔNG!</h3>
-      <p style="font-size: 13px; color: #c9d1d9; margin-bottom: 12px;">Hệ thống đang hoạt động ngầm và đồng bộ dữ liệu thời gian thực.</p>
-      <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; font-size: 12px; text-align: left; line-height: 1.6; color: #8b949e;">
-        • <b>Tay cầm:</b> DJI RC (<span id="rcSnText" style="color:#58a6ff;">5YSZM3K0031EYQ</span>)<br>
-        • <b>Dự án:</b> <span id="wsText" style="color:#f0f6fc;">Mavic 3T Solar Farm</span><br>
-        • <b>Giao thức:</b> MQTT tcp://10.20.28.50:1883 (<span style="color:#3fb950;">ONLINE</span>)<br>
-        • <b>Máy bay:</b> Sẵn sàng nhận lệnh & truyền OSD
+      <h3 style="color: #238636; margin-bottom: 6px; font-size: 18px;">ĐÃ KẾT NỐI CLOUD SERVER THÀNH CÔNG!</h3>
+      <p style="font-size: 13px; color: #2d3748; margin-bottom: 12px;">Hệ thống đang hoạt động ngầm và đồng bộ dữ liệu thời gian thực.</p>
+      <div style="background: rgba(0,0,0,0.05); padding: 10px 14px; border-radius: 8px; font-size: 12px; text-align: left; line-height: 1.8;">
+        • <b>Tay điều khiển:</b> <span id="rcSnText" style="color:#0969da; font-weight:bold;">Đang nhận diện...</span><br>
+        • <b>Máy bay:</b> <span id="aircraftSnText" style="color:#0969da; font-weight:bold;">Đang nhận diện...</span><br>
+        • <b>Phiếu kiểm tra:</b> <span id="wsText" style="font-weight:600;">Chưa chọn</span><br>
+        • <b>Giao thức MQTT:</b> <span id="mqttHostText" style="color:#238636; font-weight:bold;">ONLINE</span>
       </div>
-      <div style="margin-top: 14px; padding: 10px; background: rgba(56, 139, 253, 0.15); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 8px; font-size: 12px; color: #58a6ff;">
+      <p style="font-size:12px; margin-top: 8px; color: #238636;">✓ Ảnh gốc: Tự động tải ảnh thật về máy tính khi chụp.</p>
+      <div style="margin-top: 14px; padding: 10px; background: rgba(56, 139, 253, 0.15); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 8px; font-size: 12px; color: #0969da; text-align: left;">
         👉 <b>Bấm nút mũi tên quay lại &lt; ở góc trên bên trái</b> để ra màn hình chính DJI Pilot 2 và bấm <b>Enter Camera View</b> để bay!
+      </div>
+      <div style="margin-top:12px;">
+        <button type="button" class="btn" style="background:#e53e3e;color:#fff;margin-top:0;font-size:13px;padding:10px;width:100%;" onclick="reconnectSession()">ĐỔI PHIẾU / KẾT NỐI LẠI</button>
       </div>
     </div>
 
@@ -248,6 +260,39 @@
       } catch (e) {}
     }
 
+    // Ghi nhớ đăng nhập
+    let useSavedLogin = false;
+    const passwordInput = document.getElementById('password');
+    const usernameInput = document.getElementById('username');
+    const rememberInput = document.getElementById('rememberLogin');
+    const forgetButton = document.getElementById('forgetLogin');
+
+    function savedMode(enabled) {
+      useSavedLogin = enabled;
+      passwordInput.value = '';
+      passwordInput.disabled = enabled;
+      passwordInput.required = !enabled;
+      passwordInput.placeholder = enabled ? 'Đã lưu đăng nhập — không cần nhập lại' : '';
+      usernameInput.readOnly = enabled;
+      forgetButton.style.display = enabled ? 'block' : 'none';
+    }
+
+    async function forgetSaved() {
+      const r = await fetch('/api/pilot/remember/forget', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      if (!r.ok) throw Error('Không xóa được đăng nhập đã lưu');
+      savedMode(false);
+      rememberInput.checked = false;
+    }
+    forgetButton.onclick = () => forgetSaved().catch(e => { statusBox.textContent = e.message; });
+    rememberInput.onchange = () => { if (!rememberInput.checked && useSavedLogin) forgetSaved().catch(e => { statusBox.textContent = e.message; }); };
+    fetch('/api/pilot/remember').then(r => r.json()).then(r => {
+      if (r.code === 0 && r.data.available && !usernameInput.value && !passwordInput.value) {
+        usernameInput.value = r.data.username;
+        rememberInput.checked = true;
+        savedMode(true);
+      }
+    }).catch(() => {});
+
     // Kiểm tra và nhận diện DJI JSBridge an toàn
     const isDjiBridge = typeof window !== 'undefined' && !!(window.djiBridge);
     if (isDjiBridge) {
@@ -265,10 +310,15 @@
       addLog("<span style='color:#e3b341;'>! Đang chạy ở chế độ Trình Duyệt Test (Không có djiBridge)</span>");
     }
 
-    // Đăng ký callback toàn cục theo chuẩn Thinklabs / DJI Cloud API
+    // Đăng ký callback toàn cục theo chuẩn DJI Cloud API
     window.connectCallback = function(t) {
-      addLog("<span style='color:#3fb950; font-weight:bold;'>✓ [DJI Pilot 2] MQTT Bắt tay thành công (Connect Callback): " + JSON.stringify(t) + "</span>");
-      showConnectedSuccess();
+      const isOk = (t === true || t === 'true' || t === 0 || (t && t.code === 0));
+      if (isOk) {
+        addLog("<span style='color:#3fb950; font-weight:bold;'>✓ [DJI Pilot 2] MQTT Bắt tay thành công! (Connect Callback: " + JSON.stringify(t) + ")</span>");
+        showConnectedSuccess();
+      } else {
+        addLog("<span style='color:#f85149; font-weight:bold;'>⚠ [DJI Pilot 2] MQTT Báo mất kết nối hoặc từ chối (" + JSON.stringify(t) + "). Hãy vuốt tắt hẳn app Pilot 2 và vào lại.</span>");
+      }
     };
 
     window.liveStatusCallback = function(t) {
@@ -286,6 +336,15 @@
       addLog("<span style='color:#3fb950;'>✓ HỆ THỐNG ĐÃ SẴN SÀNG! Đang chuyển dữ liệu Mavic 3T về máy tính.</span>");
     }
 
+    function reconnectSession() {
+      document.getElementById('connectedCard').style.display = 'none';
+      document.getElementById('loginForm').style.display = 'block';
+      connectBtn.disabled = false;
+      connectBtn.innerText = 'KẾT NỐI VÀO MÁY CHỦ';
+      addLog('Đã mở lại màn hình đăng nhập. Vui lòng chọn phiếu và bấm Kết Nối lại.');
+      loadTickets();
+    }
+
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       connectBtn.disabled = true;
@@ -296,7 +355,7 @@
       const password = document.getElementById('password').value;
       const ticketId = document.getElementById('ticketSelect').value;
 
-      // Số serial tay điều khiển / máy bay (chỉ có khi mở trong DJI Pilot 2) để gắn ảnh đúng máy
+      // Lấy Serial RC và Drone trực tiếp từ DJI Bridge
       function bridgeValue(fn) {
         try {
           if (!window.djiBridge || typeof window.djiBridge[fn] !== 'function') return null;
@@ -307,13 +366,24 @@
       }
       const rcSn = bridgeValue('platformGetRemoteControllerSN');
       const aircraftSn = bridgeValue('platformGetAircraftSN');
-      if (rcSn || aircraftSn) addLog('Tay điều khiển: ' + (rcSn || '?') + ' · Máy bay: ' + (aircraftSn || '?'));
+      if (rcSn || aircraftSn) {
+        addLog('Tay điều khiển: ' + (rcSn || '?') + ' · Máy bay: ' + (aircraftSn || '?'));
+        document.getElementById('rcSnText').textContent = rcSn || 'Chưa nhận';
+        document.getElementById('aircraftSnText').textContent = aircraftSn || 'Chờ topology';
+      }
 
       try {
         const res = await fetch('/api/pilot/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password, ticketId, rc_sn: rcSn, aircraft_sn: aircraftSn })
+          body: JSON.stringify({
+            username,
+            ...(useSavedLogin ? { use_saved_login: true } : { password }),
+            remember: rememberInput.checked,
+            ticketId,
+            rc_sn: rcSn,
+            aircraft_sn: aircraftSn
+          })
         });
         const data = await res.json();
 
@@ -322,9 +392,12 @@
           statusBox.className = "status-box success";
           statusBox.innerHTML = `<strong>KẾT NỐI THÀNH CÔNG!</strong><br>Đã gán: ${escapeHtml(data.data.assigned_ticket)}<br>MQTT Host: ${escapeHtml(data.data.mqtt.host)}`;
 
+          document.getElementById('wsText').textContent = data.data.assigned_ticket;
+          document.getElementById('mqttHostText').textContent = data.data.mqtt.host;
+
           // Nếu đang chạy trong app DJI Pilot 2 thực tế:
           if (isDjiBridge || (typeof window !== 'undefined' && window.djiBridge)) {
-            addLog("Bắt đầu nạp các thông số chuẩn Thinklabs vào DJI Pilot 2...");
+            addLog("Bắt đầu nạp các thông số chuẩn vào DJI Pilot 2...");
 
             // 1. Xác thực License Thật
             try {
@@ -342,7 +415,7 @@
               addLog("Lỗi VerifyLicense: " + err.message);
             }
 
-            // 2. Nạp module API đầu tiên (Bắt buộc theo chuẩn DJI & Thinklabs)
+            // 2. Nạp module API đầu tiên (Bắt buộc theo chuẩn DJI)
             try {
               const apiParam = JSON.stringify({
                 host: window.location.origin,
@@ -358,7 +431,7 @@
             try {
               window.djiBridge.platformSetInformation(
                 "Cloud Api Platform",
-                "Mavic 3T Solar Farm",
+                data.data.workspace_name || "Mavic 3T Solar Farm",
                 data.data.assigned_ticket || "Trạm Năng Lượng Mặt Trời"
               );
               if (window.djiBridge.apiSetToken) {
@@ -381,7 +454,7 @@
               addLog("Lỗi liveshare: " + err.message);
             }
 
-            // 5. Nạp module Media (Tự động kéo ảnh thật từ thẻ nhớ Drone về Máy tính - Chuẩn Thinklabs)
+            // 5. Nạp module Media (Tự động kéo ảnh thật từ thẻ nhớ Drone về Máy tính)
             try {
               localStorage.setItem('djiAutoUploadImage', 'true');
               const mediaParam = JSON.stringify({
@@ -390,16 +463,15 @@
                 autoUploadVideo: false
               });
               window.djiBridge.platformLoadComponent('media', mediaParam);
-              
-              // Gọi trực tiếp các hàm Native của DJI Bridge như trong mã nguồn Thinklabs
+
               if (window.djiBridge.mediaSetAutoUploadPhoto) {
                 window.djiBridge.mediaSetAutoUploadPhoto(true);
               }
               if (window.djiBridge.mediaSetUploadPhotoType) {
-                window.djiBridge.mediaSetUploadPhotoType(0); // 0 = Original Photo (chứa kênh nhiệt RJPEG)
+                window.djiBridge.mediaSetUploadPhotoType(0);
               }
               if (window.djiBridge.mediaSetDownloadOwner) {
-                window.djiBridge.mediaSetDownloadOwner(0); // 0 = Mine (Lấy từ máy bay hiện tại)
+                window.djiBridge.mediaSetDownloadOwner(0);
               }
               addLog("✓ Đã kích hoạt module Media Sync (Tự động tải ảnh thật về Server)");
             } catch (err) {
@@ -441,7 +513,7 @@
           connectBtn.innerText = "ĐÃ GỬI LỆNH KẾT NỐI";
           connectBtn.style.background = "#238636";
 
-          // Tự động hiển thị thẻ trạng thái kết nối thành công
+          // Hiển thị giao diện kết nối
           setTimeout(() => {
             showConnectedSuccess();
           }, 1200);

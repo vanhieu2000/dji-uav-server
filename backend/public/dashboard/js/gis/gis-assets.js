@@ -63,7 +63,7 @@
   async function initMap() {
     const el = state.root.querySelector('#gis-assets-map');
     const plant = await GIS.getPlant();
-    const center = plant && plant.center_lat != null ? [plant.center_lat, plant.center_lng] : [11.8312, 106.5913];
+    const center = plant && plant.center_lat != null ? [plant.center_lat, plant.center_lng] : [16.0, 108.0];
     const map = L.map(el, { center, zoom: 17, maxZoom: 22, zoomControl: true });
     const sat = (typeof BASEMAPS !== 'undefined' && BASEMAPS.satellite) || { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: 'Esri' };
     L.tileLayer(sat.url, { maxZoom: 22, maxNativeZoom: sat.native || 18, attribution: sat.attr }).addTo(map);
