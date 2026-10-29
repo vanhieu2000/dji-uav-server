@@ -10,8 +10,11 @@ window.PilotBridge = (() => {
  function load(name,params){call('platformLoadComponent',name,JSON.stringify(params));}
  function connected(raw){try{const v=value(raw);return v===true||v==='true';}catch{return false;}}
  function freshThing(config){
-  const params={host:config.host,username:config.username,password:config.password,connectCallback:'connectCallback'};
-  load('thing',params);
+   try { call('thingDisconnect'); } catch(e){}
+   try { call('platformUnloadComponent', 'thing'); } catch(e){}
+   const params={host:config.host,username:config.username,password:config.password,connectCallback:'connectCallback'};
+   load('thing',params);
+   try { call('thingConnect',params.username,params.password,'connectCallback'); } catch(e){}
  }
  async function enableOriginalPhotos(isCurrent=()=>true){
   let lastError='Pilot chưa xác nhận cấu hình media';

@@ -195,6 +195,9 @@
       <div style="margin-top: 14px; padding: 10px; background: rgba(56, 139, 253, 0.15); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 8px; font-size: 12px; color: #0969da; text-align: left;">
         👉 <b>Bấm nút mũi tên quay lại &lt; ở góc trên bên trái</b> để ra màn hình chính DJI Pilot 2 và bấm <b>Enter Camera View</b> để bay!
       </div>
+      <div style="margin-top:12px;">
+        <button type="button" class="btn" style="background:#e53e3e;color:#fff;margin-top:0;font-size:13px;padding:10px;width:100%;" onclick="disconnectSession()">ĐỔI PHIẾU / KẾT NỐI LẠI MQTT</button>
+      </div>
     </div>
 
     <div class="status-box" id="statusBox"></div>
@@ -209,7 +212,7 @@
     </div>
   </div>
 
-  <script src="./bridge.js?v=4a12b16-media-ready"></script>
+  <script src="./bridge.js?v=20261029-fresh-mqtt-1793240356166"></script>
   <script>
     const logBox = document.getElementById('logBox');
     const statusBox = document.getElementById('statusBox');
@@ -327,6 +330,21 @@
 
     window.onThingConnect = window.connectCallback;
 
+    function disconnectSession() {
+      try {
+        if (window.djiBridge?.thingDisconnect) window.djiBridge.thingDisconnect();
+      } catch(e) {}
+      currentToken = null;
+      connectedShown = false;
+      connecting = false;
+      document.getElementById('connectedCard').style.display = 'none';
+      document.getElementById('loginForm').style.display = 'block';
+      connectBtn.disabled = false;
+      connectBtn.innerText = 'KẾT NỐI VÀO MÁY CHỦ';
+      addLog('Đã mở lại màn hình đăng nhập. Vui lòng chọn phiếu và bấm Kết Nối lại.');
+      loadTickets();
+    }
+
     function showConnectedSuccess() {
       connectedShown=true;connecting=false;
       configureConnectedMedia();
@@ -343,7 +361,7 @@
         const host=PilotBridge.call('apiGetHost');if(typeof host!=='string'||new URL(host).origin!==location.origin)return false;
         const token=PilotBridge.call('apiGetToken');if(typeof token!=='string'||!token)return false;
         const r=await fetch('/api/pilot/connection',{headers:{'x-auth-token':token}}),j=await r.json();
-        if(!r.ok||j.code!==0)return false;
+        if(!r.ok||j.code!==0||!j.data?.mqtt_connected)return false;
         currentToken=token;
         PilotBridge.call('thingSetConnectCallback','connectCallback');
         if (j.data.rc_sn) document.getElementById('rcSnText').textContent=j.data.rc_sn;
@@ -361,8 +379,6 @@
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       if(connecting)return;connecting=true;
-      await resumeReady;
-      if(await resumeConnection()){connecting=false;return;}
       connectBtn.disabled = true;
       connectBtn.innerText = "ĐANG KẾT NỐI...";
       addLog("Gửi yêu cầu xác thực tới máy chủ...");
