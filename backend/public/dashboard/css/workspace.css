@@ -144,3 +144,14 @@
 @media(max-height:500px) and (max-width:900px){.live-pip-window{height:155px;max-height:calc(100% - 100px)}.map-left-toolbar{top:90px}.map-osd-topbar{font-size:10px}.top{height:46px!important}}
 /* Keep map/live overlay z-indexes beneath the mobile navigation drawer. */
 .main{isolation:isolate}
+
+/* Compact controls must wrap inside their card, including on narrow screens. */
+.daily-tickets-card{min-width:0;max-width:100%;overflow:hidden}
+.daily-tickets-card .tbl-wrap{max-width:100%;overflow-x:auto}
+.daily-tickets-card .actions,.overview-live-footer{flex-wrap:wrap}
+.overview-live-footer>*{min-width:0;max-width:100%}
+#device-readiness label:has(#device-video){display:none}
+
+#view-dashboard table{width:100%;min-width:0!important;table-layout:fixed}
+#view-dashboard th,#view-dashboard td{white-space:normal;overflow-wrap:anywhere}
+#view-dashboard .tbl-wrap,#view-dashboard .table-wrap{max-width:100%;overflow-x:auto;min-width:0}

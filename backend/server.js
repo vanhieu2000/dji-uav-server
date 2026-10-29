@@ -56,9 +56,10 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({server,path:'/ws',verifyClient:(info,done)=>{
   const req=info.req,origin=req.headers.origin;
   try{if(origin&&new URL(origin).host!==req.headers.host)return done(false,403);}catch(e){return done(false,403);}
-  userForToken(tokenOf(req)).then(user=>{if(!user||user.must_change_password)return done(false,401);req.user=user;done(true);}).catch(()=>done(false,503));
+  try{req.nativeWsToken=new URL(req.url,'http://localhost').searchParams.get('x-auth-token');}catch{}
+  userForToken(tokenOf(req)||req.nativeWsToken).then(user=>{if(!user||user.must_change_password)return done(false,401);req.user=user;done(true);}).catch(()=>done(false,503));
 }});
-wss.on('connection',(socket,req)=>{socket.user=req.user;socket.authToken=tokenOf(req);});
+wss.on('connection',(socket,req)=>{socket.user=req.user;socket.authToken=tokenOf(req)||req.nativeWsToken;});
 authRouter.setOnRevoked(({user_id,session_id})=>{require('./src/services/streamAccess').revoke({user_id,session_id});require('./src/services/mqttAccess').revoke({user_id,session_id});for(const c of wss.clients)if(c.user?.user_id===user_id&&(!session_id||c.user.session_id===session_id))c.close(1008,'Phiên đã thu hồi');});
 
 // Nạp cấu hình hệ thống động từ config.json
@@ -740,7 +741,7 @@ async function handleDjiMqttMessage(topic, json) {
     const oldState=stateTimestamps.get(sn);
     if(Number.isSafeInteger(json.timestamp)&&oldState!=null&&json.timestamp<oldState)return;
     if(Number.isSafeInteger(json.timestamp)){if(stateTimestamps.size>=1000&&!stateTimestamps.has(sn))stateTimestamps.delete(stateTimestamps.keys().next().value);stateTimestamps.set(sn,json.timestamp);}
-    if(typeof d.is_cloud_control_auth==='boolean') { const gw = gatewayOfAircraft[sn] || sn; if(memoryStore.gateways[gw]) memoryStore.gateways[gw].is_cloud_control_auth = d.is_cloud_control_auth; if(memoryStore.devices[sn]) memoryStore.devices[sn].is_cloud_control_auth = d.is_cloud_control_auth; broadcastWebSocket({ type: 'cloud_control_status', authorized: d.is_cloud_control_auth, sn: sn, gateway_sn: gw }); }
+    if(typeof d.is_cloud_control_auth==='boolean') { const gw = gatewayOfAircraft[sn] || sn; if(memoryStore.gateways[gw]) memoryStore.gateways[gw].is_cloud_control_auth = d.is_cloud_control_auth; for(const [uav,gateway] of Object.entries(gatewayOfAircraft))if(gateway===gw&&memoryStore.devices[uav])memoryStore.devices[uav].is_cloud_control_auth=d.is_cloud_control_auth; broadcastWebSocket({ type: 'cloud_control_status', authorized: d.is_cloud_control_auth, sn: sn, gateway_sn: gw }); }
     if(Array.isArray(d.live_status)&&memoryStore.gateways[sn])memoryStore.gateways[sn].live_status=d.live_status;
     if (d.live_capacity) {
       memoryStore.gateways[sn] = { ...memoryStore.gateways[sn], gateway_sn: sn, live_capacity: d.live_capacity };
@@ -836,7 +837,7 @@ async function handleDjiMqttMessage(topic, json) {
     if (event === 'flighttask_progress') {
       const ext = json.data?.output?.ext || {};
       broadcastWebSocket({
-        type: 'flighttask_progress',
+        type: 'flighttask_notice',
         sn: sn,
         flight_id: ext.flight_id,
         current_waypoint: ext.current_waypoint_index,
@@ -849,7 +850,7 @@ async function handleDjiMqttMessage(topic, json) {
       const file = json.data?.file || {};
       console.log(`[MQTT PHOTO] Tay cầm ${sn} báo tải ảnh: ${file.name || 'ảnh mới'}`);
       broadcastWebSocket({
-        type: 'photo_uploaded',
+        type: 'media_upload_notice',
         sn: sn,
         file_name: file.name,
         flight_id: file.ext?.flight_id
@@ -933,8 +934,9 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
     if(!actor)return res.status(401).json({code:401,message:'Phiên không hợp lệ'});
     req.user=actor;
     if (!ticketId || String(ticketId).trim() === '') {
-      return res.status(400).json({ code: 400, message: 'Vui lòng chọn phiếu kiểm tra để kết nối phiên bay.' });
-    }
+      require('./src/services/authorization').permission(actor,'tasks:write');
+      ticket = { ticket_id: null, ticket_code: 'GATEWAY', ticket_name: 'Gateway — chọn phiếu trên Web' };
+    } else {
     try{await require('./src/services/authorization').ticket(actor,Number(ticketId));}catch(e){return res.status(403).json({code:403,message:'Không có quyền với phiếu này'});}
     ticket = await findTicketById(ticketId);
     if (!ticket) {
@@ -942,6 +944,7 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
     }
     if (!['PENDING', 'ASSIGNED', 'EXECUTING'].includes(ticket.status)) {
       return res.status(409).json({ code: 409, message: `Phiếu ${ticket.ticket_code} đã ${ticket.status === 'COMPLETED' ? 'hoàn thành' : 'hủy'}, chọn phiếu khác.` });
+    }
     }
   } catch (err) {
     return sendDbError(res, err);
@@ -959,7 +962,7 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
     const sn = v => (typeof v === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(v) ? v : null);
     sessionId = await mediaIngest.startPilotSession({ user: auth.user, ticketId: ticket.ticket_id, rcSn: sn(rcSn), aircraftSn: sn(aircraftSn) });
     const streamDevice = sn(aircraftSn) || sn(rcSn);
-    if (streamDevice && ticket.ticket_id) liveStream = await monitoring.ensureStream(ticket.ticket_id, streamDevice);
+    if (streamDevice) liveStream = await monitoring.ensureStream(ticket.ticket_id, streamDevice);
     ticketRouteList = ticket.ticket_id ? await require('./src/services/ticketRoutes').routesOfTicket(ticket.ticket_id) : [];
     uploadNamespace = (await query('SELECT upload_namespace FROM pilot_sessions WHERE session_id=?',[sessionId]))[0].upload_namespace;
     pilotToken=await issuePilotToken(auth.user,sessionId,systemConfig.workspace_id);
@@ -998,8 +1001,8 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
       token: pilotToken,
       mqtt: {
         host: process.env.MQTT_PUBLIC_URL || `tcp://${HOST_IP}:${MQTT_PORT}`,
-        username: 'pilot',
-        password: 'pilot_password',
+        username: mqttCredentials.username,
+        password: mqttCredentials.password,
         clientId: `pilot_${Date.now()}`
       },
       livestream: liveStream&&publishQuery ? { ...liveStream, rtmpUrl: `${process.env.RTMP_PUBLIC_BASE_URL || 'rtmp://'+HOST_IP+':'+(process.env.RTMP_PORT||systemConfig.rtmp_port||1935)}${liveStream.streamPath}?${publishQuery}` } : null,
@@ -1593,7 +1596,7 @@ app.all(['/storage/api/v1/workspaces/:workspace_id/sts','/media/api/v1/workspace
 
 // D6. Danh sách ảnh cho Pilot 2 Media Library
 app.get(['/media/api/v1/workspaces/:workspace_id/files', '/manage/api/v1/workspaces/:workspace_id/files'], (req, res) => {
-  const list = memoryStore.mediaFiles.filter(m=>req.pilotSession?m.ticket_id===req.pilotSession.ticket_id:require('./src/services/authorization').allScopes(req.user)).map(m => ({
+  const list = memoryStore.mediaFiles.filter(m=>req.pilotSession?(req.pilotSession.ticket_id?m.ticket_id===req.pilotSession.ticket_id:m.pilot_session_id===req.pilotSession.session_id):require('./src/services/authorization').allScopes(req.user)).map(m => ({
     id: String(m.media_id),
     name: m.file_name,
     file_url: `http://${HOST_IP}:${PORT}${m.file_url}`,

@@ -195,18 +195,19 @@ function buildGridKmz({ name, plan, geometry, profile }) {
 function buildPointsKmz({ name, points, profile, speed }) {
     actionSeq = 0;
     const waypoints = points.map(p => ({
-        lat: p.lat, lng: p.lng, alt: p.altitude_m, speed, gimbalPitch: p.gimbal_pitch,
+        lat: p.lat, lng: p.lng, alt: p.altitude_m, speed: p.speed_mps ?? speed, gimbalPitch: p.gimbal_pitch,
         heading: p.aircraft_heading == null ? null : Number(p.aircraft_heading)
     }));
     const groups = {};
     points.forEach((p, i) => {
+        const pointLenses=p.lenses||profile.lenses;
         const acts = [gimbalRotate(p.gimbal_pitch)];
         const zf = p.zoom_factor != null ? p.zoom_factor : profile.zoom_factor;
-        if (zf != null && profile.lenses.split(',').includes('zoom')) acts.push(zoom(zf));
+        if (zf != null && pointLenses.split(',').includes('zoom')) acts.push(zoom(zf));
         const hv = p.hover_seconds != null ? p.hover_seconds : profile.hover_seconds;
         if (hv > 0) acts.push(hover(hv));
         const n = Math.max(1, Number(profile.photos_per_point) || 1);
-        for (let k = 0; k < n; k += 1) acts.push(takePhoto(profile.lenses, `${p.label || `P${i + 1}`}${n > 1 ? `_${k + 1}` : ''}`));
+        for (let k = 0; k < n; k += 1) acts.push(takePhoto(pointLenses, `${p.label || `P${i + 1}`}${n > 1 ? `_${k + 1}` : ''}`));
         groups[i] = [actionGroup(i, i, i, { type: 'reachPoint' }, acts)];
     });
     return pack(name, speed, waypoints, groups);
@@ -219,7 +220,7 @@ function buildPointsKmz({ name, points, profile, speed }) {
 function buildManualKmz({ name, waypoints, altitude, speed, lenses = 'ir,wide', triggerDistance = 0, gimbalPitch = -90 }) {
     actionSeq = 0;
     const wps = waypoints.map(p => ({
-        lat: p.lat, lng: p.lng, alt: p.alt != null ? p.alt : altitude, speed,
+        lat: p.lat, lng: p.lng, alt: p.alt != null ? p.alt : altitude, speed: p.speed ?? speed,
         gimbalPitch: p.gimbalPitch != null ? p.gimbalPitch : gimbalPitch, heading: null
     }));
     const groups = {};
@@ -230,7 +231,7 @@ function buildManualKmz({ name, waypoints, altitude, speed, lenses = 'ir,wide', 
         ];
     } else {
         wps.forEach((wp, i) => {
-            groups[i] = [actionGroup(i, i, i, { type: 'reachPoint' }, [gimbalRotate(wp.gimbalPitch), takePhoto(lenses, `M${i + 1}`)])];
+            groups[i] = [actionGroup(i, i, i, { type: 'reachPoint' }, [gimbalRotate(wp.gimbalPitch), hover(waypoints[i].hoverTime ?? 1), takePhoto(waypoints[i].lenses || lenses, `M${i + 1}`)])];
         });
     }
     return pack(name, speed, wps, groups);

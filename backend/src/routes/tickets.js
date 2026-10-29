@@ -32,6 +32,7 @@ router.get('/', async (req, res) => {
             sql += ' AND (t.ticket_code LIKE ? OR t.ticket_name LIKE ? OR t.target_facility LIKE ?)';
             params.push(`%${q}%`, `%${q}%`, `%${q}%`);
         }
+        if(req.query.date){if(!/^\d{4}-\d{2}-\d{2}$/.test(req.query.date))throw new v.ValidationError('Ngày không hợp lệ');sql+=" AND DATE(TIMESTAMPADD(MINUTE,420-TIMESTAMPDIFF(MINUTE,UTC_TIMESTAMP(),NOW()),COALESCE(t.planned_start_at,t.created_at)))=?";params.push(req.query.date);}
         sql += ' ORDER BY t.ticket_id DESC';
         const rows = await query(sql, params);
         res.json({ code: 0, data: rows.map(r => ({ ...r, livestream_channel: channelForTicket(r) })) });
@@ -72,6 +73,45 @@ router.post('/:id/media/:mediaId/assign',asyncHandler(async(req,res)=>{
         await conn.execute("INSERT INTO ticket_changes (ticket_id,revision,change_type,details_json) SELECT ticket_id,revision,'MEDIA_ASSIGNED',? FROM inspection_tickets WHERE ticket_id=?",[JSON.stringify({media_id:mid,flight_session_id:fid,actor:req.user?.user_id||null}),id]);
     });
     ok(res,{ticket_id:id,media_id:mid});
+}));
+
+// Assign operational context on Web; never sends flight/motion commands.
+router.post('/:id/execution',asyncHandler(async(req,res)=>{
+ const a=require('../services/authorization'),id=v.parseId(req.params.id,'phiếu');a.permission(req.user,'tasks:write');const ticket=await a.ticket(req.user,id);
+ const sn=v.requiredString(req.body.device_sn,'UAV',64),rid=v.parseId(req.body.route_id,'tuyến');
+ if(req.body.confirmed!==true)throw new v.ValidationError('Xác nhận tuyến đã chọn trên Pilot trước khi gắn phiên');
+ const [route]=await query('SELECT r.* FROM flight_routes r JOIN ticket_routes tr ON tr.route_id=r.route_id WHERE tr.ticket_id=? AND r.route_id=?',[id,rid]);
+ if(!route)throw new v.ValidationError('Tuyến không thuộc phiếu');
+ if(!['PENDING','ASSIGNED','EXECUTING'].includes(ticket.status))throw tasks.conflict('Phiếu đã kết thúc');
+ if(ticket.assigned_device_sn&&ticket.assigned_device_sn!==sn)throw tasks.conflict('UAV khác thiết bị được giao');
+ const raw=typeof route.plan_json==='string'?JSON.parse(route.plan_json):route.plan_json;
+ const points=raw?.plan?.points||raw?.plan?.waypoints||raw?.waypoints||raw?.geojson?.path?.coordinates?.map(p=>({lng:p[0],lat:p[1]}));
+ if(!points?.length)throw new v.ValidationError('Tuyến cũ chưa có dữ liệu kiểm tra an toàn; tạo lại tuyến');
+ await require('../services/safetyGeofence').validate(query,route.target_plant_id||ticket.plant_id,points);
+ const file=require('../services/routeLibrary').kmzPath(route);
+ const md5=require('crypto').createHash('md5').update(require('fs').readFileSync(file)).digest('hex');
+ if(md5!==route.kmz_md5)throw tasks.conflict('File KMZ đã thay đổi; tạo lại tuyến trước khi giao');
+ await withTransaction(async conn=>{
+   await conn.execute('SELECT device_sn FROM uav_devices WHERE device_sn=? FOR UPDATE',[sn]);
+   const [sessions]=await conn.execute('SELECT * FROM pilot_sessions WHERE aircraft_sn=? AND ended_at IS NULL ORDER BY session_id DESC LIMIT 1 FOR UPDATE',[sn]);
+   const session=sessions[0];if(!session)throw tasks.conflict('UAV chưa kết nối qua Pilot');
+   if(!a.allScopes(req.user)&&session.user_id!==req.user.user_id)throw a.denied();
+   if(ticket.assigned_rc_sn&&ticket.assigned_rc_sn!==session.rc_sn)throw tasks.conflict('RC khác tay cầm được giao');
+   const [flights]=await conn.execute('SELECT flight_session_id FROM flight_sessions WHERE device_sn=? AND ended_at IS NULL',[sn]);if(flights.length)throw tasks.conflict('Không thay phân công khi chuyến bay chưa đóng');
+   const [active]=await conn.execute('SELECT execution_id FROM ticket_executions WHERE device_sn=? AND ended_at IS NULL',[sn]);if(active.length)throw tasks.conflict('Kết thúc phiên hiện tại trước khi chọn phiếu mới');
+   await conn.execute("INSERT INTO ticket_executions (ticket_id,pilot_session_id,device_sn,route_id,route_md5,plan_snapshot,route_state,actor_user_id) VALUES (?,?,?,?,?,?,'MANUAL_CONFIRMED',?)",[id,session.session_id,sn,rid,md5,JSON.stringify(raw),req.user.user_id]);
+   await conn.execute("UPDATE pilot_sessions SET ticket_id=?,ticket_bound_at=NOW(3),route_verification='MANUAL_CONFIRMED' WHERE session_id=?",[id,session.session_id]);
+   await conn.execute("UPDATE inspection_tickets SET status='EXECUTING',assigned_device_sn=?,start_time=COALESCE(start_time,NOW()) WHERE ticket_id=?",[sn,id]);
+ });ok(res,{ticket_id:id,route_state:'MANUAL_CONFIRMED'},'Đã gắn phiên theo xác nhận của người vận hành; không phải xác minh tự động từ Pilot');
+}));
+router.post('/:id/execution/mismatch',asyncHandler(async(req,res)=>{
+ const id=v.parseId(req.params.id,'phiếu'),a=require('../services/authorization');a.permission(req.user,'tasks:write');await a.ticket(req.user,id);
+ await withTransaction(async conn=>{await conn.execute("UPDATE pilot_sessions p JOIN ticket_executions e ON e.pilot_session_id=p.session_id SET p.route_verification='MISMATCH',e.route_state='MISMATCH' WHERE e.ticket_id=? AND e.ended_at IS NULL",[id]);});
+ ok(res,{route_state:'MISMATCH'},'Đã khóa tự gán ảnh. Ảnh gốc tiếp tục lưu ở kho chưa gán; không gửi lệnh điều khiển UAV.');
+}));
+router.post('/:id/execution/stop',asyncHandler(async(req,res)=>{
+ const id=v.parseId(req.params.id,'phiếu'),a=require('../services/authorization');a.permission(req.user,'tasks:write');await a.ticket(req.user,id);
+ await withTransaction(async conn=>{const [es]=await conn.execute('SELECT * FROM ticket_executions WHERE ticket_id=? AND ended_at IS NULL FOR UPDATE',[id]);for(const e of es){const [flights]=await conn.execute('SELECT flight_session_id FROM flight_sessions WHERE device_sn=? AND ended_at IS NULL',[e.device_sn]);if(flights.length)throw tasks.conflict('Chờ hạ cánh và đóng chuyến bay trước khi kết thúc phân công');await conn.execute("UPDATE pilot_sessions SET ticket_id=NULL,ticket_bound_at=NULL,route_verification='UNKNOWN' WHERE session_id=?",[e.pilot_session_id]);}await conn.execute('UPDATE ticket_executions SET ended_at=NOW(3) WHERE ticket_id=? AND ended_at IS NULL',[id]);await conn.execute("UPDATE inspection_tickets SET status='ASSIGNED' WHERE ticket_id=? AND status='EXECUTING'",[id]);});ok(res,{stopped:true});
 }));
 
 // 3. Xem chi tiết phiếu kiểm tra và danh sách ảnh chụp

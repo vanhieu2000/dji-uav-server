@@ -61,7 +61,7 @@ router.get(paths(''), asyncHandler(async (req, res) => {
     const session = await sessionOf(req);
     let rows = session && session.ticket_id ? await ticketRoutes.routesOfTicket(session.ticket_id) : [];
     const scope = rows.length ? `phiếu ${session.ticket_id}` : 'cả thư viện';
-    if (!rows.length && !req.pilotSession) {
+    if (!rows.length && (!req.pilotSession || (session?.ticket_id==null&&require('../services/authorization').allScopes(req.user)))) {
         rows = await query('SELECT route_id, route_uuid, route_name, created_at, updated_at FROM flight_routes WHERE route_uuid IS NOT NULL ORDER BY route_id DESC LIMIT 500');
     }
     const key = String(req.query.key || '').trim().toLowerCase();

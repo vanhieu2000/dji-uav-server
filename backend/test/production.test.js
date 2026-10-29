@@ -75,12 +75,12 @@ test('server thật + 10 UAV MQTT và camera M3T giả lập, localhost không t
  async function control(path){const r=await fetch(base+'/api/control/'+path,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({device_sn:learnedUav,mode:'dual'})});return {status:r.status,data:await r.json()};}
  async function readiness(){const r=await fetch(base+'/api/control/status?device_sn='+learnedUav,{headers});return (await r.json()).data;}
  await until(async()=>{try{return (await readiness()).telemetry_fresh;}catch{return false;}});
- assert.equal((await control('photo')).status,403);assert.deepEqual(methods,[]);
+ assert.equal((await control('photo')).status,200);assert.equal(methods[0],'payload_authority_grab');methods.length=0;
  assert.equal((await control('authorize')).status,200);await until(async()=> (await readiness()).cloud_control_authorized);
  const captured=await control('photo');assert.equal(captured.status,200);assert.equal(captured.data.data.image_received,false);
- assert.deepEqual(methods,['cloud_control_auth_request','camera_mode_switch','photo_storage_set','camera_photo_take']);
+ assert.deepEqual(methods,['cloud_control_auth_request','payload_authority_grab','camera_mode_switch','photo_storage_set','camera_photo_take']);
  await publish(`thing/product/${learnedRc}/state`,{timestamp:Date.now(),data:{is_cloud_control_auth:false}});await until(async()=>!(await readiness()).cloud_control_authorized);
- assert.equal((await control('photo')).status,403);
+ assert.equal((await control('photo')).status,200);
  const lib=require('../src/services/routeLibrary');fs.mkdirSync(lib.WAYLINE_DIR,{recursive:true});const zip=new(require('adm-zip'))();zip.addFile('wpmz/waylines.wpml',Buffer.from('<kml/>'));const kmz=path.join(lib.WAYLINE_DIR,'fixture-download.kmz');fs.writeFileSync(kmz,zip.toBuffer());
  const route=await lib.addKmz({fileName:'fixture-download.kmz',routeName:'TEST ONLY — do not fly'});await db.query('INSERT INTO ticket_routes (ticket_id,route_id,sort_order) VALUES (?,?,0)',[first.tid,route.route_id]);
  const urlResponse=await fetch(base+'/wayline/api/v1/workspaces/runtime-workspace/waylines/'+route.route_uuid+'/url?format=json',{headers:{'x-auth-token':pilotToken}});assert.equal(urlResponse.status,200);const link=(await urlResponse.json()).data.url;
@@ -92,6 +92,13 @@ test('server thật + 10 UAV MQTT và camera M3T giả lập, localhost không t
  const diagnosticResponse=await fetch(base+'/api/diagnostics/export',{headers});assert.equal(diagnosticResponse.status,200);const diagnosticZip=new(require('adm-zip'))(Buffer.from(await diagnosticResponse.arrayBuffer()));assert.ok(diagnosticZip.getEntry('manifest.json'));const diagnosticText=diagnosticZip.getEntries().filter(e=>e.entryName.endsWith('.jsonl')).map(e=>e.getData().toString()).join('');assert.ok(!diagnosticText.includes(first.credentials.password));assert.ok(!diagnosticText.includes(refreshedMqtt.password));assert.ok(!diagnosticText.includes('runtime-test-password'));assert.ok(diagnosticZip.getEntries().every(e=>!e.entryName.endsWith('.env')));
  // Persistent RC login: cookie is HttpOnly and only a hash is stored; no password reuse in requests.
  async function pilotLogin(body,cookie){return fetch(base+'/api/pilot/login',{method:'POST',headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:JSON.stringify(body)});}
+ const gatewayLogin=await pilotLogin({username:'runtime-admin',password:'runtime-test-password'});assert.equal(gatewayLogin.status,200);const gatewayConfig=(await gatewayLogin.json()).data;assert.equal(gatewayConfig.ticket_id,null);assert.match(gatewayConfig.mqtt.username,/^pilot:\d+$/);const gatewayPeer=await connect({username:gatewayConfig.mqtt.username,password:gatewayConfig.mqtt.password,clientId:gatewayConfig.mqtt.clientId});clients.push(gatewayPeer);
+ const gatewayHeaders={'x-auth-token':gatewayConfig.token};assert.equal((await fetch(base+'/api/pilot/connection',{headers:gatewayHeaders})).status,200);
+ const gatewayStorage=await fetch(base+'/storage/api/v1/workspaces/'+gatewayConfig.workspace_id+'/sts',{method:'POST',headers:gatewayHeaders});assert.equal(gatewayStorage.status,200);
+ const gatewayLibrary=await fetch(base+'/wayline/api/v1/workspaces/'+gatewayConfig.workspace_id+'/waylines',{headers:gatewayHeaders});assert.equal(gatewayLibrary.status,200);assert.ok((await gatewayLibrary.json()).data.list.some(x=>x.id===route.route_uuid));
+ const gatewayDownload=await fetch(base+'/wayline/api/v1/workspaces/'+gatewayConfig.workspace_id+'/waylines/'+route.route_uuid+'/url?format=json',{headers:gatewayHeaders});assert.equal(gatewayDownload.status,200);assert.equal((await fetch((await gatewayDownload.json()).data.url)).status,200);
+ const nativeWs=new(require('ws'))(base.replace('http:','ws:')+'/ws?x-auth-token='+encodeURIComponent(gatewayConfig.token));await new Promise((resolve,reject)=>{nativeWs.once('open',resolve);nativeWs.once('error',reject);});nativeWs.close();
+
  const remembered=await pilotLogin({username:'runtime-admin',password:'runtime-test-password',ticketId:first.tid,remember:true});assert.equal(remembered.status,200);
  const rememberedHeader=remembered.headers.getSetCookie().find(c=>c.includes('Max-Age=2592000'));assert.match(rememberedHeader,/HttpOnly/);assert.match(rememberedHeader,/SameSite=Strict/);const saved=rememberedHeader.split(';')[0],raw=saved.split('=')[1];
  assert.equal((await fetch(base+'/api/pilot/remember',{headers:{Cookie:saved}}).then(r=>r.json())).data.available,true);

@@ -12,6 +12,6 @@ async function ticket(user,id){
     return t;
 }
 async function media(user,id){
-    const [m]=await query('SELECT * FROM media_files WHERE media_id=?',[id]);if(!m)throw denied();await ticket(user,m.ticket_id);return m;
+    const [m]=await query('SELECT * FROM media_files WHERE media_id=?',[id]);if(!m)throw denied();if(m.ticket_id!=null)await ticket(user,m.ticket_id);else if(!allScopes(user))throw denied();return m;
 }
 module.exports={permission,plant,ticket,media,denied,allScopes};

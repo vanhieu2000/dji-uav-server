@@ -13,11 +13,11 @@ function hmsItems(data) {
 }
 
 function channelFor(ticketId, sn) {
-    if (!Number.isSafeInteger(Number(ticketId)) || Number(ticketId) <= 0 || !SN_RE.test(sn || '')) {
+    if ((ticketId!=null&&(!Number.isSafeInteger(Number(ticketId))||Number(ticketId)<=0)) || !SN_RE.test(sn || '')) {
         throw new Error('Phiếu hoặc mã thiết bị phát không hợp lệ');
     }
     // Không dùng ticket_code như path: mã nghiệp vụ có thể đổi hoặc có ký tự không hợp lệ với RTMP.
-    return `ticket_${Number(ticketId)}_${digest(sn).slice(0, 16)}`;
+    return ticketId==null?`gateway_${digest(sn).slice(0,16)}`:`ticket_${Number(ticketId)}_${digest(sn).slice(0, 16)}`;
 }
 
 function createMonitoring({ query, onEvent = () => {}, now = () => Date.now(), playbackBase = '' }) {
@@ -27,8 +27,8 @@ function createMonitoring({ query, onEvent = () => {}, now = () => Date.now(), p
     async function ensureStream(ticketId, sn) {
         const channel = channelFor(ticketId, sn);
         await query(`INSERT INTO ticket_live_streams (ticket_id, device_sn, channel) VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE channel = VALUES(channel)`, [Number(ticketId), sn, channel]);
-        return { ticket_id: Number(ticketId), device_sn: sn, channel, streamPath: `/live/${channel}` };
+            ON DUPLICATE KEY UPDATE channel = VALUES(channel)`, [ticketId==null?null:Number(ticketId), sn, channel]);
+        return { ticket_id: ticketId==null?null:Number(ticketId), device_sn: sn, channel, streamPath: `/live/${channel}` };
     }
     function state(row) {
         const streamPath = `/live/${row.channel}`;
@@ -38,12 +38,13 @@ function createMonitoring({ query, onEvent = () => {}, now = () => Date.now(), p
         return { ...row, streamPath, flv_url: playbackBase ? `${playbackBase.replace(/\/$/, '')}${streamPath}.flv` : null, status, publisher_seen_at: p ? p.at : null };
     }
     async function streams(ticketId) {
-        return (await query('SELECT * FROM ticket_live_streams WHERE ticket_id = ? ORDER BY stream_id', [ticketId])).map(state);
+        return (await query('SELECT * FROM ticket_live_streams WHERE ticket_id <=> ? ORDER BY stream_id', [ticketId])).map(state);
     }
+    async function streamsForDevice(sn){return (await query('SELECT * FROM ticket_live_streams WHERE device_sn=? ORDER BY stream_id DESC',[sn])).map(state);}
     function publisherEvent(kind, session, legacyPath) {
         const streamPath = typeof session === 'object' && session ? session.streamPath : legacyPath;
         const id = typeof session === 'object' && session ? session.id : session;
-        if (!/^\/live\/ticket_\d+_[a-f0-9]{16}$/.test(streamPath || '')) return Promise.resolve(null);
+        if (!/^\/live\/(?:ticket_\d+|gateway)_[a-f0-9]{16}$/.test(streamPath || '')) return Promise.resolve(null);
         const run = (chains.get(streamPath) || Promise.resolve()).then(async () => {
             const [row] = await query('SELECT * FROM ticket_live_streams WHERE channel = ?', [streamPath.slice(6)]);
             if (!row) return null;
@@ -85,6 +86,6 @@ function createMonitoring({ query, onEvent = () => {}, now = () => Date.now(), p
         }
         return out;
     }
-    return { ensureStream, streams, publisherEvent, hms };
+    return { ensureStream, streamsForDevice, streams, publisherEvent, hms };
 }
 module.exports = { createMonitoring, channelFor, hmsItems };

@@ -13,13 +13,8 @@ const TICKET_SELECT = `
     LEFT JOIN flight_routes r ON t.assigned_route_id = r.route_id
 `;
 
-/** Kênh live mặc định của phiếu: "pkt_" + mã phiếu (chỉ chữ, số, _ -), để mỗi phiếu xem luồng riêng. */
-function channelForTicket(row) {
-    // 'm3t_live' là kênh chung cũ (mọi phiếu dùng chung) → coi như chưa đặt
-    if (row.livestream_channel && row.livestream_channel !== DEFAULT_LIVE_CHANNEL) return row.livestream_channel;
-    const code = String(row.ticket_code || row.ticket_id || '').toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
-    return code ? `pkt_${code}`.slice(0, 100) : DEFAULT_LIVE_CHANNEL;
-}
+/** Stable ticket channel, shared by API, reports and Pilot. */
+function channelForTicket(row) { return `ticket_${row.ticket_id}`; }
 
 function normalizeTicket(row) {
     if (!row) return null;
@@ -54,4 +49,4 @@ async function findTicketById(ticketId) {
     return normalizeTicket(rows[0]);
 }
 
-module.exports = { listActiveTickets, findTicketById, ACTIVE_STATUSES };
+module.exports = { listActiveTickets, findTicketById, findTicketByChannel, channelForTicket, ACTIVE_STATUSES };

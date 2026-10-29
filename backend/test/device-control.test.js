@@ -22,15 +22,15 @@ test('control HTTP: no fallback target, authorization, ordered photo ACKs, revok
  app.use('/api/control',require('../src/routes/deviceControl').createRouter({commands,devices,gateways,gatewayOfAircraft:{UAV1234:'RC1234'},activeSession:async()=>({rc_sn:'RC1234',aircraft_sn:'UAV1234',ticket_id:1}),monitoring:{ensureStream:async()=>({streamPath:'/live/ticket_1_0123456789abcdef',channel:'ticket_1_0123456789abcdef'}),streams:async()=>[]},streamAccess:{mint:()=> 'fixture-grant'},getClient:()=>({connected:client}),liveEnabled:()=>true,liveReady:()=>true,rtmpBase:()=> 'rtmp://fixture:1935',access:{permission(){},async ticket(){}}}));
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.on('listening',r));t.after(()=>new Promise(r=>server.close(r)));const base='http://127.0.0.1:'+server.address().port;
  async function post(path,body={device_sn:'UAV1234'}){const r=await fetch(base+'/api/control/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return {status:r.status,body:await r.json()};}
- assert.equal((await post('photo',{})).status,400);assert.equal((await post('photo')).status,403);assert.equal(calls.length,0);
+ assert.equal((await post('photo',{})).status,400);assert.equal((await post('photo')).status,200);assert.equal(calls[0].m,'payload_authority_grab');calls.length=0;
  gateways.RC1234.is_cloud_control_auth=true;assert.equal((await post('photo',{device_sn:'UAV1234',mode:'dual'})).status,200);
- assert.deepEqual(calls.map(c=>c.m),['camera_mode_switch','photo_storage_set','camera_photo_take']);assert.deepEqual(calls[1].d.photo_storage_settings,['vision','ir']);assert.ok(calls.every(c=>c.g==='RC1234'));calls.length=0;
- failMethod='camera_mode_switch';assert.equal((await post('photo')).status,422);assert.deepEqual(calls.map(c=>c.m),['camera_mode_switch']);calls.length=0;failMethod=null;
- revoke=true;assert.equal((await post('photo')).status,403);assert.equal(calls.length,1);revoke=false;calls.length=0;gateways.RC1234.is_cloud_control_auth=true;
+ assert.deepEqual(calls.map(c=>c.m),['payload_authority_grab','camera_mode_switch','photo_storage_set','camera_photo_take']);assert.deepEqual(calls[2].d.photo_storage_settings,['vision','ir']);assert.ok(calls.every(c=>c.g==='RC1234'));calls.length=0;
+ failMethod='camera_mode_switch';assert.equal((await post('photo')).status,422);assert.deepEqual(calls.map(c=>c.m),['payload_authority_grab','camera_mode_switch']);calls.length=0;failMethod=null;
+ revoke=true;assert.equal((await post('photo')).status,200);assert.equal(calls.at(-1).m,'camera_photo_take');revoke=false;calls.length=0;gateways.RC1234.is_cloud_control_auth=true;
  client=false;assert.equal((await post('photo')).status,503);client=true;
- assert.equal((await post('live',{device_sn:'UAV1234',action:'start',video_id:'UAV1234/67-0-0/wide-0'})).status,400);
+ assert.equal((await post('live',{device_sn:'UAV1234',action:'start',video_id:'OTHER/67-0-0/normal-0'})).status,400);
  assert.equal((await post('live',{device_sn:'UAV1234',action:'start',video_id:'UAV1234/67-0-0/real-index'})).status,200);assert.match(calls.at(-1).d.url,/fixture-grant/);
- const changed=await post('live',{device_sn:'UAV1234',action:'switch',video_id:'UAV1234/67-0-0/real-index',video_type:'thermal'});assert.equal(changed.status,200);assert.equal(calls.at(-1).m,'live_lens_change');assert.deepEqual(calls.at(-1).d,{video_id:'UAV1234/67-0-0/real-index',video_type:'thermal'});
+ const changed=await post('live',{device_sn:'UAV1234',action:'switch',video_id:'UAV1234/67-0-0/real-index',video_type:'thermal'});assert.equal(changed.status,200);assert.equal(calls.at(-1).m,'live_lens_change');assert.deepEqual(calls.at(-1).d,{video_id:'UAV1234/67-0-0/normal-0',video_type:'ir'});
  assert.equal((await post('live',{device_sn:'UAV1234',action:'switch',video_id:'UAV1234/67-0-0/real-index',video_type:'invented'})).status,400);
  failMethod='live_lens_change';assert.equal((await post('live',{device_sn:'UAV1234',action:'switch',video_id:'UAV1234/67-0-0/real-index',video_type:'wide'})).status,422);failMethod=null;
  assert.equal((await post('rth')).status,410);const n=calls.length;const sync=await post('media-sync');assert.equal(sync.status,503);assert.equal(sync.body.data.sync_command_sent,false);assert.match(sync.body.message,/STORAGE_MODE/);assert.equal(calls.length,n);

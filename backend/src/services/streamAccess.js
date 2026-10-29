@@ -2,7 +2,7 @@
 const crypto=require('crypto'),{query}=require('../config/db');
 const secret=crypto.randomBytes(32).toString('hex'),grants=new Map(),sessions=new Map();
 function mint(path,purpose,user){
- if(!/^\/live\/ticket_\d+_[a-f0-9]{16}$/.test(path)||!['play','publish'].includes(purpose)||!user?.session_id)throw Error('Invalid stream grant');
+ if(!/^\/live\/(?:ticket_\d+|gateway)_[a-f0-9]{16}$/.test(path)||!['play','publish'].includes(purpose)||!user?.session_id)throw Error('Invalid stream grant');
  const now=Date.now();for(const [id,g]of grants)if(g.expires<now)grants.delete(id);if(grants.size>=10000)throw Error('Quá nhiều stream grant');
  const id=crypto.randomBytes(24).toString('hex'),exp=Math.floor(now/1000)+(purpose==='publish'?12*3600:3600);
  grants.set(id,{path,purpose,user_id:user.user_id,session_id:user.session_id,auth_version:user.auth_version,expires:exp*1000});

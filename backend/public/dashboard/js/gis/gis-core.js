@@ -33,7 +33,8 @@
    */
   GIS.api = async function (method, url, body) {
     const token = localStorage.getItem('uav_token');
-    const init = { method, headers: token ? { Authorization: `Bearer ${token}` } : {} };
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+    const init = { signal:controller.signal, method, headers: token ? { Authorization: `Bearer ${token}` } : {} };
     if (body instanceof FormData) {
       init.body = body;
     } else if (body !== undefined) {
@@ -44,8 +45,8 @@
     try {
       res = await fetch(url, init);
     } catch (e) {
-      throw new Error('Không kết nối được máy chủ');
-    }
+      throw new Error(e.name==='AbortError'?'Máy chủ phản hồi quá lâu; bạn có thể chuyển tab và thử lại.':'Không kết nối được máy chủ');
+    }finally{clearTimeout(timer);}
     let json = null;
     try { json = await res.json(); } catch (e) { /* không phải JSON */ }
     if (!res.ok || !json || json.code !== 0) {

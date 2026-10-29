@@ -11,7 +11,7 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
   const session=await activeSession(sn);
   if(!session||session.rc_sn!==gateway||session.aircraft_sn!==sn)throw failure('Thiết bị chưa gắn đúng phiên Pilot');
   if(req.user.pilot_session_id&&req.user.pilot_session_id!==session.session_id)throw failure('Token Pilot không thuộc phiên thiết bị này',403);
-  access.permission(req.user,'tasks:write');await access.ticket(req.user,session.ticket_id);
+  access.permission(req.user,'tasks:write');if(session.ticket_id)await access.ticket(req.user,session.ticket_id);else if(!access.allScopes(req.user))throw failure('Phiên Gateway chưa gán phạm vi; cần operator hoặc admin',403);
   const fresh=device.last_osd_at&&Date.now()-new Date(device.last_osd_at).getTime()<30000&&device.status!=='OFFLINE';
   return {sn,gateway,device,session,fresh};
  }
@@ -111,6 +111,8 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
   // Chuẩn hóa video_id cho Mavic 3T: cụm camera 67-0-0 dùng video_index là normal-0
   let pushVideoId = id;
   let lens = req.body.video_type || null;
+  if(id&&!id.startsWith(t.sn+'/'))throw failure('Nguồn video không thuộc UAV đã chọn',400);
+  if(lens&&!['normal','wide','zoom','thermal','ir'].includes(lens))throw failure('Loại camera không hợp lệ',400);
   if (id.includes('67-0-0')) {
     pushVideoId = `${t.sn}/67-0-0/normal-0`;
     if (!lens) {
@@ -170,7 +172,7 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
     playback_url:row?streamAccess.playback(row,req.user).flv_url:null,
     streamPath:stream.streamPath,
     channel:stream.channel,
-    publisher_confirmed:true,
+    publisher_confirmed:row?.status==='STREAMING'||row?.status==='RECONNECTING',
     video_id:pushVideoId,
     video_type:lens||null
   },'Pilot 2 đã kích hoạt phát luồng live stream thành công.');

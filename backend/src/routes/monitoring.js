@@ -24,7 +24,7 @@ function createRouter({ monitoring, getLiveDevices }) {
             const liveSeen = dev?.last_seen ? new Date(dev.last_seen).getTime() : 0;
             const dbSeen = r.last_seen ? new Date(r.last_seen).getTime() : 0;
             const latestSeen = Math.max(liveSeen, dbSeen);
-            const isOnline = (now - latestSeen < 35000) && (dev?.status !== 'OFFLINE');
+            const isOnline = (now - latestSeen < 35000) && ((dev?.status||r.status) !== 'OFFLINE');
             return {
                 ...r,
                 battery: dev?.battery != null ? dev.battery : r.battery,
@@ -75,6 +75,11 @@ function createRouter({ monitoring, getLiveDevices }) {
         if (!row) throw new NotFoundError('Không tìm thấy cảnh báo HMS');
         await query('UPDATE uav_hms_events SET acknowledged_at = COALESCE(acknowledged_at, NOW()) WHERE event_id = ?', [id]);
         ok(res, { event_id: id });
+    }));
+    router.get('/live-current',asyncHandler(async(req,res)=>{
+      const sn=v.requiredString(req.query.device_sn,'UAV',64),a=require('../services/authorization');a.permission(req.user,'tasks:read');
+      if(!a.allScopes(req.user)){const [d]=await query('SELECT plant_id,unit_id FROM uav_devices WHERE device_sn=?',[sn]);if(!d||d.unit_id!==req.user.unit_id)throw a.denied();a.plant(req.user,d.plant_id);}
+      ok(res,(await monitoring.streamsForDevice(sn)).map(row=>require('../services/streamAccess').playback(row,req.user)));
     }));
     router.get('/live/:ticketId', asyncHandler(async (req, res) => {
         const id = v.parseId(req.params.ticketId, 'phiếu kiểm tra');

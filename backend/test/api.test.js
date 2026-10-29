@@ -349,6 +349,7 @@ test('API tài sản & bản đồ', async (t) => {
         const grid = profiles.find(p => p.profile_code === 'SOLAR_THERMAL');
         const pts = profiles.find(p => p.profile_code === 'DCL_POINT');
 
+        await api('PUT', `/api/solar/plants/${plantId}`, {boundary_geojson:{type:'Polygon',coordinates:[[[106.99,11.84],[107.02,11.84],[107.02,11.88],[106.99,11.88],[106.99,11.84]]]}});
         // Khu chưa có ranh giới → báo rõ
         const noPoly = await api('POST', '/api/solar/areas', { area_code: 'NOPOLY', area_name: 'Chưa vẽ' });
         const e1 = await api('POST', '/api/flight-plans/preview', { profile_id: grid.profile_id, area_id: noPoly.body.data.area_id });
@@ -387,9 +388,9 @@ test('API tài sản & bản đồ', async (t) => {
         assert.equal(ptRoute.body.data.plan.stats.point_count, 2);
 
         const manualPoints=[{lat:11.85,lng:107,altitude_m:30,gimbal_pitch:-90,hover_seconds:2},{lat:11.86,lng:107,altitude_m:35,gimbal_pitch:-45,hover_seconds:4},{lat:11.8501,lng:107,altitude_m:30,gimbal_pitch:-90,hover_seconds:1}];
-        const manual=await api('POST','/api/flight-plans/preview',{profile_id:pts.profile_id,points:manualPoints});assert.equal(manual.status,200);assert.deepEqual(manual.body.data.geojson.path.coordinates,manualPoints.map(p=>[p.lng,p.lat]));
-        assert.equal((await api('POST','/api/flight-plans/preview',{profile_id:pts.profile_id,points:[null,null]})).status,400);
-        const manualRoute=await api('POST','/api/flight-plans',{profile_id:pts.profile_id,points:manualPoints,route_name:'Điểm thủ công theo thứ tự'});assert.equal(manualRoute.status,200);
+        const manual=await api('POST','/api/flight-plans/preview',{plant_id:plantId,profile_id:pts.profile_id,points:manualPoints});assert.equal(manual.status,200,JSON.stringify(manual.body));assert.deepEqual(manual.body.data.geojson.path.coordinates,manualPoints.map(p=>[p.lng,p.lat]));
+        assert.equal((await api('POST','/api/flight-plans/preview',{plant_id:plantId,profile_id:pts.profile_id,points:[null,null]})).status,400);
+        const manualRoute=await api('POST','/api/flight-plans',{plant_id:plantId,profile_id:pts.profile_id,points:manualPoints,route_name:'Điểm thủ công theo thứ tự'});assert.equal(manualRoute.status,200);
         const manualZip=new AdmZip(Buffer.from(await fetch(app.base+manualRoute.body.data.kmz_url).then(r=>r.arrayBuffer()))),wpml=manualZip.readAsText('wpmz/waylines.wpml');assert.match(wpml,/reachPoint/);assert.match(wpml,/hover/);assert.match(wpml,/takePhoto/);assert.match(wpml,/relativeToStartPoint/);
         await api('DELETE','/api/flight-plans/'+manualRoute.body.data.route_id);
         const list = await api('GET', '/api/flight-plans');
@@ -670,6 +671,7 @@ test('API tài sản & bản đồ', async (t) => {
 
     await t.test('quét bản đồ 2D theo ranh giới nhà máy', async () => {
         const map2d = (await api('GET', '/api/capture-profiles')).body.data.find(p => p.profile_code === 'MAP_2D');
+        await api('PUT', `/api/solar/plants/${plantId}`, {boundary_geojson:null});
         const noBoundary = await api('POST', '/api/flight-plans/preview', { profile_id: map2d.profile_id, plant_id: plantId });
         assert.equal(noBoundary.status, 400);
         assert.match(noBoundary.body.message, /chưa vẽ ranh giới/);

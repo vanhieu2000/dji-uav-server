@@ -51,8 +51,8 @@
   function renderDevices() {
     const box = document.getElementById('uav-live-devices'); if (!box) return;
     const rows = [...devices.values()].filter(visible);
-    if(!selected && rows.length){
-      const active = rows.find(d => d.status === 'ONLINE' || d.status === 'IN_FLIGHT') || rows[0];
+    if(configLoaded && deviceMode==='single' && !selected && rows.length){
+      const active = defaultDevice?rows.find(d=>d.device_sn===defaultDevice):(rows.filter(d=>d.status==='ONLINE'||d.status==='IN_FLIGHT').length===1?rows.find(d=>d.status==='ONLINE'||d.status==='IN_FLIGHT'):rows.length===1?rows[0]:null);
       if(active){ selected = active.device_sn; onSelect(selected); }
     }
     const selector=document.getElementById('uav-monitor-target');
@@ -80,14 +80,16 @@
   async function refreshStreams() {
     const selectEl = document.getElementById('uav-live-stream'); if (!selectEl) return;
     const token = generation;
-    if (!ticketId) { streams = []; selectEl.innerHTML = '<option value="">Chọn phiếu để xem kênh live</option>'; return; }
+    if (!ticketId&&!selected) {streams=[];return;}
     try {
-      const r = await GIS.api('GET', `/api/monitoring/live/${ticketId}`);
+      const r = await GIS.api('GET', ticketId?`/api/monitoring/live/${ticketId}`:'/api/monitoring/live-current?device_sn='+encodeURIComponent(selected));
       if (token !== generation) return;
       streams = r.data;
       selectEl.innerHTML = '<option value="">Chọn kênh phát</option>' + streams.map(s => `<option value="${esc(s.streamPath)}">${esc(s.device_sn)} · ${s.status === 'STREAMING' ? 'Đang phát' : s.status === 'RECONNECTING' ? 'Đang kết nối lại' : 'Chưa phát'}</option>`).join('');
       if (currentPath && streams.some(s => s.streamPath === currentPath && ['STREAMING','RECONNECTING'].includes(s.status))) selectEl.value = currentPath;
       else if (currentPath) stopPlayback();
+      const active=streams.find(s=>s.status==='STREAMING'&&(!selected||s.device_sn===selected));
+      if(active&&!currentPath){currentPath=active.streamPath;selectEl.value=currentPath;window.startFlvLivePlayer?.(active.streamPath,active.flv_url);}
     } catch (e) { selectEl.innerHTML = '<option value="">Không tải được kênh</option>'; }
   }
   async function refreshHms() {
@@ -128,6 +130,7 @@
       renderDevices(); draw(); loading = false;
     }
   }
+  window.openTicketLive=(id,sn)=>{window.switchView('dashboard');GIS.LiveMonitor.openTicket(id,sn);};
   GIS.LiveMonitor = {
     addMap(map) {
       if (maps.has(map)) return;
@@ -150,7 +153,7 @@
         // Do not advance cursor from WS: HTTP keyset must still recover missed earlier images.
       } else if (msg.type === 'hms') refreshHms();
       else if (msg.type === 'stream_started' || msg.type === 'stream_stopped') {
-        if (String(msg.ticket_id) === ticketId) {
+        if (!ticketId || String(msg.ticket_id) === ticketId) {
           if (msg.type === 'stream_stopped' && msg.streamPath === currentPath) stopPlayback();
           refreshStreams();
         }
@@ -160,6 +163,7 @@
     reconnect: catchUp,
     selected: () => selected,
     selectDevice: select,
+    openTicket(id,sn){ticketId=String(id);generation++;select(sn);const el=document.getElementById('uav-live-ticket');if(el)el.value=ticketId;stopPlayback();catchUp();},
     streamPath: () => currentPath,
     playbackUrl: () => streams.find(s=>s.streamPath===currentPath)?.flv_url || null,
     mount(callback) {

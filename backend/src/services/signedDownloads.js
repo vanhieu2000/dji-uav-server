@@ -10,7 +10,8 @@ async function verify(req){
  if(!u)return false;
  // User session claims aren't stored as plaintext. Resolve the Pilot task by the session binding.
  const [p]=await query('SELECT * FROM pilot_sessions WHERE auth_session_id=? AND ended_at IS NULL',[sid]);
- if(p){const plants=await query('SELECT plant_id FROM user_plant_scopes WHERE user_id=?',[u.user_id]);await require('./authorization').ticket({...u,plant_ids:plants.map(x=>x.plant_id)},p.ticket_id);
+ if(p&&p.ticket_id==null){if(!require('./authorization').allScopes(u))return false;const [r]=await query('SELECT route_id FROM flight_routes WHERE kmz_file_name=?',[decodeURIComponent(req.path.split('/').pop())]);if(!r)return false;
+ }else if(p){const plants=await query('SELECT plant_id FROM user_plant_scopes WHERE user_id=?',[u.user_id]);await require('./authorization').ticket({...u,plant_ids:plants.map(x=>x.plant_id)},p.ticket_id);
   const [r]=await query('SELECT r.route_id FROM flight_routes r JOIN ticket_routes tr ON r.route_id=tr.route_id WHERE tr.ticket_id=? AND r.kmz_file_name=?',[p.ticket_id,decodeURIComponent(req.path.split('/').pop())]);if(!r)return false;
  }else if(!require('./authorization').allScopes(u))return false;
  req.user=u;return true;

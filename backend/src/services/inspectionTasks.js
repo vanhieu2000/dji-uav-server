@@ -33,6 +33,9 @@ async function saveTask(body,id=null,external=null){
             if(['COMPLETED','CANCELLED'].includes(current.status))throw conflict('Không sửa phiếu đã kết thúc');}
         const b={...current,...body};
         const name=v.requiredString(b.ticket_name,'tên phiếu',255),type=v.oneOf(b.inspection_type,['SOLAR_PANEL','DISCONNECTOR','OVERALL_SURVEY'],'loại kiểm tra');
+        const cycle=v.oneOf(b.inspection_cycle||'AD_HOC',['DAILY','WEEKLY','MONTHLY','AD_HOC'],'chu kỳ');
+        const category=v.oneOf(b.target_category||'OTHER',['SOLAR_AREA','SUBSTATION_110KV','FEEDER_22KV','OTHER'],'đối tượng');
+        const rc=v.optionalString(b.assigned_rc_sn,'tay cầm RC',64);
         const facility=v.requiredString(b.target_facility,'phạm vi mô tả',255);
         const profile=v.isBlank(b.capture_profile_id)?null:v.parseId(b.capture_profile_id,'hồ sơ chụp');
         const team=v.isBlank(b.team_id)?null:v.parseId(b.team_id,'tổ công tác');
@@ -55,7 +58,7 @@ async function saveTask(body,id=null,external=null){
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,[code,name,type,facility,device,inspector,notes,team,profile,start,end,b.vision_required?1:0]);id=r.insertId;
         }else await conn.execute(`UPDATE inspection_tickets SET ticket_name=?,inspection_type=?,target_facility=?,assigned_device_sn=?,inspector_id=?,notes=?,team_id=?,capture_profile_id=?,planned_start_at=?,planned_end_at=?,vision_required=?,revision=?,reconciled_at=NULL WHERE ticket_id=?`,
             [name,type,facility,device,inspector,notes,team,profile,start,end,b.vision_required?1:0,revision,id]);
-        await conn.execute('UPDATE inspection_tickets SET plant_id=?,unit_id=? WHERE ticket_id=?',[plantId,unitId,id]);
+        await conn.execute('UPDATE inspection_tickets SET plant_id=?,unit_id=?,inspection_cycle=?,target_category=?,assigned_rc_sn=? WHERE ticket_id=?',[plantId,unitId,cycle,category,rc,id]);
         if(body.scope!==undefined){
             if(!Array.isArray(body.scope)||body.scope.length>5000)throw new v.ValidationError('Phạm vi tối đa 5000 mục');
             const seen=new Set();await conn.execute('DELETE FROM ticket_details WHERE ticket_id=?',[id]);

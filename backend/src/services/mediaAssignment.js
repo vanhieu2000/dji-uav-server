@@ -5,11 +5,16 @@ async function resolveAssignment(query, options, meta) {
         const rows=await query('SELECT * FROM pilot_sessions WHERE upload_namespace=?',[options.uploadNamespace]);
         session=rows[0]||null;
     }
+    if(session&&session.route_verification!=='LEGACY'&&session.route_verification!=null&&meta.captured_at instanceof Date){
+        const matches=await query('SELECT ticket_id,route_state,started_at,ended_at FROM ticket_executions WHERE pilot_session_id=? AND ? BETWEEN started_at AND COALESCE(ended_at,NOW(3)) ORDER BY execution_id DESC LIMIT 2',[session.session_id,meta.captured_at]);
+        if(matches.length===1&&['VERIFIED','MANUAL_CONFIRMED','MISMATCH','UNKNOWN'].includes(matches[0].route_state))session={...session,ticket_id:matches[0].ticket_id,route_verification:matches[0].route_state,ticket_bound_at:matches[0].started_at,ended_at:matches[0].ended_at};
+    }
+    if(session&&['MISMATCH','UNKNOWN'].includes(session.route_verification))return {ticketId:null,deviceSn:options.deviceSn||session.aircraft_sn||'UNKNOWN',flightSessionId:null,pilotSessionId:session.session_id,status:'UNRESOLVED'};
     const deviceSn=options.deviceSn||(session&&session.aircraft_sn)||null;
     const captured=meta.captured_at instanceof Date && Number.isFinite(meta.captured_at.getTime()) ? meta.captured_at : null;
     const t=captured?captured.getTime():null;
     // Từ chối gán task mới cho ảnh được chụp ngoài khoảng phiên (ảnh cũ trong queue RC).
-    const inSession=session && t!=null && t>=new Date(session.started_at).getTime()-30000 &&
+    const inSession=session && t!=null && t>=new Date(session.ticket_bound_at||session.started_at).getTime()-(session.ticket_bound_at?0:30000) &&
         (!session.ended_at||t<=new Date(session.ended_at).getTime()+30000);
     let flight=null;
     if(deviceSn && captured){

@@ -5,13 +5,15 @@ const path=require('path');const req=require('module').createRequire(path.resolv
  app.use('/dashboard',req('express').static(path.resolve(__dirname,'../public/dashboard')));
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.on('listening',r));const base='http://127.0.0.1:'+server.address().port;
  const browser=await engine.launch({...(engineName==='chromium'?{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']}:{}),headless:true});
- const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));const commands=[],externalLibraries=[];let deviceMode='multi';
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));const commands=[],externalLibraries=[];let deviceMode='multi',apiOffline=false,liveRows=[];
  await page.addInitScript(()=>{window.WebSocket=class {constructor(){setTimeout(()=>this.onopen&&this.onopen(),10)} send(){} close(){}};});
  await page.route('**/*',async route=>{const u=new URL(route.request().url());
   if(u.host!==new URL(base).host){if(['script','stylesheet','font'].includes(route.request().resourceType()))externalLibraries.push(u.hostname);if(u.pathname.endsWith('leaflet.js'))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(req.resolve('leaflet/dist/leaflet.js'))});if(u.pathname.endsWith('leaflet.css'))return route.fulfill({contentType:'text/css',body:fs.readFileSync(req.resolve('leaflet/dist/leaflet.css'))});return route.fulfill({status:200,body:''});}
   if(u.pathname.startsWith('/api/')){
+   if(apiOffline&&u.pathname!=='/api/auth/me')return route.fulfill({status:503,json:{code:503,message:'Fixture unavailable'}});
    if(route.request().method()!=='GET'&&u.pathname!=='/api/diagnostics/client')commands.push(u.pathname);
    let data=[];
+   if(u.pathname==='/api/monitoring/live-current')data=liveRows;
    if(u.pathname==='/api/workspace/context')data={plants:[]};
    if(u.pathname==='/api/auth/me')data={user_id:1,role:'ADMIN',username:'fixture-admin'};
    if(u.pathname==='/api/insights/charts')data={tickets:[],defects:[],areas:[],temperatures:[],statuses:[],levels:[]};
@@ -60,17 +62,17 @@ const path=require('path');const req=require('module').createRequire(path.resolv
   await page.waitForTimeout(400);
   assert.equal(await page.locator('#real-gis-map .leaflet-control-layers').count(),1);
   if(process.env.BROWSER_SCREENSHOT) await page.screenshot({path:process.env.BROWSER_SCREENSHOT,fullPage:false});
-  await page.evaluate(()=>{triggerPhoto();flyAndCapturePoint(10,106);flyDroneToPoint(10,106);GIS.Tasks.render(document.getElementById('gis-assets-root'));});
+  await page.evaluate(()=>{flyAndCapturePoint(10,106);flyDroneToPoint(10,106);GIS.Tasks.render(document.getElementById('gis-assets-root'));});
   await page.waitForSelector('#task-form',{state:'attached'});
   await page.evaluate(()=>GIS.Insights.reports());
   await page.waitForSelector('#insights-reports-root .gis-empty',{state:'attached'});
   for(const view of ['dashboard','tickets-solar','tickets-dcl','control-manual','uav','reports','assets','admin']){await page.evaluate(v=>switchView(v),view);await page.waitForTimeout(150);assert.equal(await page.locator('.page-view.active').count(),1);}
   assert.deepEqual(commands,[]);assert.deepEqual(errors,[]);assert.deepEqual(externalLibraries,[]);assert.ok(await page.evaluate(()=>!!(window.L?.PM&&window.flvjs&&window.XLSX?.utils)));
   await page.evaluate(()=>switchView('map-solar'));await page.waitForFunction(()=>!!gBaseLayerSolar);
-  assert.match(await page.evaluate(()=>gBaseLayerSolar._url),/mt1\.google\.com/);
+  assert.match(await page.evaluate(()=>gBaseLayerSolar._url),/google\.com|arcgisonline\.com/);
   await page.evaluate(()=>{for(let i=0;i<4;i++)gBaseLayerSolar.fire('tileerror');});await page.waitForTimeout(200);
-  assert.match(await page.evaluate(()=>gBaseLayerSolar._url),/mt1\.google\.com/);assert.match(await page.locator('#topbar-net-status').innerText(),/Lỗi|lỗi/);
-  await page.evaluate(()=>setBasemap('offline','solar'));assert.equal(await page.evaluate(()=>gBaseLayerSolar._url),'/tiles/{z}/{x}/{y}.png');assert.equal(await page.evaluate(()=>localStorage.getItem('uav-basemap-solar')),'offline');
+  assert.match(await page.evaluate(()=>gBaseLayerSolar._url),/google\.com|arcgisonline\.com/);assert.match(await page.locator('#topbar-net-status').innerText(),/Lỗi|lỗi/);
+  await page.evaluate(()=>setBasemap('offline','solar'));assert.match(await page.evaluate(()=>gBaseLayerSolar._url),/google\.com|arcgisonline\.com/);assert.notEqual(await page.evaluate(()=>localStorage.getItem('uav-basemap-solar')),'offline');
   await page.evaluate(()=>setBasemap('google_hybrid','solar'));assert.equal(await page.evaluate(()=>savedBasemap('solar')),'google_hybrid');
   await page.goto(base+'/accounts.html');await page.waitForSelector('#permission-checks input');assert.equal(await page.locator('#permission-checks input').count(),6);assert.equal(await page.locator('#message').innerText(),'');assert.deepEqual(errors,[]);
   deviceMode='single';await page.goto(base);await page.waitForFunction(()=>GIS.LiveMonitor.selected()==='UAV-A');assert.equal(await page.evaluate(()=>gSelectedDroneSn),'UAV-A');
@@ -80,6 +82,8 @@ const path=require('path');const req=require('module').createRequire(path.resolv
     startFlvLivePlayer('/live/fixture','http://fixture.example/live.flv');return config;
   });assert.equal(playerConfig.enableStashBuffer,false);assert.equal(playerConfig.lazyLoad,false);
   await page.waitForFunction(()=>document.getElementById('manual-live-video').currentTime>4.5);await page.evaluate(()=>stopFlvLivePlayer());assert.equal(await page.evaluate(()=>gLiveEdgeTimer),null);assert.deepEqual(errors,[]);assert.deepEqual(commands,[]);
+  liveRows=[{device_sn:'UAV-A',ticket_id:null,streamPath:'/live/gateway_0123456789abcdef',status:'STREAMING',flv_url:'http://fixture/live.flv'}];await page.evaluate(()=>{window.autoPlayed=null;window.startFlvLivePlayer=(path,url)=>window.autoPlayed={path,url};GIS.LiveMonitor.onEvent({type:'stream_started',ticket_id:null,device_sn:'UAV-A'});});await page.waitForFunction(()=>window.autoPlayed?.path==='/live/gateway_0123456789abcdef');
+  apiOffline=true;await page.setViewportSize({width:1440,height:900});for(const view of ['reports','missions','dashboard']){await page.locator('aside [data-target="'+view+'"]').click();await page.waitForTimeout(100);assert.equal(await page.locator('aside [data-target="'+view+'"]').getAttribute('aria-current'),'page');}assert.deepEqual(errors,[]);
   console.log('PASS '+engineName+': dashboard boots, two UAV markers, zero battery, offline event, realtime photo; task UI mounts, legacy simulation sends no commands; online map default and tile errors preserve provider; explicit offline choice; no page errors');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -53,9 +53,10 @@ function createTracker({ query, now = () => Date.now(), onEvent = () => {}, find
             `UPDATE media_files m JOIN (
                 SELECT m2.media_id,MIN(f.flight_session_id) AS flight_id,MIN(f.ticket_id) AS ticket_id
                 FROM media_files m2 JOIN flight_sessions f ON m2.device_sn=f.device_sn
+                LEFT JOIN pilot_sessions ps ON ps.session_id=f.pilot_session_id
                   AND m2.captured_at BETWEEN f.started_at - INTERVAL 30 SECOND AND COALESCE(f.ended_at,NOW()) + INTERVAL 30 SECOND
                   AND (m2.ticket_id IS NULL OR m2.ticket_id=f.ticket_id)
-                WHERE m2.flight_session_id IS NULL AND f.ended_at IS NOT NULL
+                WHERE m2.flight_session_id IS NULL AND f.ended_at IS NOT NULL AND (ps.route_verification IS NULL OR ps.route_verification NOT IN ('UNKNOWN','MISMATCH'))
                   AND m2.device_sn NOT IN ('','UNKNOWN')
                 GROUP BY m2.media_id HAVING COUNT(*)=1
             ) candidate ON m.media_id=candidate.media_id
@@ -83,7 +84,7 @@ function createTracker({ query, now = () => Date.now(), onEvent = () => {}, find
         s.fixSamples = 0;
         s.samples = 0;
         s.batteryStart = dev.battery ?? null;
-        s.ticketId = session ? session.ticket_id : null;
+        s.ticketId = session&&!['UNKNOWN','MISMATCH'].includes(session.route_verification) ? session.ticket_id : null;
         s.pilotSessionId = session ? session.session_id : null;
         const r = await query(
             `INSERT INTO flight_sessions (device_sn, ticket_id, pilot_session_id, started_at, start_lat, start_lng, battery_start)

@@ -4,7 +4,7 @@
  window.UAV_MODULES={
   'flight-plans':{tab:'flights',title:'Lập đường bay',description:'Thiết kế tuyến kiểm tra, xem trước và xuất tuyến bay.'},
   'flight-history':{tab:'history',title:'Lịch sử chuyến bay',description:'Tra cứu chuyến bay và phát lại hành trình đã ghi nhận.'},
-  'missions':{tab:'tasks',title:'Nhiệm vụ & phân công',description:'Tạo nhiệm vụ, phân công tổ kiểm tra và theo dõi ảnh theo phiếu.'},
+  'missions':{tab:'tasks',title:'Phiếu kiểm tra & Lịch bay',description:'Tạo nhiệm vụ, phân công tổ kiểm tra và theo dõi ảnh theo phiếu.'},
   'vision':{tab:'vision',title:'Xử lý Vision',description:'Theo dõi xử lý ảnh và xác nhận kết quả phát hiện lỗi.'},
   'media-import':{tab:'media',title:'Nhập ảnh thẻ nhớ',description:'Đưa ảnh kiểm tra từ thẻ nhớ vào đúng phiếu.'},
   'photo-coverage':{tab:'coverage',title:'Kiểm tra đủ ảnh',description:'Đối chiếu ảnh đã nhận với các đối tượng cần kiểm tra.'},
@@ -30,6 +30,9 @@
   const left=document.createElement('div'),right=document.createElement('div');left.className=right.className='overview-column';
   issues.classList.add('overview-issue-card');area.classList.add('overview-area-card');
   primary.replaceChildren(left,right);left.append(live,area);right.append(stats,issues);secondary.remove();
+  const daily=document.createElement('section');daily.className='card daily-tickets-card';daily.style.cssText='padding:14px;margin-bottom:14px';daily.innerHTML='<div class="actions"><h3>Phiếu kiểm tra trong ngày</h3><button type="button" class="btn sm" id="daily-refresh">Làm mới</button><button type="button" class="btn sm" id="daily-all">Tất cả phiếu</button></div><div class="tbl-wrap" id="daily-tickets">Đang tải…</div>';primary.before(daily);
+  async function dailyTickets(){const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());try{const r=await GIS.api('GET','/api/tickets?date='+date);daily.querySelector('#daily-tickets').innerHTML='<table class="ui-table"><thead><tr><th>Phiếu</th><th>UAV</th><th>Trạng thái</th><th></th></tr></thead><tbody>'+r.data.map(t=>`<tr><td>${GIS.esc(t.ticket_name)}</td><td>${GIS.esc(t.assigned_device_sn||'Chưa giao')}</td><td>${GIS.esc(({PENDING:'Chờ giao',ASSIGNED:'Đã giao',EXECUTING:'Đang thực hiện',COMPLETED:'Hoàn tất',CANCELLED:'Đã hủy'})[t.status]||t.status)}</td><td>${t.status==='EXECUTING'?`<button class="btn sm" style="color:#dc3545" data-live="${t.ticket_id}" data-sn="${GIS.esc(t.assigned_device_sn||'')}">🔴 Xem Live</button>`:''}</td></tr>`).join('')+'</tbody></table>';if(!r.data.length)daily.querySelector('#daily-tickets').textContent='Chưa có phiếu trong ngày.';}catch(e){daily.querySelector('#daily-tickets').textContent=e.message;}}
+  daily.querySelector('#daily-refresh').onclick=dailyTickets;daily.querySelector('#daily-all').onclick=()=>window.switchView('missions');daily.addEventListener('click',e=>{const b=e.target.closest('[data-live]');if(b)window.openTicketLive?.(Number(b.dataset.live),b.dataset.sn);});dailyTickets();setInterval(()=>{if(document.getElementById('view-dashboard')?.classList.contains('active'))dailyTickets();},15000);
   const root=document.getElementById('settings-module-root');
   root.innerHTML=['profiles','import','basemaps'].map(tab=>`<div class="settings-pane" data-settings-pane="${tab}" hidden></div>`).join('');
   document.querySelectorAll('[data-settings]').forEach(button=>button.onclick=()=>{

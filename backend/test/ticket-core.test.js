@@ -1,0 +1,25 @@
+const test=require('node:test'),assert=require('node:assert/strict'),h=require('./helpers');
+test('Ticket Core: Gateway, Web assignment, immutable route snapshot, race exclusion, mismatch lock and late originals',async t=>{
+ if(!await h.mysqlAvailable())return t.skip('MySQL unavailable');await h.resetTestDatabase();const db=require('../src/config/db');await db.testConnection();
+ const user={user_id:1,username:'fixture',role:'ADMIN'};await db.query("INSERT INTO users (user_id,username,password_hash,full_name,role) VALUES (1,'fixture','not-a-password','Fixture','ADMIN')");const app=await h.startTestApp({user});
+ t.after(async()=>{await app.close();await db.closePool();await h.dropTestDatabase();});const {api}=app;
+ const boundary={type:'Polygon',coordinates:[[[106,10],[106.1,10],[106.1,10.1],[106,10.1],[106,10]]]};const plant=(await api('POST','/api/solar/plants',{plant_code:'FIXTURE',plant_name:'Fixture',boundary_geojson:boundary})).body.data.plant_id;
+ await db.query("INSERT INTO uav_devices (device_sn,device_name,device_model,device_type) VALUES ('UAV1234','Fixture','Mavic 3T','DRONE')");
+ const points=[{lat:10.01,lng:106.01,altitude_m:30,speed_mps:1,gimbal_pitch:-90,hover_seconds:1,lenses:'wide'},{lat:10.02,lng:106.02,altitude_m:40,speed_mps:2,gimbal_pitch:-45,hover_seconds:3,lenses:'ir'}];
+ const route=await api('POST','/api/flight-plans',{plant_id:plant,route_name:'Fixture — do not fly',points});assert.equal(route.status,200,JSON.stringify(route.body));const rid=route.body.data.route_id;
+ const create=await api('POST','/api/tickets',{ticket_name:'Inspection',inspection_type:'OVERALL_SURVEY',inspection_cycle:'WEEKLY',target_category:'FEEDER_22KV',plant_id:plant,target_facility:'Fixture',route_ids:[rid],assigned_device_sn:'UAV1234',assigned_rc_sn:'RC1234',inspector_id:1,planned_start_at:new Date().toISOString()});assert.equal(create.status,200,JSON.stringify(create.body));const tid=create.body.data.ticket_id;
+ const ticket=(await api('GET','/api/tickets/'+tid)).body.data.ticket;assert.equal(ticket.inspection_cycle,'WEEKLY');assert.equal(ticket.target_category,'FEEDER_22KV');
+ const session=await require('../src/services/mediaIngest').startPilotSession({user,rcSn:'RC1234',aircraftSn:'UAV1234'});const [s]=await db.query('SELECT * FROM pilot_sessions WHERE session_id=?',[session]);assert.equal(s.ticket_id,null);
+ const start=()=>api('POST',`/api/tickets/${tid}/execution`,{device_sn:'UAV1234',route_id:rid,confirmed:true});const attempts=await Promise.all([start(),start()]);assert.deepEqual(attempts.map(x=>x.status).sort(),[200,409]);
+ const [e]=await db.query('SELECT * FROM ticket_executions WHERE ticket_id=?',[tid]);assert.equal(e.route_state,'MANUAL_CONFIRMED');assert.ok(e.route_md5&&e.plan_snapshot);assert.equal((await api('DELETE','/api/flight-plans/'+rid)).status,409);
+ const source=async(sql,args)=>db.query(sql,args),now=new Date();await db.query('UPDATE ticket_executions SET started_at=DATE_SUB(NOW(3),INTERVAL 1 SECOND) WHERE execution_id=?',[e.execution_id]);
+ const assignment=await require('../src/services/mediaAssignment').resolveAssignment(source,{uploadNamespace:s.upload_namespace},{captured_at:now});assert.equal(assignment.ticketId,tid);
+ const check=await require('../src/services/waypointReconciliation').inspect(source,{originalName:'DJI_MAP_1_W.JPG'},{latitude:points[0].lat,longitude:points[0].lng,rtk_flag:50,captured_at:now},assignment);assert.equal(check.waypoint_check,'PASS');assert.equal(check.planned_waypoint_index,0);
+ assert.equal((await api('POST',`/api/tickets/${tid}/execution/mismatch`,{})).status,200);
+ const blocked=await require('../src/services/mediaAssignment').resolveAssignment(source,{uploadNamespace:s.upload_namespace},{captured_at:now});assert.equal(blocked.ticketId,null);
+  const fs=require('fs'),os=require('os'),path=require('path');process.env.LOCAL_STORAGE_DIR=fs.mkdtempSync(path.join(os.tmpdir(),'uav-gateway-original-'));t.after(()=>fs.rmSync(process.env.LOCAL_STORAGE_DIR,{recursive:true,force:true}));
+ const [blockedSession]=await db.query('SELECT * FROM pilot_sessions WHERE session_id=?',[session]);const native=require('../src/services/localObjectStorage'),key='media/'+s.upload_namespace+'/DJI_MAP_1_W.JPG',original=native.objectPath(key);fs.mkdirSync(path.dirname(original),{recursive:true});fs.writeFileSync(original,h.fakeDjiJpeg({lat:10.01,lng:106.01,date:new Date().toISOString()}));const saved=await native.receive(blockedSession,key);assert.equal(saved.media.ticket_id,null);assert.ok(fs.existsSync(saved.media.file_path_local));assert.equal(saved.status,'created');
+ const stopped=await api('POST',`/api/tickets/${tid}/execution/stop`,{});assert.equal(stopped.status,200);
+ const [sessionAfter]=await db.query('SELECT ticket_id FROM pilot_sessions WHERE session_id=?',[session]);assert.equal(sessionAfter.ticket_id,null);
+ const outside=await api('POST','/api/flight-plans/preview',{plant_id:plant,points:[points[0],{...points[1],lat:20}]});assert.equal(outside.status,400);
+});

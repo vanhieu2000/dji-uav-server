@@ -44,7 +44,7 @@ const engines=require('playwright-core'),engineName=process.env.BROWSER_ENGINE||
    await page.setViewportSize({width,height:1000});await page.waitForTimeout(300);
 
    const b=await page.evaluate(()=>{const s=document.getElementById('dashboard-live-stage'),c=s.closest('.card'),r=s.getBoundingClientRect(),cr=c.getBoundingClientRect();return {width:r.width,height:r.height,contained:r.right<=cr.right&&r.left>=cr.left,overflow:document.querySelector('#view-dashboard').scrollWidth>document.querySelector('#view-dashboard').clientWidth};});
-   assert.ok(b.contained&&b.width>200&&b.height<370,JSON.stringify({width,b}));assert.equal(b.overflow,false);
+   assert.ok(b.contained&&b.width>200&&b.height<370,JSON.stringify({width,b}));if(b.overflow)console.log('overflow nodes',await page.evaluate(()=>[...document.querySelectorAll('#view-dashboard *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1).map(e=>({tag:e.tagName,id:e.id,cls:e.className,width:e.getBoundingClientRect().width})).slice(0,12)));assert.equal(b.overflow,false,JSON.stringify({width,b}));
   }
   await page.setViewportSize({width:1440,height:1000});
   await page.evaluate(()=>{selectUav('UAV-A');setDroneOnlineState(true,'UAV-A',{device_sn:'UAV-A',alt:77,battery:12});selectUav('UAV-B');setDroneOnlineState(true,'UAV-A',{device_sn:'UAV-A',alt:999,battery:99});});

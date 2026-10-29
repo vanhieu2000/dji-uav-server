@@ -4,15 +4,15 @@ permissions:
   contents: read
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       MYSQL_HOST: 127.0.0.1
       MYSQL_USER: uav_ci
       MYSQL_PASSWORD: ci-fixture-password-only
       TEST_MYSQL_DATABASE: dji_uav_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -21,7 +21,12 @@ jobs:
       - name: Start native MySQL for isolated tests
         run: |
           sudo systemctl start mysql
-          sudo mysql -e "CREATE USER IF NOT EXISTS 'uav_ci'@'127.0.0.1' IDENTIFIED BY 'ci-fixture-password-only'; GRANT ALL PRIVILEGES ON *.* TO 'uav_ci'@'127.0.0.1';"
+          if sudo mysql -e 'SELECT 1' >/dev/null 2>&1; then
+            mysql_ci() { sudo mysql "$@"; }
+          else
+            mysql_ci() { MYSQL_PWD=root mysql --protocol=TCP -h127.0.0.1 -uroot "$@"; }
+          fi
+          mysql_ci -e "CREATE USER IF NOT EXISTS 'uav_ci'@'127.0.0.1' IDENTIFIED BY 'ci-fixture-password-only'; GRANT ALL PRIVILEGES ON dji_uav_test.* TO 'uav_ci'@'127.0.0.1';"
       - run: npm ci
         working-directory: backend
       - run: npm test
@@ -29,14 +34,14 @@ jobs:
       - run: npm audit --omit=dev
         working-directory: backend
   browsers:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         engine: [chromium, firefox, webkit]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
       - run: npm ci
@@ -49,6 +54,7 @@ jobs:
           npm run test:mobile
           npm run test:auth
           npm run test:workspace
+          if [ "${{ matrix.engine }}" = "chromium" ]; then npm run test:pilot; fi
         working-directory: backend
         env:
           BROWSER_ENGINE: ${{ matrix.engine }}
@@ -56,7 +62,7 @@ jobs:
   windows-launcher-syntax:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Validate Windows PowerShell launcher
         shell: powershell
         run: |

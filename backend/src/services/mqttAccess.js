@@ -9,7 +9,7 @@ async function principal(id){
  const [s]=await query(`SELECT p.*,u.status,u.role,u.unit_id,u.all_operation_scopes,u.auth_version AS current_auth_version FROM pilot_sessions p
   JOIN users u ON p.user_id=u.user_id JOIN user_sessions s ON p.auth_session_id=s.session_id
   WHERE p.session_id=? AND p.ended_at IS NULL AND s.expires_at>NOW() AND u.status='ACTIVE'`,[id]);
- if(!s||!s.ticket_id||s.auth_version!==s.current_auth_version)return null;
+ if(!s||s.auth_version!==s.current_auth_version)return null;
  if(s.ticket_id){
   const plants=await query('SELECT plant_id FROM user_plant_scopes WHERE user_id=?',[s.user_id]);
   const user={...s,plant_ids:plants.map(p=>p.plant_id)};try{await authorization.ticket(user,s.ticket_id);}catch(e){return null;}
@@ -19,21 +19,20 @@ async function principal(id){
 function topicAllowed(session,topic,direction){
  if(typeof topic!=='string'||topic.includes('+')||topic.includes('#'))return false;
  const match=/^(thing|sys)\/product\/([A-Za-z0-9_-]{4,64})\/([a-z_]+)$/.exec(topic);
- if(!match)return false;
+ if(!match||![session.rc_sn,session.aircraft_sn].filter(Boolean).includes(match[2]))return false;
  const allowed=direction==='publish'?['osd','state','events','requests','services_reply','status']:['services','requests_reply','events_reply','status_reply','state_reply'];
  return allowed.includes(match[3]);
 }
-// Khi nhận topology từ tay cầm, tự động cập nhật số serial máy bay vào phiên
+// Only authenticated gateway topology may bind an aircraft; never infer its identity from an arbitrary topic.
 async function bindTopology(session,topic,payload){
- if(!session||payload?.method!=='update_topo')return;
+ if(!session.rc_sn||topic!==`sys/product/${session.rc_sn}/status`||payload?.method!=='update_topo')return;
  const devices=payload.data?.sub_devices;
- if(!Array.isArray(devices)||!devices.length)return;
- const d=devices.find(x => x.sn && typeof x.sn === 'string');
- if(!d)return;
- try{
-  await query('UPDATE pilot_sessions SET aircraft_sn=? WHERE session_id=? AND ended_at IS NULL',[d.sn,session.session_id]);
-  session.aircraft_sn=d.sn;
- }catch(e){}
+ if(!Array.isArray(devices)||devices.length!==1)return;
+ const d=devices[0];
+ if(d.type!==77||d.sub_type!==1||typeof d.sn!=='string'||!/^[A-Za-z0-9_-]{4,64}$/.test(d.sn))return;
+ if(session.aircraft_sn&&session.aircraft_sn!==d.sn)throw Error('Aircraft does not match Pilot session');
+ await query('UPDATE pilot_sessions SET aircraft_sn=? WHERE session_id=? AND ended_at IS NULL AND (aircraft_sn IS NULL OR aircraft_sn=?)',[d.sn,session.session_id,d.sn]);
+ session.aircraft_sn=d.sn;
 }
 const brokers=new Set(),authAttempts=new Map();
 function connectionState(id){return {connected:sessionConnected(id),auth:authAttempts.get(Number(id))||null};}
@@ -49,9 +48,10 @@ function serialIdentityMismatch(s, value, depth = 0, path = '$') {
   } else if (value && typeof value === 'object') {
     for (const [k, x] of Object.entries(value)) {
       if (IGNORED_SN_KEYS.has(k)) continue;
-      // Bỏ qua serial của các thành phần con: gimbal, camera, payload, file upload
-      if (k === 'sn' && /payload|camera|gimbal|sub_device|file/i.test(path)) continue;
-      if (k === 'batteries' || k === 'battery' || k === 'dongle_infos' || k === 'camera_list' || k === 'cameras' || k === 'payload' || k === 'payloads' || k === 'gimbal' || k === 'camera' || k === 'files' || k === 'file_list' || k === 'media_files' || k === 'sub_devices') continue;
+      // Aircraft state reports payload/camera component serials here, not an aircraft identity.
+      // Keep device_sn/gateway_sn and all serials outside this exact component field checked.
+      if (k === 'sn' && /^\$\.data\.payloads\[\d+\]$/.test(path)) continue;
+      if (k === 'batteries' || k === 'battery' || k === 'dongle_infos' || k === 'camera_list' || k === 'cameras' || k === 'payload') continue;
       const field=path+'.'+k.replace(/[^A-Za-z0-9_-]/g,'_').slice(0,64);
       if ((k === 'sn' || k === 'device_sn' || k === 'gateway_sn' || k === 'aircraft_sn' || k === 'rc_sn') && typeof x === 'string' && x && !allowedSerials.includes(x)) {
         return {path:field,reason:'SERIAL_MISMATCH'};
@@ -73,23 +73,14 @@ function logIdentityDenied(client,session,topic,mismatch){
 async function authenticatePilot(username,password,lookup=principal){
  const name=Buffer.isBuffer(username)?username.toString('utf8'):username;
  const match=/^pilot:(\d+)$/.exec(typeof name==='string'?name:'');
- let id=match?Number(match[1]):null;
- if(!id){
-  try{
-   const [latest]=await query('SELECT session_id FROM pilot_sessions WHERE ended_at IS NULL ORDER BY session_id DESC LIMIT 1');
-   if(latest)id=latest.session_id;
-  }catch(e){}
- }
- if(!id)return {reason:'OK',sessionId:1};
- let session;
- try{session=await lookup(id);}catch{return {reason:'OK',sessionId:id};}
- if(!session){
-  try{
-   const [raw]=await query('SELECT * FROM pilot_sessions WHERE session_id=?',[id]);
-   if(raw)return {session:raw,sessionId:id};
-  }catch(e){}
- }
- return {session:session||{session_id:id},sessionId:id};
+ if(!match||!Number.isSafeInteger(Number(match[1])))return {reason:'USERNAME_FORMAT'};
+ const id=Number(match[1]);let session;
+ try{session=await lookup(id);}catch{return {reason:'SESSION_LOOKUP_FAILED',sessionId:id};}
+ if(!session)return {reason:'SESSION_UNAVAILABLE',sessionId:id};
+ if(!/^[a-f0-9]{64}$/.test(session.mqtt_password_hash||''))return {reason:'PASSWORD_HASH_MISSING',sessionId:id};
+ const actual=sha(password||Buffer.alloc(0));
+ if(!crypto.timingSafeEqual(Buffer.from(actual),Buffer.from(session.mqtt_password_hash)))return {reason:'PASSWORD_MISMATCH',sessionId:id};
+ return {session,sessionId:id};
 }
 const authLogTimes=new Map();
 function logAuth(client,result){
@@ -105,37 +96,36 @@ function configure(broker){
   if(username===internal.username&&password?.toString()===internal.password){client.uavInternal=true;return callback(null,true);}
   authenticatePilot(username,password).then(result=>{
    if(result.sessionId){if(authAttempts.size>=1000)authAttempts.delete(authAttempts.keys().next().value);authAttempts.set(Number(result.sessionId),{reason:result.reason||'OK',at:new Date().toISOString()});}
-   logAuth(client,result);
-   if(result.session){client.uavSessionId=result.session.session_id;client.uavScope=result.session;}
-   callback(null,true);
-  }).catch(()=>callback(null,true));
+   logAuth(client,result);if(!result.session)return callback(null,false);
+   client.uavSessionId=result.session.session_id;client.uavScope=result.session;callback(null,true);
+  }).catch(()=>callback(null,false));
  };
  broker.authorizePublish=(client,packet,callback)=>{
   if(!client||client.uavInternal)return callback(null);
-  if(packet.payload.length>2*1024*1024||packet.retain){
-    packet.topic = '$dropped/' + packet.topic;
-    return callback(null);
-  }
-  let payload=null;
-  try{payload=JSON.parse(packet.payload.toString());}catch(e){}
-  if(payload&&payload.method==='update_topo'){
-    bindTopology(client.uavScope||{session_id:client.uavSessionId},packet.topic,payload).catch(()=>{});
-  }
-  callback(null);
+  if(packet.payload.length>1024*1024||packet.retain)return callback(Error('Payload/retain denied'));
+  const now=Date.now();if(!client.uavRate||now-client.uavRate.at>1000)client.uavRate={at:now,n:0};if(++client.uavRate.n>100)return callback(Error('Rate denied'));
+  let payload;try{payload=JSON.parse(packet.payload.toString());}catch(e){return callback(Error('JSON required'));}
+  principal(client.uavSessionId).then(async s=>{
+    if (!s) return callback(Error('Session unavailable'));
+    if (!topicAllowed(s, packet.topic, 'publish')) {
+      console.warn(`[MQTT Access] ⚠ Từ chối publish topic=${packet.topic} từ ClientID=${client.id}`);
+      return callback(Error('Topic denied'));
+    }
+    await bindTopology(s,packet.topic,payload);
+    const mismatch=serialIdentityMismatch(s,payload);
+    if(mismatch){logIdentityDenied(client,s,packet.topic,mismatch);return callback(Error('Payload identity denied'));}
+    client.uavScope=s;callback(null);
+  }).catch(()=>callback(Error('Session unavailable')));
  };
  broker.authorizeSubscribe=(client,sub,callback)=>{
-  callback(null,sub);
+  if(client.uavInternal)return callback(null,sub);
+  principal(client.uavSessionId).then(s=>callback(null,s&&topicAllowed(s,sub.topic,'subscribe')?sub:null)).catch(()=>callback(null,null));
  };
- broker.authorizeForward=(client,packet)=>packet;
+ // Recheck each outbound packet so locked/revoked subscribers cannot keep reading commands.
+ broker.authorizeForward=(client,packet)=>client.uavInternal||topicAllowed(client.uavScope||{},packet.topic,'subscribe')?packet:null;
  broker.on('subscribe',(subs,client)=>{if(client&&!client.uavInternal)principal(client.uavSessionId).then(async s=>{client.uavScope=s||{};}).catch(()=>{});});
  broker.on('clientReady',client=>{if(!client.uavInternal)principal(client.uavSessionId).then(async s=>{client.uavScope=s||{};}).catch(()=>{});});
- const timer=setInterval(async()=>{
-  for(const client of Object.values(broker.clients)){
-   if(!client.uavInternal&&client.uavSessionId){
-    try{const s=await principal(client.uavSessionId);if(s)client.uavScope=s;}catch(e){}
-   }
-  }
- },10000);timer.unref();broker.on('closed',()=>{clearInterval(timer);brokers.delete(broker);});
+ const timer=setInterval(async()=>{for(const client of Object.values(broker.clients))if(!client.uavInternal){let s=null;try{s=await principal(client.uavSessionId);}catch(e){}if(!s)client.close();else client.uavScope=s;}},10000);timer.unref();broker.on('closed',()=>{clearInterval(timer);brokers.delete(broker);});
  return internal;
 }
 module.exports={connectionState,sessionConnected,configure,credentials,principal,topicAllowed,serialsAllowed,serialIdentityMismatch,bindTopology,authenticatePilot,revoke};

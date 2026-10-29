@@ -39,6 +39,7 @@ async function startPilotSession({ user, ticketId, rcSn, aircraftSn }) {
         'INSERT INTO pilot_sessions (user_id, username, ticket_id, rc_sn, aircraft_sn, upload_namespace) VALUES (?, ?, ?, ?, ?, ?)',
         [user && user.user_id ? user.user_id : null, user ? user.username : null, ticketId || null, rcSn || null, aircraftSn || null, crypto.randomUUID()]
     );
+    if(!ticketId)await query("UPDATE pilot_sessions SET route_verification='UNKNOWN' WHERE session_id=?",[r.insertId]);
     return r.insertId;
 }
 
@@ -120,7 +121,9 @@ async function ingestUnique(o,sha,stat){
     const pointId = await matchPhotoPoint(o.originalName || o.fileName, meta);
     const deviceSn = assignment.deviceSn;
 
+    const waypoint=await require('./waypointReconciliation').inspect(query,o,meta,assignment);
     const row = {
+        ...waypoint,
         ticket_id: ticketId,
         device_sn: deviceSn,
         file_name: o.fileName,

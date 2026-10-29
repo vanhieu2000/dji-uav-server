@@ -79,9 +79,10 @@ async function dropTestDatabase() {
 }
 
 /** App Express tối giản gắn các router cần test, chạy trên cổng ngẫu nhiên. */
-async function startTestApp() {
+async function startTestApp({user}={}) {
     const app = express();
     app.use(express.json({ limit: '50mb' }));
+    if(user)app.use((req,res,next)=>{req.user=user;next();});
     app.use(require('../src/routes/mediaUpload'));
     app.use(require('../src/routes/pilotWaylines'));
     app.use('/api/solar', require('../src/routes/solar'));

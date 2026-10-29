@@ -56,7 +56,7 @@ async function planGrid(profile, areaIdRaw, polygonRaw) {
             lineSpacingM: geometry.line_spacing_m,
             triggerDistanceM: geometry.trigger_distance_m,
             speedMps: geometry.max_speed_mps,
-            marginM: profile.margin_m,
+            marginM: 0,
             headingMode: profile.heading_mode,
             headingDeg: profile.heading_deg,
             rowLines: strings.map(s => { try { return JSON.parse(s.line_geojson); } catch (e) { return null; } })
@@ -84,7 +84,7 @@ async function planPlant(profile, plantIdRaw) {
     try {
         plan = gridPlan({
             polygon: rows[0].boundary_geojson, lineSpacingM: geometry.line_spacing_m, triggerDistanceM: geometry.trigger_distance_m,
-            speedMps: geometry.max_speed_mps, marginM: profile.margin_m,
+            speedMps: geometry.max_speed_mps, marginM: 0,
             headingMode: profile.heading_mode === 'FIXED' ? 'FIXED' : 'AUTO', headingDeg: profile.heading_deg
         });
     } catch (e) {
@@ -158,16 +158,21 @@ async function planPoints(profile, targets) {
 
 function planManualPoints(profile,raw){
  if(!Array.isArray(raw)||raw.length<2||raw.length>MAX_POINTS)throw new v.ValidationError(`Chọn từ 2 đến ${MAX_POINTS} điểm trên bản đồ rồi xem trước.`);
- const points=raw.map((p,i)=>{if(!p||typeof p!=='object'||Array.isArray(p))throw new v.ValidationError('Điểm chụp không hợp lệ');return {lat:v.requiredNumber(p.lat,'vĩ độ',{min:-90,max:90}),lng:v.requiredNumber(p.lng,'kinh độ',{min:-180,max:180}),altitude_m:v.requiredNumber(p.altitude_m,'độ cao so với điểm cất cánh',{min:2,max:500}),gimbal_pitch:v.requiredNumber(p.gimbal_pitch,'góc camera',{min:-90,max:35}),aircraft_heading:v.optionalNumber(p.aircraft_heading,'hướng máy bay',{min:-180,max:180}),hover_seconds:v.requiredNumber(p.hover_seconds,'thời gian dừng',{min:0,max:120}),label:'MAP_'+(i+1)};});
+ const points=raw.map((p,i)=>{if(!p||typeof p!=='object'||Array.isArray(p))throw new v.ValidationError('Điểm chụp không hợp lệ');return {lat:v.requiredNumber(p.lat,'vĩ độ',{min:-90,max:90}),lng:v.requiredNumber(p.lng,'kinh độ',{min:-180,max:180}),altitude_m:v.requiredNumber(p.altitude_m,'độ cao so với điểm cất cánh',{min:2,max:500}),gimbal_pitch:v.requiredNumber(p.gimbal_pitch,'góc camera',{min:-90,max:35}),aircraft_heading:v.optionalNumber(p.aircraft_heading,'hướng máy bay',{min:-180,max:180}),hover_seconds:v.requiredNumber(p.hover_seconds,'thời gian dừng',{min:0,max:120}),speed_mps:v.requiredNumber(p.speed_mps??profile.speed_mps,'tốc độ',{min:0.1,max:15}),lenses:(()=>{const xs=String(p.lenses||profile.lenses).split(',');if(!xs.length||xs.length>3||xs.some(x=>!['wide','ir','zoom'].includes(x)))throw new v.ValidationError('Ống kính không hợp lệ');return [...new Set(xs)].join(',');})(),label:'MAP_'+(i+1)};});
  const plan=pointsPlan(points,{speedMps:profile.speed_mps,hoverSeconds:profile.hover_seconds,photosPerPoint:profile.photos_per_point,preserveOrder:true});
  return {kind:'POINTS',targets:[],plan,geometry:{max_speed_mps:Number(profile.speed_mps)},stats:plan.stats,warnings:[...plan.warnings,'Điểm chọn trên bản đồ giữ đúng thứ tự. Kiểm tra tọa độ, độ cao so với điểm cất cánh và vật cản trên Pilot 2 trước khi bay.'],geojson:{path:{type:'LineString',coordinates:points.map(p=>[p.lng,p.lat])},points:points.map(p=>({...p}))}};
 }
 
 async function buildPlan(body) {
-    const profile = await loadProfile(body && body.profile_id);
+    const profile = body?.profile_id ? await loadProfile(body.profile_id) : {profile_id:null,route_kind:'POINTS',speed_mps:3,lenses:'wide,ir',gimbal_pitch:-90,hover_seconds:1,photos_per_point:1};
     const result = profile.route_kind === 'GRID'
         ? (v.isBlank(body.plant_id) ? await planGrid(profile, body.area_id, body.polygon) : await planPlant(profile, body.plant_id))
         : (body.points!==undefined?planManualPoints(profile,body.points):await planPoints(profile, body.targets));
+    let safetyPlant=body.plant_id;
+    if(!safetyPlant&&body.area_id){const [a]=await query('SELECT plant_id FROM solar_areas WHERE area_id=?',[body.area_id]);safetyPlant=a?.plant_id;}
+    if(!safetyPlant&&result.targets?.length){const t=result.targets[0],sql={BAY:'SELECT s.plant_id FROM substation_bays b JOIN substations s ON s.substation_id=b.substation_id WHERE b.bay_id=?',DISCONNECTOR:'SELECT s.plant_id FROM disconnectors d JOIN substation_bays b ON b.bay_id=d.bay_id JOIN substations s ON s.substation_id=b.substation_id WHERE d.disconnector_id=?',DCL_CONTACT:'SELECT s.plant_id FROM dcl_contacts c JOIN disconnectors d ON d.disconnector_id=c.disconnector_id JOIN substation_bays b ON b.bay_id=d.bay_id JOIN substations s ON s.substation_id=b.substation_id WHERE c.contact_id=?'}[t.asset_type];if(sql){const [a]=await query(sql,[t.asset_id]);safetyPlant=a?.plant_id;}}
+    await require('../services/safetyGeofence').validate(query,safetyPlant,result.kind==='GRID'?result.plan.waypoints:result.plan.points);
+    result.plant_id=Number(safetyPlant);
     if (profile.time_window_start && profile.time_window_end) {
         result.warnings.push(`Chỉ bay trong khung giờ ${profile.time_window_start.slice(0, 5)}–${profile.time_window_end.slice(0, 5)}`);
     }
@@ -189,6 +194,18 @@ function publicPlan(r) {
         geojson: r.geojson
     };
 }
+
+router.get('/geofence/:plantId',asyncHandler(async(req,res)=>{
+ const id=v.parseId(req.params.plantId,'nhà máy');require('../services/authorization').plant(req.user,id);
+ const [p]=await query('SELECT boundary_geojson FROM plants WHERE plant_id=?',[id]);
+ ok(res,{boundary:p?.boundary_geojson||null,exclusions:await query('SELECT exclusion_id,polygon_geojson FROM safety_exclusions WHERE plant_id=?',[id])});
+}));
+router.put('/geofence/:plantId',asyncHandler(async(req,res)=>{
+ const access=require('../services/authorization'),id=v.parseId(req.params.plantId,'nhà máy');access.permission(req.user,'assets:write');access.plant(req.user,id);
+ const fence=require('../services/safetyGeofence'),boundary=fence.polygon(req.body.boundary),blocked=req.body.exclusions||[];
+ if(!Array.isArray(blocked)||blocked.length>30)throw new v.ValidationError('Tối đa 30 vùng cấm');blocked.forEach(fence.polygon);
+ await require('../config/db').withTransaction(async conn=>{await conn.execute('UPDATE plants SET boundary_geojson=? WHERE plant_id=?',[JSON.stringify(boundary),id]);await conn.execute('DELETE FROM safety_exclusions WHERE plant_id=?',[id]);for(const g of blocked)await conn.execute('INSERT INTO safety_exclusions (plant_id,polygon_geojson) VALUES (?,?)',[id,JSON.stringify(g)]);});ok(res,{saved:true});
+}));
 
 router.post('/preview', asyncHandler(async (req, res) => {
     ok(res, publicPlan(await buildPlan(req.body || {})));
@@ -223,6 +240,7 @@ router.post('/', asyncHandler(async (req, res) => {
                 r.targets ? JSON.stringify(r.targets) : null, JSON.stringify(publicPlan(r)), md5,
                 r.geometry.altitude_m ?? null, r.stats.photo_count, r.stats.duration_s, v.optionalString(body.description, 'mô tả', 2000)]
         );
+        await query('UPDATE flight_routes SET target_plant_id=? WHERE route_id=?',[r.plant_id,result.insertId]);
         if (!v.isBlank(body.ticket_id)) await ticketRoutes.addRoute(body.ticket_id, result.insertId);
         const rows = await query('SELECT * FROM flight_routes WHERE route_id = ?', [result.insertId]);
         ok(res, toPublic(rows[0]), `Đã tạo đường bay ${kmz.waypointCount} điểm, khoảng ${r.stats.photo_count} ảnh`);
@@ -288,6 +306,7 @@ router.delete('/:id/tickets/:ticketId', asyncHandler(async (req, res) => {
 
 router.delete('/:id', asyncHandler(async (req, res) => {
     const row = await loadRoute(req.params.id);
+    const active=await query('SELECT execution_id FROM ticket_executions WHERE route_id=? AND ended_at IS NULL',[row.route_id]);if(active.length)throw Object.assign(new v.ValidationError('Tuyến đang được phân công; kết thúc phiên trước khi xóa'),{status:409});
     const affectedTickets = await ticketRoutes.ticketsOfRoute(row.route_id);
     await query('DELETE FROM flight_routes WHERE route_id = ?', [row.route_id]);
     for (const t of affectedTickets) await ticketRoutes.syncAssigned(t);
