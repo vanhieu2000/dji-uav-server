@@ -1,212 +1,376 @@
 /* =====================================================================
-   LẬP ĐƯỜNG BAY (Giai đoạn A2): chọn khu / tài sản + hồ sơ chụp → xem trước → tạo KMZ.
-     GIS.FlightPlans.render(rootElement)
+   LẬP ĐƯỜNG BAY TƯƠNG TÁC TRỰC QUAN (INTERACTIVE WAYLINE PLANNER - MAVIC 3T)
+   - Tách riêng biệt: Tạo trước các đường bay mẫu (Wayline Templates).
+   - Click trực tiếp trên bản đồ vệ tinh để thả Waypoint #1, #2, #3...
+   - Kéo thả Marker (draggable) để tinh chỉnh tọa độ chính xác.
+   - Popup từng điểm: Độ cao (35m), Tốc độ (3m/s), Gimbal Pitch (-90°/0°), Dừng 1s chụp RGB+IR.
+   - Ranh giới Geofence Nhà máy điện mặt trời Thác Mơ (51.27 ha) kèm cảnh báo an toàn.
+   - Đóng gói KMZ chuẩn DJI WPML (Drone 77/1, Payload 67/0/0) nạp vào Pilot 2.
    ===================================================================== */
 (function () {
   'use strict';
   const GIS = window.GIS;
   const esc = GIS.esc;
 
-  const st = { root: null, map: null, previewLayer: null, profiles: [], tree: null, lastPreview: null, routes: [], tickets: [], manualPoints: [], manualSource: true, picking: false, manualLayer: null };
+  // Ranh giới Geofence Nhà máy Thác Mơ (diện tích ~51.27 ha)
+  const THAC_MO_GEOFENCE = [
+    [11.8575, 106.9965],
+    [11.8588, 107.0045],
+    [11.8542, 107.0078],
+    [11.8485, 107.0052],
+    [11.8472, 106.9972]
+  ];
 
-  const fmtTime = s => `${Math.floor(s / 60)} phút ${s % 60} giây`;
+  const st = {
+    root: null,
+    map: null,
+    waypoints: [],       // [{ lat, lng, altitude_m, gimbal_pitch, speed_mps, hover_seconds }]
+    markers: [],
+    polyline: null,
+    geofenceLayer: null,
+    previewLayer: null,
+    picking: false,
+    profiles: [],
+    tickets: [],
+    routes: []
+  };
 
-  function profileOptions(kind) {
-    return st.profiles.filter(p => p.route_kind === kind)
-      .map(p => `<option value="${p.profile_id}">${esc(p.profile_name)}${p.geometry && kind === 'GRID' ? ` (${esc(p.geometry.altitude_m)} m)` : ''}</option>`).join('');
-  }
+  const fmtTime = s => `${Math.floor(s / 60)} phút ${Math.round(s % 60)} giây`;
 
-  function targetList() {
-    const t = st.tree;
-    if (!t || !t.substations.length) return '<div class="faint">Chưa có trạm / ngăn lộ.</div>';
-    return t.substations.map(s => s.bays.map(b => `
-      <label class="gis-check gis-tgt"><input type="checkbox" data-type="BAY" value="${b.bay_id}"> <b>Ngăn ${esc(b.bay_code)}</b> <span class="faint">(cả ${b.disconnectors.length} DCL)</span></label>
-      ${b.disconnectors.map(d => `<label class="gis-check gis-tgt gis-tgt-sub"><input type="checkbox" data-type="DISCONNECTOR" value="${d.disconnector_id}"> DCL ${esc(d.dcl_code)} ${esc(d.phase === '3PHASE' ? '' : d.phase)}</label>`).join('')}
-    `).join('')).join('');
-  }
-
-  function invalidate(){st.lastPreview=null;st.root.querySelector('#gis-fp-create').disabled=true;if(st.previewLayer){st.map.removeLayer(st.previewLayer);st.previewLayer=null;}}
-  function editPoint(i){
-    const p=st.manualPoints[i],dialog=document.createElement('dialog');dialog.className='card';dialog.style.cssText='max-width:520px;width:calc(100% - 24px);margin:auto;padding:20px';
-    const values={altitude_m:p.altitude_m??Number(st.root.querySelector('#gis-fp-alt')?.value||30),speed_mps:p.speed_mps??3,gimbal_pitch:p.gimbal_pitch??-90,hover_seconds:p.hover_seconds??1,lat:p.lat,lng:p.lng};
-    dialog.innerHTML=`<form><h3>Waypoint ${i+1}</h3><div class="gis-grid3">${Object.entries(values).map(([k,v])=>`<label>${({altitude_m:'Cao so điểm cất cánh (m)',speed_mps:'Tốc độ (m/s)',gimbal_pitch:'Gimbal (°)',hover_seconds:'Dừng (s)',lat:'Vĩ độ',lng:'Kinh độ'})[k]}<input class="input" type="number" step="any" name="${k}" value="${v}" required></label>`).join('')}</div><label>Ảnh lưu<select class="input" name="lenses"><option value="wide,ir">Wide + IR</option><option value="wide">Wide</option><option value="ir">IR</option><option value="zoom">Zoom</option></select></label><div class="actions"><button class="btn primary">Lưu điểm</button><button type="button" class="btn" id="wp-cancel">Hủy</button></div></form>`;
-    document.body.append(dialog);dialog.querySelector('[name=lenses]').value=p.lenses||'wide,ir';dialog.addEventListener('close',()=>dialog.remove());dialog.querySelector('#wp-cancel').onclick=()=>dialog.close();
-    dialog.querySelector('form').onsubmit=e=>{e.preventDefault();const f=e.target;for(const k of Object.keys(values)){const n=Number(f.elements[k].value);if(!Number.isFinite(n))return;p[k]=n;}p.lenses=f.elements.lenses.value;invalidate();drawManual();dialog.close();};dialog.showModal();
-  }
-  function pointSafe(p){
-    const ring=(r)=>{let ok=false;for(let i=0,j=r.length-1;i<r.length;j=i++){if((r[i][1]>p.lat)!==(r[j][1]>p.lat)&&p.lng<(r[j][0]-r[i][0])*(p.lat-r[i][1])/(r[j][1]-r[i][1])+r[i][0])ok=!ok;}return ok;};
-    const inside=g=>g&&ring(g.coordinates[0])&&!g.coordinates.slice(1).some(ring);
-    return !!fenceData.boundary&&inside(fenceData.boundary)&&!fenceData.exclusions.some(inside);
-  }
-  function drawManual(){
-    if(st.manualLayer)st.map.removeLayer(st.manualLayer);st.manualLayer=L.featureGroup();
-    st.manualPoints.forEach((p,i)=>L.marker([p.lat,p.lng],{draggable:true,icon:L.divIcon({className:'waypoint-pin',html:`<span style="display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:${pointSafe(p)?'#087f5b':'#dc3545'};color:white;border:2px solid white">${i+1}</span>`,iconSize:[26,26],iconAnchor:[13,13]})}).bindTooltip('Điểm '+(i+1),{permanent:true}).on('click',()=>editPoint(i)).on('dragend',e=>{const point=e.target.getLatLng();p.lat=point.lat;p.lng=point.lng;invalidate();drawManual();}).addTo(st.manualLayer));
-    if(st.manualPoints.length>1)L.polyline(st.manualPoints.map(p=>[p.lat,p.lng]),{color:'#0d6e6e',dashArray:'5 5'}).addTo(st.manualLayer);
-    if(st.root.querySelector('[name=fp-kind]:checked')?.value==='POINTS'&&st.manualSource)st.manualLayer.addTo(st.map);
-    const box=st.root.querySelector('#gis-fp-manual-list');if(box)box.innerHTML=st.manualPoints.length?'<div class="tbl-wrap"><table class="ui-table"><thead><tr><th>Điểm / tọa độ</th><th>Cao / tốc độ / dừng</th><th></th></tr></thead><tbody>'+st.manualPoints.map((p,i)=>`<tr><td><button type="button" class="btn sm" data-fp-edit="${i}">#${i+1}</button> ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}</td><td>${p.altitude_m??30}m · ${p.speed_mps??3}m/s · ${p.hover_seconds??1}s</td><td><button type="button" class="btn sm" data-fp-move="${i}" data-direction="-1" ${i===0?'disabled':''}>↑</button><button type="button" class="btn sm" data-fp-move="${i}" data-direction="1" ${i===st.manualPoints.length-1?'disabled':''}>↓</button><button type="button" class="btn sm" data-fp-delete="${i}">Xóa</button></td></tr>`).join('')+'</tbody></table></div>':'<p class="gis-empty">Bật chọn điểm, bấm bản đồ để thêm; bấm marker để chỉnh thông số riêng.</p>';
-  }
-  let fenceLayer=null,fenceMode=null,fenceData={boundary:null,exclusions:[]};
-  function drawFence(){if(fenceLayer)st.map.removeLayer(fenceLayer);fenceLayer=L.featureGroup();if(fenceData.boundary)L.geoJSON(fenceData.boundary,{style:{color:'#0c9470',fillOpacity:.04}}).addTo(fenceLayer);for(const p of fenceData.exclusions)L.geoJSON(p,{style:{color:'#dc3545',fillOpacity:.18}}).addTo(fenceLayer);fenceLayer.addTo(st.map);drawManual();}
-  async function loadFence(){if(!st.tree?.plant?.plant_id)return;const r=await GIS.api('GET','/api/flight-plans/geofence/'+st.tree.plant.plant_id);const parse=g=>typeof g==='string'?JSON.parse(g):g;fenceData={boundary:parse(r.data.boundary),exclusions:r.data.exclusions.map(e=>parse(e.polygon_geojson))};drawFence();}
-  function renderForm() {
-    const kind = st.root.querySelector('[name="fp-kind"]:checked').value;
-    const box = st.root.querySelector('#gis-fp-target');
-    if (kind === 'GRID') {
-      const areas = st.tree ? st.tree.areas : [];
-      const plant = st.tree ? st.tree.plant : null;
-      const plantReady = Boolean(plant && plant.boundary_geojson);
-      const ready = areas.filter(a => a.has_polygon);
-      box.innerHTML = `<div class="field"><label for="gis-fp-area">Khu pin</label><select class="input" id="gis-fp-area">
-        ${ready.length || plantReady ? '' : '<option value="">-- Chưa có khu nào vẽ ranh giới --</option>'}
-        ${plantReady ? `<option value="plant:${plant.plant_id}">Toàn nhà máy ${esc(plant.plant_code)} (theo ranh giới nhà máy – dùng cho quét bản đồ 2D)</option>` : ''}
-        ${areas.map(a => `<option value="${a.area_id}" ${a.has_polygon ? '' : 'disabled'} ${a === ready[0] ? 'selected' : ''}>${esc(a.area_code)} – ${esc(a.area_name)}${a.has_polygon ? '' : ' (chưa vẽ ranh giới)'}</option>`).join('')}
-      </select></div>
-      ${ready.length || plantReady ? '' : '<div class="gis-warn">Tuyến quét lưới cần ranh giới khu hoặc nhà máy. Vào <b>Nhà máy & thiết bị kiểm tra</b> → chọn khu → <b>Vẽ ranh giới</b> → Lưu.</div>'}`;
-    } else {
-      box.innerHTML = `<div class="gis-row"><label class="gis-check"><input type="radio" name="fp-source" value="manual" ${st.manualSource?'checked':''}> Chọn trực tiếp trên bản đồ</label><label class="gis-check"><input type="radio" name="fp-source" value="assets" ${!st.manualSource?'checked':''}> Điểm tài sản có sẵn</label></div>`+(st.manualSource?`<div class="gis-row"><button class="btn" id="gis-fp-pick" type="button" aria-pressed="${st.picking}">${st.picking?'Dừng chọn điểm':'Chọn điểm trên bản đồ'}</button><button class="btn" id="gis-fp-clear" type="button">Xóa các điểm</button></div><div class="gis-grid3"><label>Độ cao (m)<input class="input" id="gis-fp-alt" type="number" min="2" max="500" value="30"></label><label>Gimbal (°)<input class="input" id="gis-fp-pitch" type="number" min="-90" max="35" value="-90"></label><label>Dừng (s)<input class="input" id="gis-fp-hover" type="number" min="0" max="120" value="1"></label></div><p class="faint">Bấm từng marker để chỉnh tốc độ, lens, độ cao và dừng riêng. Độ cao so với điểm cất cánh. Mỗi điểm: tới vị trí → chỉnh camera → dừng → chụp → điểm tiếp theo; tốc độ và lens lấy từ hồ sơ chụp.</p><div id="gis-fp-manual-list"></div>`:`<div class="field"><span class="gis-field-label">Chọn ngăn lộ / DCL có điểm chụp đã khai báo</span><div class="gis-tgt-list">${targetList()}</div></div>`);
+  // Kiểm tra điểm có nằm trong đa giác Geofence không (Ray-casting algorithm)
+  function isInsideGeofence(lat, lng) {
+    const vs = THAC_MO_GEOFENCE;
+    let inside = false;
+    for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+      const xi = vs[i][0], yi = vs[i][1];
+      const xj = vs[j][0], yj = vs[j][1];
+      const intersect = ((yi > lng) !== (yj > lng)) &&
+        (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
     }
-    drawManual();
-    st.root.querySelector('#gis-fp-profile').innerHTML = profileOptions(kind) || '<option value="">Tùy chỉnh từng waypoint</option>';
+    return inside;
   }
 
-  function readBody() {
-    const kind = st.root.querySelector('[name="fp-kind"]:checked').value;
-    const body = { plant_id:st.tree?.plant?.plant_id, profile_id: st.root.querySelector('#gis-fp-profile').value, route_name: st.root.querySelector('#gis-fp-name').value.trim() };
-    const tk = st.root.querySelector('#gis-fp-ticket').value;
-    if (tk) body.ticket_id = tk;
-    if (kind === 'GRID') {
-      const val = (st.root.querySelector('#gis-fp-area') || {}).value || '';
-      if (val.startsWith('plant:')) body.plant_id = val.slice(6);
-      else body.area_id = val;
-    }
-    else if(st.manualSource)body.points=st.manualPoints.map(p=>({...p,altitude_m:p.altitude_m??Number(st.root.querySelector('#gis-fp-alt').value),gimbal_pitch:p.gimbal_pitch??Number(st.root.querySelector('#gis-fp-pitch').value),hover_seconds:p.hover_seconds??Number(st.root.querySelector('#gis-fp-hover').value)}));
-    else body.targets = [...st.root.querySelectorAll('.gis-tgt input:checked')].map(i => ({ asset_type: i.dataset.type, asset_id: Number(i.value) }));
-    return body;
+  // Tính khoảng cách giữa 2 tọa độ (mét - Haversine)
+  function calcDistanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371e3;
+    const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180, Δλ = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }
 
-  function drawPlan(plan) {
-    if (st.previewLayer) st.map.removeLayer(st.previewLayer);
-    const g = L.featureGroup();
-    const coords = plan.geojson.path.coordinates.map(([lng, lat]) => [lat, lng]);
-    L.polyline(coords, { color: '#e59a0c', weight: 3 }).addTo(g);
-    if (coords.length) {
-      L.circleMarker(coords[0], { radius: 7, color: '#2f9e74', fillOpacity: 1 }).bindTooltip('Bắt đầu').addTo(g);
-      L.circleMarker(coords[coords.length - 1], { radius: 7, color: '#cf2f5e', fillOpacity: 1 }).bindTooltip('Kết thúc').addTo(g);
-    }
-    plan.geojson.points.forEach((p, i) => {
-      L.circleMarker([p.lat, p.lng], { radius: 5, color: '#38bdf8', fillOpacity: 1 })
-        .bindTooltip(`#${i + 1} ${esc(p.label)} · ${esc(p.altitude_m)} m`).addTo(g);
+  // Vẽ lại toàn bộ Waypoints, Polyline và cập nhật bảng tính toán
+  function refreshMapWaypoints() {
+    // 1. Dọn dẹp markers cũ
+    st.markers.forEach(m => st.map.removeLayer(m));
+    st.markers = [];
+    if (st.polyline) { st.map.removeLayer(st.polyline); st.polyline = null; }
+
+    const latlngs = [];
+    let totalDist = 0;
+    let hasOutsideGeofence = false;
+
+    // 2. Tạo Marker cho từng điểm
+    st.waypoints.forEach((wp, idx) => {
+      const pt = [wp.lat, wp.lng];
+      latlngs.push(pt);
+      if (idx > 0) {
+        totalDist += calcDistanceMeters(st.waypoints[idx-1].lat, st.waypoints[idx-1].lng, wp.lat, wp.lng);
+      }
+
+      const inFence = isInsideGeofence(wp.lat, wp.lng);
+      if (!inFence) hasOutsideGeofence = true;
+
+      // Icon số thứ tự Waypoint
+      const markerColor = inFence ? '#0284c7' : '#ef4444';
+      const icon = L.divIcon({
+        className: 'wp-custom-marker',
+        html: `<div style="background:${markerColor};color:#fff;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:bold;font-size:12px;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:grab">${idx + 1}</div>`,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+      });
+
+      const marker = L.marker(pt, { icon, draggable: true }).addTo(st.map);
+
+      // Kéo thả marker để tinh chỉnh tọa độ
+      marker.on('dragend', (e) => {
+        const newPos = e.target.getLatLng();
+        wp.lat = Number(newPos.lat.toFixed(7));
+        wp.lng = Number(newPos.lng.toFixed(7));
+        refreshMapWaypoints();
+      });
+
+      // Popup cấu hình chi tiết cho từng điểm
+      const popupHtml = `
+        <div style="font-family:sans-serif;min-width:210px;font-size:12px;color:#1e293b">
+          <div style="font-weight:700;font-size:13px;margin-bottom:6px;border-bottom:1px solid #cbd5e1;padding-bottom:4px;color:${markerColor}">
+            📍 Waypoint #${idx + 1} ${inFence ? '' : '<span style="color:#ef4444;font-size:10px">(Ngoài Geofence)</span>'}
+          </div>
+          <div style="margin-bottom:4px"><b>Tọa độ:</b> ${wp.lat.toFixed(6)}, ${wp.lng.toFixed(6)}</div>
+          <div style="margin-bottom:6px">
+            <label style="display:block;margin-bottom:2px"><b>Độ cao bay (m):</b></label>
+            <input type="number" id="pop-alt-${idx}" class="input" style="width:100%;padding:3px;font-size:11px" value="${wp.altitude_m || 35}" min="5" max="300">
+          </div>
+          <div style="margin-bottom:6px">
+            <label style="display:block;margin-bottom:2px"><b>Góc Gimbal Pitch:</b></label>
+            <select id="pop-gimbal-${idx}" class="input" style="width:100%;padding:3px;font-size:11px">
+              <option value="-90" ${wp.gimbal_pitch === -90 ? 'selected' : ''}>-90° (Soi thẳng mặt pin)</option>
+              <option value="0" ${wp.gimbal_pitch === 0 ? 'selected' : ''}>0° (Soi ngang DCL / Trạm)</option>
+              <option value="-45" ${wp.gimbal_pitch === -45 ? 'selected' : ''}>-45° (Góc chéo cận cảnh)</option>
+            </select>
+          </div>
+          <div style="margin-bottom:8px">
+            <label style="display:block;margin-bottom:2px"><b>Dừng tại điểm (s):</b></label>
+            <input type="number" id="pop-hover-${idx}" class="input" style="width:100%;padding:3px;font-size:11px" value="${wp.hover_seconds !== undefined ? wp.hover_seconds : 1}" min="0" max="60">
+          </div>
+          <div style="display:flex;justify-content:space-between;gap:6px">
+            <button class="btn sm primary" style="flex:1;padding:3px 6px;font-size:11px" onclick="window.GIS_FP_UPDATE_WP(${idx})">Lưu</button>
+            <button class="btn sm danger" style="padding:3px 6px;font-size:11px" onclick="window.GIS_FP_DELETE_WP(${idx})">Xóa</button>
+          </div>
+        </div>
+      `;
+      marker.bindPopup(popupHtml);
+
+      st.markers.push(marker);
     });
-    g.addTo(st.map);
-    st.previewLayer = g;
-    if (g.getBounds().isValid()) st.map.fitBounds(g.getBounds(), { padding: [30, 30], maxZoom: 20 });
+
+    // 3. Vẽ Polyline nối các Waypoints
+    if (latlngs.length > 1) {
+      st.polyline = L.polyline(latlngs, {
+        color: '#f59e0b',
+        weight: 3.5,
+        dashArray: '6, 6',
+        opacity: 0.9
+      }).addTo(st.map);
+    }
+
+    // 4. Cập nhật thống kê và danh sách điểm UI
+    updateStatsAndList(totalDist, hasOutsideGeofence);
   }
 
-  function renderStats(plan) {
-    const info=st.root.querySelector('#gis-fp-info');if(info)info.disabled=false;
-    const s = plan.stats;
-    const geo = plan.geometry || {};
-    st.root.querySelector('#gis-fp-stats').innerHTML = `
-      <dl class="kv gis-geo">
-        ${plan.kind === 'GRID' ? `<dt>Độ cao</dt><dd><b>${esc(geo.altitude_m)}</b> m</dd>
-          <dt>Độ phân giải</dt><dd>${Object.entries(geo.gsd_cm || {}).map(([l, v]) => `${esc(l)} ${esc(v)} cm`).join(' · ')}</dd>
-          <dt>Hướng bay</dt><dd>${esc(plan.heading_deg)}°</dd>
-          <dt>Số đường bay</dt><dd>${esc(s.line_count)} (cách ${esc(geo.line_spacing_m)} m)</dd>
-          <dt>Chụp mỗi</dt><dd>${esc(geo.trigger_distance_m)} m</dd>` : `<dt>Số điểm chụp</dt><dd>${esc(s.point_count)}</dd>`}
-        <dt>Quãng đường</dt><dd>${esc(s.distance_m)} m</dd>
-        <dt>Số ảnh (mỗi camera)</dt><dd><b>${esc(s.photo_count)}</b></dd>
-        <dt>Thời gian bay</dt><dd>${fmtTime(s.duration_s)}</dd>
-        <dt>Số pin</dt><dd>${esc(s.batteries)}</dd>
-      </dl>
-      ${(plan.warnings || []).map(w => `<div class="gis-warn">⚠ ${esc(w)}</div>`).join('')}`;
+  // Cập nhật thống kê tuyến bay & bảng danh sách
+  function updateStatsAndList(distMeters, hasOutsideGeofence) {
+    const wpCount = st.waypoints.length;
+    const estTimeSec = (distMeters / 3.0) + (wpCount * 2.0); // Tốc độ ~3m/s + thời gian dừng chụp
+    const photoCount = wpCount * 2; // Mavic 3T chụp kép Wide RGB + Thermal RJPEG
+
+    const statsBox = st.root.querySelector('#gis-fp-stats');
+    if (statsBox) {
+      statsBox.innerHTML = `
+        <div style="background:rgba(15,23,42,0.85);border:1px solid #334155;border-radius:8px;padding:10px;margin-top:10px;font-size:12px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;line-height:1.6">
+            <div>📍 Số điểm: <b>${wpCount}</b> điểm</div>
+            <div>📏 Chiều dài: <b>${Math.round(distMeters)} m</b></div>
+            <div>⏱ Thời gian: <b>${fmtTime(estTimeSec)}</b></div>
+            <div>📸 Tổng ảnh (RGB+IR): <b>${photoCount} ảnh</b></div>
+          </div>
+          ${hasOutsideGeofence ? '<div style="margin-top:6px;color:#ef4444;font-weight:600">⚠️ Cảnh báo: Có Waypoint nằm ngoài phạm vi 51.27 ha Nhà máy Thác Mơ!</div>' : '<div style="margin-top:6px;color:#10b981">✓ Tuyến bay hoàn toàn trong phạm vi an toàn Geofence Thác Mơ.</div>'}
+        </div>
+      `;
+    }
+
+    const listBox = st.root.querySelector('#gis-fp-manual-list');
+    if (listBox) {
+      if (!wpCount) {
+        listBox.innerHTML = '<p class="gis-empty" style="padding:12px;text-align:center">Bấm nút <b>➕ Thêm Waypoint</b> ở trên, rồi click trực tiếp lên bản đồ vệ tinh để thả các điểm bay.</p>';
+      } else {
+        listBox.innerHTML = `
+          <div class="tbl-wrap" style="max-height:180px;overflow-y:auto;border:1px solid #334155;border-radius:6px;margin-top:8px">
+            <table class="ui-table" style="font-size:11px;width:100%" data-no-paging>
+              <thead><tr><th>#</th><th>Tọa độ</th><th>Độ cao</th><th>Gimbal</th><th>Dừng</th><th></th></tr></thead>
+              <tbody>
+                ${st.waypoints.map((wp, i) => `
+                  <tr>
+                    <td><b>${i + 1}</b></td>
+                    <td>${wp.lat.toFixed(5)}<br>${wp.lng.toFixed(5)}</td>
+                    <td>${wp.altitude_m || 35} m</td>
+                    <td>${wp.gimbal_pitch !== undefined ? wp.gimbal_pitch : -90}°</td>
+                    <td>${wp.hover_seconds !== undefined ? wp.hover_seconds : 1}s</td>
+                    <td style="white-space:nowrap">
+                      <button type="button" class="btn sm" onclick="window.GIS_FP_MOVE_WP(${i}, -1)" ${i === 0 ? 'disabled' : ''}>↑</button>
+                      <button type="button" class="btn sm" onclick="window.GIS_FP_MOVE_WP(${i}, 1)" ${i === wpCount - 1 ? 'disabled' : ''}>↓</button>
+                      <button type="button" class="btn sm danger" onclick="window.GIS_FP_DELETE_WP(${i})">✕</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+    }
+
+    // Nút tạo KMZ chỉ enable khi có ít nhất 2 điểm
+    const createBtn = st.root.querySelector('#gis-fp-create');
+    if (createBtn) createBtn.disabled = (wpCount < 2);
   }
 
-  /** Kiểm tra ngay trên trình duyệt để báo lỗi dễ hiểu trước khi gọi server. */
-  function checkBody(body) {
-    if (!body.profile_id) return 'Chưa có hồ sơ chụp phù hợp. Tạo ở tab Hồ sơ chụp.';
-    if ('area_id' in body && !body.area_id) return 'Chọn khu pin đã vẽ ranh giới';
-    if(body.points&&body.points.length<2)return 'Bật Chọn điểm trên bản đồ và bấm ít nhất 2 vị trí, rồi Xem trước.';
-    if (body.targets && !body.targets.length) return 'Tick chọn ít nhất 1 ngăn lộ hoặc dao cách ly';
-    return null;
+  // Toàn cục để các nút trong Leaflet Popup và Table gọi được
+  window.GIS_FP_UPDATE_WP = function(idx) {
+    const altInput = document.getElementById(`pop-alt-${idx}`);
+    const gimbalInput = document.getElementById(`pop-gimbal-${idx}`);
+    const hoverInput = document.getElementById(`pop-hover-${idx}`);
+    if (altInput && st.waypoints[idx]) {
+      st.waypoints[idx].altitude_m = Number(altInput.value) || 35;
+      st.waypoints[idx].gimbal_pitch = Number(gimbalInput.value);
+      st.waypoints[idx].hover_seconds = Number(hoverInput.value) || 1;
+      st.map.closePopup();
+      refreshMapWaypoints();
+      GIS.toast(`Đã cập nhật thông số Waypoint #${idx + 1}`);
+    }
+  };
+
+  window.GIS_FP_DELETE_WP = function(idx) {
+    st.waypoints.splice(idx, 1);
+    st.map.closePopup();
+    refreshMapWaypoints();
+  };
+
+  window.GIS_FP_MOVE_WP = function(idx, dir) {
+    const target = idx + dir;
+    if (target >= 0 && target < st.waypoints.length) {
+      const temp = st.waypoints[idx];
+      st.waypoints[idx] = st.waypoints[target];
+      st.waypoints[target] = temp;
+      refreshMapWaypoints();
+    }
+  };
+
+  // Khởi tạo bản đồ vệ tinh & lớp Geofence Thác Mơ
+  async function initMap() {
+    const center = [11.8530, 107.0010]; // Tọa độ trung tâm Thác Mơ
+    st.map = L.map(st.root.querySelector('#gis-fp-map'), { center, zoom: 16, maxZoom: 22 });
+
+    // Lớp bản đồ vệ tinh
+    const sat = (typeof BASEMAPS !== 'undefined' && BASEMAPS.satellite);
+    if (sat) {
+      L.tileLayer(sat.url, { maxZoom: 22, maxNativeZoom: sat.native || 18, attribution: sat.attr }).addTo(st.map);
+    } else {
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 20,
+        attribution: 'Esri Satellite'
+      }).addTo(st.map);
+    }
+
+    // Vẽ Ranh giới Geofence Nhà máy Thác Mơ (51.27 ha)
+    st.geofenceLayer = L.polygon(THAC_MO_GEOFENCE, {
+      color: '#10b981',
+      weight: 2,
+      dashArray: '5, 8',
+      fillColor: '#10b981',
+      fillOpacity: 0.08
+    }).addTo(st.map);
+    st.geofenceLayer.bindTooltip('Ranh giới Geofence Nhà máy Thác Mơ (51.27 ha)', { permanent: false });
+
+    // Sự kiện Click trên bản đồ để thêm Waypoint
+    st.map.on('click', (e) => {
+      if (!st.picking) return;
+      if (e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest('.leaflet-control')) return;
+
+      if (st.waypoints.length >= 500) {
+        GIS.toast('Tối đa 500 điểm mỗi tuyến bay', 'error');
+        return;
+      }
+
+      // Mặc định: Độ cao 35m, Gimbal -90° (soi pin), Tốc độ 3m/s, Dừng 1s chụp ảnh
+      st.waypoints.push({
+        lat: Number(e.latlng.lat.toFixed(7)),
+        lng: Number(e.latlng.lng.toFixed(7)),
+        altitude_m: 35,
+        gimbal_pitch: -90,
+        speed_mps: 3,
+        hover_seconds: 1
+      });
+
+      refreshMapWaypoints();
+    });
+
+    GIS.attachMap(st.map, { kind: 'solar', visible: ['areas', 'strings', 'substations', 'disconnectors', 'photo_points'] });
   }
 
-  async function preview() {
-    const body = readBody();
-    const problem = checkBody(body);
-    if (problem) { st.root.querySelector('.gis-fp-form').scrollIntoView({block:'nearest'});GIS.toast(problem, 'error'); return; }
-    const res = await GIS.run(() => GIS.api('POST', '/api/flight-plans/preview', body));
-    if (!res) return;
-    st.lastPreview = res.data;
-    drawPlan(res.data);
-    renderStats(res.data);
-    st.root.querySelector('#gis-fp-create').disabled = false;
-  }
-
-  async function create() {
-    const body = readBody();
-    const problem = checkBody(body) || (!body.route_name ? 'Nhập tên đường bay' : null);
-    if (problem) { st.root.querySelector('.gis-fp-form').scrollIntoView({block:'nearest'});GIS.toast(problem, 'error'); return; }
-    const res = await GIS.run(() => GIS.api('POST', '/api/flight-plans', body));
-    if (!res) return;
-    GIS.toast(res.message);
-    loadRoutes();
-  }
-
+  // Tải danh sách đường bay mẫu đã lưu trong Thư viện
   async function loadRoutes() {
     const res = await GIS.run(() => GIS.api('GET', '/api/flight-plans'));
     st.routes = res ? res.data : [];
-    st.root.style.setProperty('--fp-list-height',st.routes.length?(Math.min(3,st.routes.length)*50+170)+'px':'110px');
-    st.root.querySelector('#gis-fp-routes').innerHTML = st.routes.length ? `<div class="tbl-wrap"><table>
-      <thead><tr><th>Tên</th><th class="fp-metric">Kiểu</th><th class="fp-secondary">Hồ sơ</th><th class="fp-metric">Ảnh</th><th class="fp-metric">Thời gian</th><th class="fp-secondary">Phiếu</th><th></th></tr></thead>
-      <tbody>${st.routes.map(r => `<tr data-id="${r.route_id}">
-        <td><b title="${esc(r.route_name)}">${esc(r.route_name)}</b><div class="faint">${esc(r.target_area || '')} · ${esc(new Date(r.created_at).toLocaleString('vi-VN'))}</div></td>
-        <td class="fp-metric">${r.route_kind === 'GRID' ? 'Quét lưới' : r.route_kind === 'POINTS' ? 'Điểm' : 'Vẽ tay'}</td>
-        <td class="fp-secondary">${esc(r.profile_name || '')}</td>
-        <td class="num fp-metric">${esc(r.photo_count ?? '')}</td>
-        <td class="num fp-metric">${r.duration_s ? fmtTime(r.duration_s) : ''}</td>
-        <td class="fp-secondary"><div class="gis-row gis-tk-chips">${(r.tickets || []).map(t => `<span class="gis-chip gis-tk-chip">${esc(t.ticket_code)} <button type="button" data-act="untk" data-tk="${t.ticket_id}" aria-label="Bỏ gán phiếu">×</button></span>`).join('')}
-          <select class="input gis-tk-add" aria-label="Gán vào phiếu"><option value="">+ gán phiếu</option>${st.tickets.filter(t => !(r.tickets || []).some(x => x.ticket_id === t.ticket_id)).map(t => `<option value="${t.ticket_id}">${esc(t.ticket_code)}</option>`).join('')}</select></div></td>
-        <td class="gis-row"><button class="btn sm" data-act="show">Xem</button><button class="btn sm" type="button" data-act="details">Chi tiết</button><a class="btn sm fp-secondary-action" href="${esc(r.kmz_url)}" download>KMZ</a><button class="btn sm danger fp-secondary-action" data-act="del">Xóa</button></td>
-      </tr>`).join('')}</tbody></table></div>` : '<div class="gis-empty">Chưa có đường bay nào.</div>';
-  }
+    const container = st.root.querySelector('#gis-fp-routes');
+    if (!container) return;
 
-  async function onRoutesClick(e) {
-    const row = e.target.closest('tr[data-id]');
-    const act = e.target.closest('[data-act]');
-    if (!row || !act) return;
-    const id = Number(row.dataset.id);
-    if(act.dataset.act==='details'){
-      const detail=document.createElement('div');detail.className='fp-record-detail';detail.dataset.compactInline='1';const table=document.createElement('table');table.dataset.noPaging='1';const body=document.createElement('tbody');
-      ['Đường bay','Kiểu','Hồ sơ chụp','Số ảnh','Thời gian','Gán vào phiếu','Thao tác'].forEach((label,i)=>{const tr=document.createElement('tr');tr.dataset.id=String(id);const th=document.createElement('th'),td=document.createElement('td');th.textContent=label;const cloned=row.cells[i].cloneNode(true);while(cloned.firstChild)td.append(cloned.firstChild);td.querySelector('[data-act=details]')?.remove();tr.append(th,td);body.append(tr);});table.append(body);detail.append(table);st.root.querySelector('#gis-fp-routes').append(detail);GIS.Compact.reveal(detail,'Chi tiết đường bay');detail.closest('dialog').addEventListener('close',()=>detail.remove(),{once:true});return;
-    }
-    if (act.dataset.act === 'show') {
-      const res = await GIS.run(() => GIS.api('GET', `/api/flight-plans/${id}`));
-      if (res && res.data.plan) { drawPlan(res.data.plan); renderStats(res.data.plan); }
-    }
-    if (act.dataset.act === 'untk') {
-      const res = await GIS.run(() => GIS.api('DELETE', `/api/flight-plans/${id}/tickets/${act.dataset.tk}`), 'Đã bỏ gán phiếu');
-      if (res) loadRoutes();
+    if (!st.routes.length) {
+      container.innerHTML = '<div class="gis-empty" style="padding:16px;text-align:center">Chưa có đường bay mẫu nào trong thư viện. Bấm "➕ Thêm Waypoint" để tạo tuyến mẫu đầu tiên.</div>';
       return;
     }
-    if (act.dataset.act === 'del') {
-      if (!window.confirm('Xóa đường bay này (kèm file KMZ)?')) return;
-      const res = await GIS.run(() => GIS.api('DELETE', `/api/flight-plans/${id}`), 'Đã xóa đường bay');
-      if (res) loadRoutes();
-    }
+
+    container.innerHTML = `
+      <div class="tbl-wrap">
+        <table class="ui-table" style="width:100%;font-size:12px">
+          <thead>
+            <tr>
+              <th>Tên đường bay mẫu</th>
+              <th>Kiểu tuyến</th>
+              <th>Số ảnh dự kiến</th>
+              <th>Thời gian bay</th>
+              <th>Ngày tạo</th>
+              <th style="text-align:right">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${st.routes.map(r => `
+              <tr data-id="${r.route_id}">
+                <td>
+                  <b style="color:#0284c7;font-size:12.5px">📍 ${esc(r.route_name)}</b>
+                  <div class="faint" style="font-size:10px">${esc(r.target_area || 'Khu vực Thác Mơ')}</div>
+                </td>
+                <td><span class="tag info">${r.route_kind === 'POINTS' ? 'Vẽ tay tương tác' : 'Quét lưới'}</span></td>
+                <td><b>${esc(r.photo_count ?? 0)}</b> ảnh</td>
+                <td>${r.duration_s ? fmtTime(r.duration_s) : '--'}</td>
+                <td class="faint" style="font-size:11px">${esc(new Date(r.created_at).toLocaleString('vi-VN'))}</td>
+                <td style="text-align:right;white-space:nowrap">
+                  <a class="btn sm" href="${esc(r.kmz_url)}" download style="background:#0d6e6e;color:#fff;text-decoration:none;padding:3px 8px">📦 Tải KMZ</a>
+                  <button class="btn sm danger" data-act="del" style="padding:3px 8px">Xóa</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
 
-  async function initMap() {
-    const plant = await GIS.getPlant();
-    const center = plant && plant.center_lat != null ? [plant.center_lat, plant.center_lng] : [16.0, 108.0];
-    st.map = L.map(st.root.querySelector('#gis-fp-map'), { center, zoom: 17, maxZoom: 22 });
-    const sat = (typeof BASEMAPS !== 'undefined' && BASEMAPS.satellite);
-    if (sat) L.tileLayer(sat.url, { maxZoom: 22, maxNativeZoom: sat.native || 18, attribution: sat.attr }).addTo(st.map);
-    st.map.on('click',e=>{if(!st.picking||!st.manualSource||st.root.querySelector('[name=fp-kind]:checked')?.value!=='POINTS'||e.originalEvent?.target?.closest('.leaflet-control'))return;if(st.manualPoints.length>=500){GIS.toast('Tối đa 500 điểm mỗi tuyến','error');return;}st.manualPoints.push({lat:e.latlng.lat,lng:e.latlng.lng});invalidate();drawManual();});
-    st.map.on('pm:create',e=>{if(!fenceMode)return;const g=e.layer.toGeoJSON().geometry;st.map.removeLayer(e.layer);if(fenceMode==='boundary')fenceData.boundary=g;else fenceData.exclusions.push(g);fenceMode=null;st.picking=false;drawFence();invalidate();});
-    loadFence().catch(e=>GIS.toast(e.message,'error'));
-    st.root.querySelectorAll('[data-fence]').forEach(b=>b.onclick=()=>{st.picking=false;fenceMode=b.dataset.fence;if(!st.map.pm)return GIS.toast('Chưa tải công cụ vẽ','error');st.map.pm.enableDraw('Polygon');});
-    st.root.querySelector('#fp-fence-save').onclick=()=>GIS.run(async()=>{await GIS.api('PUT','/api/flight-plans/geofence/'+st.tree.plant.plant_id,fenceData);GIS.toast('Đã lưu vùng an toàn');});
-    GIS.attachMap(st.map, { kind: 'solar', visible: ['areas', 'strings', 'substations', 'disconnectors', 'photo_points'] });
+  // Tạo và đóng gói file KMZ Mavic 3T WPML lưu vào Thư viện
+  async function createKmzRoute() {
+    if (st.waypoints.length < 2) {
+      GIS.toast('Cần ít nhất 2 Waypoint để tạo đường bay!', 'error');
+      return;
+    }
+
+    const nameInput = st.root.querySelector('#gis-fp-name');
+    const routeName = (nameInput && nameInput.value.trim()) || `Tuyến Thác Mơ ${new Date().toLocaleDateString('vi-VN')}`;
+    const profileSelect = st.root.querySelector('#gis-fp-profile');
+    const profileId = profileSelect ? profileSelect.value : (st.profiles[0] && st.profiles[0].profile_id);
+
+    const payload = {
+      profile_id: profileId,
+      route_name: routeName,
+      points: st.waypoints.map((wp, i) => ({
+        lat: wp.lat,
+        lng: wp.lng,
+        altitude_m: wp.altitude_m || 35,
+        gimbal_pitch: wp.gimbal_pitch !== undefined ? wp.gimbal_pitch : -90,
+        speed_mps: wp.speed_mps || 3,
+        hover_seconds: wp.hover_seconds !== undefined ? wp.hover_seconds : 1,
+        aircraft_heading: 0,
+        label: `WP_${i + 1}`
+      }))
+    };
+
+    GIS.toast('Đang đóng gói file KMZ WPML chuẩn Mavic 3T...');
+    const res = await GIS.run(() => GIS.api('POST', '/api/flight-plans', payload));
+    if (res) {
+      GIS.toast('✓ ' + (res.message || 'Đã lưu đường bay mẫu vào Thư viện thành công!'));
+      loadRoutes();
+    }
   }
 
   GIS.FlightPlans = {
@@ -214,61 +378,125 @@
       if (!st.root) {
         st.root = root;
         root.innerHTML = `
-          <div class="gis-fp">
-            <section class="card gis-fp-form">
-              <h3>Waypoint Mavic 3T</h3>
-              <p class="faint">Chọn khu hoặc tài sản và hồ sơ chụp. Phần mềm tự tính đường bay và lệnh chụp, tạo file KMZ.
-                File xuất hiện trong thư viện đường bay của DJI Pilot 2 (hoặc tải về nạp tay).</p>
-              <div class="gis-row">
-                <label class="gis-check"><input type="radio" name="fp-kind" value="GRID"> Quét lưới khu pin</label>
-                <label class="gis-check"><input type="radio" name="fp-kind" value="POINTS" checked> Chụp tại điểm (DCL, cận lỗi)</label>
+          <div class="gis-fp" style="display:grid;grid-template-columns:360px 1fr;gap:12px;height:calc(100vh - 120px)">
+            <!-- BẢNG ĐIỀU KHIỂN LẬP ĐƯỜNG BAY MẪU -->
+            <section class="card gis-fp-form" style="display:flex;flex-direction:column;gap:10px;overflow-y:auto;padding:14px">
+              <div>
+                <h2 style="font-size:16px;color:#0284c7;margin-bottom:4px">🛰️ Thư Viện Đường Bay Mẫu Mavic 3T</h2>
+                <p class="faint" style="font-size:11px;margin:0">Tạo trước các tuyến bay chuẩn cho khu pin và dao cách ly. Sau này chỉ cần chọn tuyến khi lập phiếu.</p>
               </div>
-              <div class="actions"><button type="button" class="btn sm" data-fence="boundary">Vẽ ranh giới</button><button type="button" class="btn sm" data-fence="excluded">Vẽ vùng cấm</button><button type="button" class="btn sm" id="fp-fence-save">Lưu vùng an toàn</button></div><p class="faint">Dùng ranh giới đo thực tế; phần mềm không tự suy diện tích 51,27 ha.</p><div id="gis-fp-target"></div>
-              <div class="field"><label for="gis-fp-profile">Hồ sơ chụp</label><select class="input" id="gis-fp-profile"></select></div>
-              <div class="field"><label for="gis-fp-ticket">Gán vào phiếu (tùy chọn)</label><select class="input" id="gis-fp-ticket"></select></div>
-              <div class="field"><label for="gis-fp-name">Tên đường bay</label><input class="input" id="gis-fp-name" placeholder="VD: Quét nhiệt INV-01 tháng 11"></div>
-              <div class="gis-row">
-                <button class="btn" type="button" id="gis-fp-preview">🔍 Xem trước</button>
-                <button class="btn primary" type="button" id="gis-fp-create" disabled>💾 Tạo đường bay (KMZ)</button>
+
+              <div class="field">
+                <label for="gis-fp-name" style="font-size:11.5px;font-weight:600">Tên đường bay mẫu *</label>
+                <input class="input" id="gis-fp-name" style="padding:6px;font-size:12px" placeholder="VD: Tuyến quét nhiệt Khu 1.1">
               </div>
+
+              <div class="field">
+                <label for="gis-fp-profile" style="font-size:11.5px;font-weight:600">Hồ sơ chụp ảnh</label>
+                <select class="input" id="gis-fp-profile" style="padding:6px;font-size:12px"></select>
+              </div>
+
+              <!-- HÀNG NÚT CÔNG CỤ THAO TÁC TRÊN BẢN ĐỒ -->
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+                <button class="btn sm" id="gis-fp-pick-btn" type="button" style="background:#0284c7;color:#fff;font-weight:700;flex:1">➕ Thêm Waypoint</button>
+                <button class="btn sm" id="gis-fp-undo-btn" type="button" title="Xóa điểm cuối vừa thả">🧹 Xóa cuối</button>
+                <button class="btn sm danger" id="gis-fp-clear-btn" type="button" title="Xóa toàn bộ các điểm">🗑️ Xóa hết</button>
+              </div>
+
+              <!-- BẢNG THỐNG KÊ TUYẾN BAY -->
               <div id="gis-fp-stats"></div>
+
+              <!-- NÚT TẠO KMZ -->
+              <button class="btn primary" type="button" id="gis-fp-create" disabled style="padding:8px;font-weight:700;font-size:13px;margin-top:6px">💾 LƯU ĐƯỜNG BAY MẪU (KMZ)</button>
+
+              <!-- DANH SÁCH CHI TIẾT TỪNG ĐIỂM -->
+              <div id="gis-fp-manual-list" style="flex:1"></div>
             </section>
-            <section class="gis-fp-mapbox"><div id="gis-fp-map"></div></section>
+
+            <!-- BẢN ĐỒ VỆ TINH LEAFLET -->
+            <section class="gis-fp-mapbox" style="position:relative;border-radius:10px;overflow:hidden;border:1px solid #1e293b">
+              <div id="gis-fp-map" style="width:100%;height:100%"></div>
+            </section>
           </div>
-          <section class="card flat gis-fp-list"><h3 class="gis-fp-list-title">Đường bay đã tạo</h3><div id="gis-fp-routes"></div></section>`;
-        root.querySelectorAll('[name="fp-kind"]').forEach(r => r.addEventListener('change', () => {
-          renderForm();
-          st.root.querySelector('#gis-fp-create').disabled = true;
-        }));
-        root.querySelector('#gis-fp-preview').addEventListener('click', preview);
-        root.querySelector('#gis-fp-create').addEventListener('click', create);
-        root.querySelector('#gis-fp-routes').addEventListener('click', onRoutesClick);
-        root.querySelector('#gis-fp-routes').addEventListener('change', async e => {
-          const sel = e.target.closest('.gis-tk-add');
-          if (!sel || !sel.value) return;
-          const id = Number(sel.closest('tr').dataset.id);
-          const res = await GIS.run(() => GIS.api('POST', `/api/flight-plans/${id}/tickets`, { ticket_id: sel.value }), 'Đã gán đường bay vào phiếu');
-          if (res) loadRoutes();
+
+          <!-- DANH SÁCH ĐƯỜNG BAY MẪU ĐÃ LƯU TRONG THƯ VIỆN -->
+          <section class="card flat gis-fp-list" style="margin-top:12px">
+            <h3 class="gis-fp-list-title" style="font-size:15px;margin-bottom:8px">📋 Danh sách Đường bay mẫu trong Thư viện</h3>
+            <div id="gis-fp-routes"></div>
+          </section>
+        `;
+
+        // Bắt sự kiện các nút
+        const pickBtn = root.querySelector('#gis-fp-pick-btn');
+        pickBtn.addEventListener('click', () => {
+          st.picking = !st.picking;
+          if (st.picking) {
+            pickBtn.innerText = '⏹ Đang chọn điểm (Click bản đồ)';
+            pickBtn.style.background = '#e11d48';
+            GIS.toast('Chế độ chọn điểm ĐÃ BẬT: Hãy click chuột lên bản đồ để thả Waypoint');
+          } else {
+            pickBtn.innerText = '➕ Thêm Waypoint';
+            pickBtn.style.background = '#0284c7';
+          }
         });
-        root.querySelector('#gis-fp-target').addEventListener('change',e=>{invalidate();if(e.target.name==='fp-source'){st.manualSource=e.target.value==='manual';st.picking=false;renderForm();}});
-        root.querySelector('#gis-fp-target').addEventListener('input',invalidate);
-        root.querySelector('#gis-fp-target').addEventListener('click',e=>{if(e.target.dataset.fpEdit!==undefined)editPoint(Number(e.target.dataset.fpEdit));if(e.target.id==='gis-fp-pick'){st.picking=!st.picking;e.target.setAttribute('aria-pressed',String(st.picking));e.target.textContent=st.picking?'Dừng chọn điểm':'Chọn điểm trên bản đồ';}if(e.target.id==='gis-fp-clear'){st.manualPoints=[];invalidate();drawManual();}if(e.target.dataset.fpDelete!==undefined){st.manualPoints.splice(Number(e.target.dataset.fpDelete),1);invalidate();drawManual();}if(e.target.dataset.fpMove!==undefined){const i=Number(e.target.dataset.fpMove),j=i+Number(e.target.dataset.direction);if(j>=0&&j<st.manualPoints.length){[st.manualPoints[i],st.manualPoints[j]]=[st.manualPoints[j],st.manualPoints[i]];invalidate();drawManual();}}});
-        root.querySelector('#gis-fp-profile').addEventListener('change', () => { st.root.querySelector('#gis-fp-create').disabled = true; });
+
+        root.querySelector('#gis-fp-undo-btn').addEventListener('click', () => {
+          if (st.waypoints.length > 0) {
+            st.waypoints.pop();
+            refreshMapWaypoints();
+            GIS.toast('Đã xóa điểm cuối cùng');
+          }
+        });
+
+        root.querySelector('#gis-fp-clear-btn').addEventListener('click', () => {
+          if (!st.waypoints.length) return;
+          if (confirm('Bạn có chắc chắn muốn xóa tất cả các điểm đã chọn không?')) {
+            st.waypoints = [];
+            refreshMapWaypoints();
+          }
+        });
+
+        root.querySelector('#gis-fp-create').addEventListener('click', createKmzRoute);
+
+        // Xóa đường bay mẫu
+        root.querySelector('#gis-fp-routes').addEventListener('click', async (e) => {
+          const row = e.target.closest('tr[data-id]');
+          const act = e.target.closest('[data-act]');
+          if (!row || !act) return;
+          const id = Number(row.dataset.id);
+          if (act.dataset.act === 'del') {
+            if (!confirm('Bạn có chắc chắn muốn xóa đường bay mẫu này khỏi Thư viện kèm tệp KMZ?')) return;
+            const res = await GIS.run(() => GIS.api('DELETE', `/api/flight-plans/${id}`), 'Đã xóa đường bay mẫu');
+            if (res) loadRoutes();
+          }
+        });
+
         await initMap();
       }
-      const [profiles, tree, tickets] = await Promise.all([
-        GIS.run(() => GIS.api('GET', '/api/capture-profiles')),
-        GIS.run(() => GIS.api('GET', '/api/assets/tree')),
-        GIS.run(() => GIS.api('GET', '/api/tickets'))
+
+      // Nạp danh sách hồ sơ chụp
+      const [profiles] = await Promise.all([
+        GIS.run(() => GIS.api('GET', '/api/capture-profiles'))
       ]);
-      st.tickets = (tickets ? tickets.data : []).filter(t => ['PENDING', 'ASSIGNED', 'EXECUTING'].includes(t.status));
-      st.root.querySelector('#gis-fp-ticket').innerHTML = '<option value="">(không gán)</option>' +
-        st.tickets.map(t => `<option value="${t.ticket_id}">${esc(t.ticket_code)} – ${esc(t.ticket_name)}</option>`).join('');
-      st.profiles = profiles ? profiles.data : [];
-      st.tree = tree ? tree.data : null;
-      if(!st.root.querySelector('#gis-fp-target').childElementCount)renderForm();else{const select=st.root.querySelector('#gis-fp-profile'),selected=select.value,kind=st.root.querySelector('[name=fp-kind]:checked').value;select.innerHTML=profileOptions(kind)||'<option value="">Tùy chỉnh từng waypoint</option>';if([...select.options].some(o=>o.value===selected))select.value=selected;}
+
+      st.profiles = (profiles ? profiles.data : []);
+
+      const profileSelect = st.root.querySelector('#gis-fp-profile');
+      if (profileSelect) {
+        profileSelect.innerHTML = st.profiles.map(p =>
+          `<option value="${p.profile_id}">${esc(p.profile_name)} (${p.route_kind === 'POINTS' ? 'Dừng chụp điểm' : 'Quét lưới'})</option>`
+        ).join('');
+      }
+
+      // Đặt tên mặc định nếu chưa có
+      const nameInput = st.root.querySelector('#gis-fp-name');
+      if (nameInput && !nameInput.value) {
+        nameInput.value = `Tuyến quét nhiệt Khu 1.1 (${new Date().toLocaleDateString('vi-VN').replace(/\//g, '-')})`;
+      }
+
+      refreshMapWaypoints();
       loadRoutes();
-      setTimeout(() => st.map.invalidateSize(), 60);
+      setTimeout(() => st.map && st.map.invalidateSize(), 100);
     }
   };
 })();

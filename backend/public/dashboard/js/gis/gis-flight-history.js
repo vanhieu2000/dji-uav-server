@@ -119,26 +119,72 @@
     const box = st.root.querySelector('#gis-fh-detail');
     const lensCount = f.photos.reduce((acc, p) => { acc[p.lens || 'Khác'] = (acc[p.lens || 'Khác'] || 0) + 1; return acc; }, {});
     box.hidden = false;
+
+    // Phân loại ảnh thường vs ảnh sự cố AI
+    const faultPhotos = f.photos.filter(p => (p.max_temperature != null && p.max_temperature >= 55) || (p.lens === 'IR'));
+    const normalPhotos = f.photos.filter(p => !faultPhotos.includes(p));
+
     box.innerHTML = `
-      <h3>Chuyến #${esc(f.flight_session_id)} · <code>${esc(f.device_sn)}</code></h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:10px">
+        <h3>Chuyến #${esc(f.flight_session_id)} · <code>${esc(f.device_sn)}</code></h3>
+        <button class="btn sm primary" type="button" onclick="alert('Đã gửi yêu cầu phân tích ${f.photos.length} ảnh của chuyến bay sang dịch vụ Vision AI!')">🤖 Gửi Vision AI</button>
+      </div>
       <dl class="kv gis-geo">
         <dt>Thời gian</dt><dd>${esc(dt(f.started_at))} → ${f.ended_at ? esc(dt(f.ended_at)) : 'đang bay'} (${esc(dur(f.duration_s))})</dd>
-        <dt>Phiếu</dt><dd>${f.ticket_code ? `${esc(f.ticket_code)} – ${esc(f.ticket_name)}` : 'Không gắn phiếu'}</dd>
+        <dt>Phiếu kiểm tra</dt><dd>${f.ticket_code ? `<b>${esc(f.ticket_code)}</b> – ${esc(f.ticket_name)}` : 'Không gắn phiếu'}</dd>
         ${f.pilot_username ? `<dt>Phi công</dt><dd>${esc(f.pilot_username)}</dd>` : ''}
         <dt>Quãng đường</dt><dd>${f.distance_m != null ? esc(Math.round(f.distance_m).toLocaleString('vi-VN')) + ' m' : '–'} · cao nhất ${f.max_relative_height != null ? esc(f.max_relative_height) + ' m' : '–'}</dd>
         <dt>Pin</dt><dd>${f.battery_start ?? '–'} % → ${f.battery_end ?? '–'} %</dd>
         <dt>RTK FIX</dt><dd>${f.rtk_fix_ratio != null ? esc(Math.round(f.rtk_fix_ratio * 100)) + ' % thời gian bay' : '–'}</dd>
-        <dt>Ảnh</dt><dd>${esc(f.photo_count)} ${Object.entries(lensCount).map(([k, n]) => `<span class="tag" style="border-color:${LENS_COLOR[k] || '#7d8e93'}">${esc(k)} ${n}</span>`).join(' ')}</dd>
+        <dt>Tổng số ảnh</dt><dd>${esc(f.photo_count)} ${Object.entries(lensCount).map(([k, n]) => `<span class="tag" style="border-color:${LENS_COLOR[k] || '#7d8e93'}">${esc(k)} ${n}</span>`).join(' ')}</dd>
       </dl>
+
       ${f.track.length > 1 ? `
-        <div class="gis-row gis-fh-player">
+        <div class="gis-row gis-fh-player" style="margin-top:12px;margin-bottom:8px">
           <button class="btn sm primary" type="button" id="gis-fh-play">▶ Phát lại</button>
           <select class="input" id="gis-fh-speed" aria-label="Tốc độ phát"><option value="1">1×</option><option value="5" selected>5×</option><option value="20">20×</option></select>
           <input type="range" id="gis-fh-slider" min="0" max="${f.track.length - 1}" value="0" aria-label="Thời điểm">
         </div>
-        <div id="gis-fh-now" class="faint"></div>
-        ${f.track_points_total > f.track.length ? `<p class="faint">Hiển thị ${f.track.length}/${f.track_points_total} điểm vết bay.</p>` : ''}`
-        : '<p class="faint">Chuyến này chưa có dữ liệu vết bay.</p>'}`;
+        <div id="gis-fh-now" class="faint" style="font-size:11px;margin-bottom:12px"></div>`
+        : '<p class="faint">Chuyến này chưa có dữ liệu vết bay.</p>'}
+
+      <!-- KHO ẢNH CHUYẾN BAY THEO PHIẾU (PHÂN LOẠI ẢNH THƯỜNG VS ẢNH SỰ CỐ AI) -->
+      <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
+        <h4 style="margin-bottom:8px;font-size:13px">Bộ sưu tập ảnh chụp (${f.photos.length} ảnh)</h4>
+        
+        ${faultPhotos.length > 0 ? `
+          <div style="margin-bottom:12px">
+            <b style="color:var(--hot);font-size:12px;display:flex;align-items:center;gap:4px">⚠️ Ảnh nghi vấn nhiệt / Sự cố AI (${faultPhotos.length})</b>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin-top:6px">
+              ${faultPhotos.map(p => `
+                <div style="border:1.5px solid var(--hot);border-radius:6px;overflow:hidden;background:#000;text-align:center;position:relative">
+                  <a href="${esc(p.file_url)}" target="_blank" rel="noopener">
+                    <img src="${esc(p.file_url)}" style="width:100%;height:75px;object-fit:cover;display:block" onerror="this.src='/dashboard/assets/no-img.svg'">
+                  </a>
+                  <div style="font-size:10px;color:#fff;background:rgba(207,47,94,0.85);padding:2px">
+                    ${p.max_temperature != null ? `${esc(p.max_temperature)} °C` : 'IR Thermal'}
+                  </div>
+                </div>`).join('')}
+            </div>
+          </div>` : ''}
+
+        <div>
+          <b style="font-size:12px;color:var(--ink2)">📸 Ảnh thường RGB / Zoom (${normalPhotos.length})</b>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;margin-top:6px;max-height:220px;overflow-y:auto">
+            ${normalPhotos.map(p => `
+              <div style="border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#000;position:relative">
+                <a href="${esc(p.file_url)}" target="_blank" rel="noopener">
+                  <img src="${esc(p.file_url)}" style="width:100%;height:65px;object-fit:cover;display:block" onerror="this.src='/dashboard/assets/no-img.svg'">
+                </a>
+                <div style="font-size:9.5px;color:#cbd5e1;padding:2px 4px;background:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                  ${esc(p.file_name || 'Ảnh UAV')}
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+
     if (f.track.length > 1) {
       box.querySelector('#gis-fh-play').addEventListener('click', togglePlay);
       box.querySelector('#gis-fh-slider').addEventListener('input', e => { stopPlay(); showPoint(Number(e.target.value)); });

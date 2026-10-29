@@ -33,16 +33,8 @@
   const daily=document.createElement('section');daily.className='card daily-tickets-card';daily.style.cssText='padding:14px;margin-bottom:14px';daily.innerHTML='<div class="actions"><h3>Phiếu kiểm tra trong ngày</h3><button type="button" class="btn sm" id="daily-refresh">Làm mới</button><button type="button" class="btn sm" id="daily-all">Tất cả phiếu</button></div><div class="tbl-wrap" id="daily-tickets">Đang tải…</div>';primary.before(daily);
   async function dailyTickets(){const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());try{const r=await GIS.api('GET','/api/tickets?date='+date);daily.querySelector('#daily-tickets').innerHTML='<table class="ui-table"><thead><tr><th>Phiếu</th><th>UAV</th><th>Trạng thái</th><th></th></tr></thead><tbody>'+r.data.map(t=>`<tr><td>${GIS.esc(t.ticket_name)}</td><td>${GIS.esc(t.assigned_device_sn||'Chưa giao')}</td><td>${GIS.esc(({PENDING:'Chờ giao',ASSIGNED:'Đã giao',EXECUTING:'Đang thực hiện',COMPLETED:'Hoàn tất',CANCELLED:'Đã hủy'})[t.status]||t.status)}</td><td>${t.status==='EXECUTING'?`<button class="btn sm" style="color:#dc3545" data-live="${t.ticket_id}" data-sn="${GIS.esc(t.assigned_device_sn||'')}">🔴 Xem Live</button>`:''}</td></tr>`).join('')+'</tbody></table>';if(!r.data.length)daily.querySelector('#daily-tickets').textContent='Chưa có phiếu trong ngày.';}catch(e){daily.querySelector('#daily-tickets').textContent=e.message;}}
   daily.querySelector('#daily-refresh').onclick=dailyTickets;daily.querySelector('#daily-all').onclick=()=>window.switchView('missions');daily.addEventListener('click',e=>{const b=e.target.closest('[data-live]');if(b)window.openTicketLive?.(Number(b.dataset.live),b.dataset.sn);});dailyTickets();setInterval(()=>{if(document.getElementById('view-dashboard')?.classList.contains('active'))dailyTickets();},15000);
-  const root=document.getElementById('settings-module-root');
-  root.innerHTML=['profiles','import','basemaps'].map(tab=>`<div class="settings-pane" data-settings-pane="${tab}" hidden></div>`).join('');
-  document.querySelectorAll('[data-settings]').forEach(button=>button.onclick=()=>{
-   const tab=button.dataset.settings;
-   document.querySelectorAll('[data-settings]').forEach(b=>{b.classList.toggle('on',b===button);b.setAttribute('aria-selected',String(b===button));});
-   document.getElementById('settings-system-pane').hidden=tab!=='system';root.hidden=tab==='system';
-   root.querySelectorAll('[data-settings-pane]').forEach(p=>p.hidden=p.dataset.settingsPane!==tab);
-   const pane=root.querySelector(`[data-settings-pane="${tab}"]`);
-   if(pane&&!pane.dataset.ready){pane.dataset.ready='1';if(tab==='profiles')GIS.Profiles.render(pane);if(tab==='import')GIS.Import.render(pane);if(tab==='basemaps')GIS.BaseMaps.render(pane);}
-  });
+  const sRoot=document.getElementById('settings-module-root');
+  if(sRoot) sRoot.innerHTML='';
   document.getElementById('dashboard-period').onchange=()=>GIS.Insights.overview();
   window.addEventListener('hashchange',()=>{const route=location.hash.slice(1);if(route&&route!==window.lastWorkspaceRoute){window.lastWorkspaceRoute=route;const active=document.querySelector('.nav-btn.on')?.dataset.target;if(route!==active&&window.switchView)window.switchView(route);}});
  });
