@@ -394,8 +394,11 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
         <span class="nav-label">Báo cáo & AI Sự cố</span>
       </a>
 
+<a class="nav-btn" data-admin-only hidden data-target="maps-2d" href="#maps-2d" title="Bản đồ 2D"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 10h16M10 10v10"/></svg><span class="nav-label">Bản đồ 2D</span></a>
+<a class="nav-btn" data-admin-only hidden data-target="offline-maps" href="#offline-maps" title="Bản đồ offline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 10h16M10 10v10"/></svg><span class="nav-label">Bản đồ offline</span></a>
+<a class="nav-btn" data-admin-only hidden data-target="account-management" href="#account-management" title="Quản lý tài khoản"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 10h16M10 10v10"/></svg><span class="nav-label">Quản lý tài khoản</span></a>
       <div style="margin-top:auto;border-top:1px solid rgba(255,255,255,0.08);padding-top:8px">
-        <a class="nav-btn" data-target="admin" href="#admin" title="Cài đặt chung">
+        <a class="nav-btn" data-admin-only hidden data-target="admin" href="#admin" title="Cài đặt chung">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
           <span class="nav-label">Cài đặt chung</span>
         </a>
@@ -453,7 +456,7 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
           </section>
           <section class="card overview-statistics"><div class="card-head"><h2>Kiểm tra gần đây</h2><div class="r"><select class="input" id="dashboard-period" aria-label="Kỳ thống kê tổng quan"><option value="7">7 ngày</option><option value="30" selected>30 ngày</option><option value="90">90 ngày</option></select></div></div><div id="dashboard-bar-chart"><div class="gis-empty">Đang tải biểu đồ…</div></div><div id="dashboard-status-chart"></div><button class="btn overview-detail" onclick="GIS.Insights.openReports()">Xem báo cáo chi tiết →</button></section>
         </div>
-        
+
         <!-- BẢNG PHIẾU KIỂM TRA HÔM NAY KÈM NÚT XEM LIVE THÔNG MINH -->
         <section class="card" style="margin-top:16px;">
           <div class="card-head">
@@ -503,7 +506,7 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
               <span>🔋 <b id="solar-hud-bat">--%</b></span>
               <span style="opacity:0.3">|</span>
               <span>🌡️ <b style="color:var(--hot)" id="solar-hud-thermal">-- °C</b></span>
-              
+
               <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
                 <select id="solar-basemap-select" class="input" style="height:28px;background:rgba(15,23,42,0.92);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);border-radius:6px;font-size:11.5px;font-weight:600;padding:0 6px" onchange="setBasemap(this.value, 'solar')">
                   <option value="dji">🛰️ DJI Esri Satellite</option>
@@ -840,63 +843,7 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
         <div id="gis-assets-root"></div>
       </section>
 
-      <!-- VIEW 9: CÀI ĐẶT CHUNG HỆ THỐNG -->
-      <section class="page-view view-scrollable" id="view-admin">
-        <div class="page-head">
-          <div>
-            <h1>Cài đặt chung</h1>
-            <p class="muted">Cấu hình thông số hệ thống, quản lý tài khoản, bản đồ offline và bản đồ 2D trực giao.</p>
-          </div>
-        </div>
-
-        <div class="tabs settings-tabs" role="tablist" aria-label="Cài đặt chung">
-          <button class="on" data-settings="system" role="tab" aria-selected="true" onclick="switchAdminTab('system')">⚙️ Thông số hệ thống</button>
-          <button data-settings="accounts" role="tab" aria-selected="false" onclick="switchAdminTab('accounts')">👥 Quản lý tài khoản</button>
-          <button data-settings="offline-maps" role="tab" aria-selected="false" onclick="switchAdminTab('offline-maps')">💾 Bản đồ Offline</button>
-          <button data-settings="2d-maps" role="tab" aria-selected="false" onclick="switchAdminTab('2d-maps')">🗺️ Bản đồ 2D Khu vực</button>
-        </div>
-
-        <!-- 1. TAB THÔNG SỐ HỆ THỐNG -->
-        <div id="settings-tab-system" class="admin-tab-pane">
-          <div class="grid g-2" style="max-width:1100px;margin-bottom:16px">
-            <section class="card">
-              <h2>📁 Kho lưu trữ ảnh & video UAV</h2>
-              <p class="muted" style="margin-bottom:12px">Đường dẫn thư mục lưu ảnh gốc và video tải về từ drone.</p>
-              <div class="field" style="margin-bottom:10px">
-                <label>Đường dẫn thư mục (MEDIA_DIR)</label>
-                <input class="input" id="cfg-media-dir" value="data/media" placeholder="D:/UAV_Media hoặc data/media">
-              </div>
-              <p id="native-storage-status" class="faint" style="margin-bottom:12px">Đang kiểm tra dung lượng ổ đĩa...</p>
-              <div style="display:flex;gap:8px">
-                <button class="btn" type="button" onclick="loadNativeStorageStatus()">Kiểm tra dung lượng</button>
-                <button class="btn primary" type="button" onclick="saveMediaStoragePath()">Lưu đường dẫn</button>
-              </div>
-            </section>
-
-            <section class="card">
-              <h2>🤖 Kết nối Vision AI Phân tích sự cố</h2>
-              <p class="muted" style="margin-bottom:12px">Địa chỉ API dịch vụ AI nhận diện quá nhiệt tấm pin, nứt cell, dao cách ly.</p>
-              <div class="field" style="margin-bottom:10px">
-                <label>Endpoint API Vision AI</label>
-                <input class="input" id="cfg-vision-api" value="http://127.0.0.1:5000/api/vision" placeholder="http://127.0.0.1:5000/api/vision">
-              </div>
-              <p id="vision-api-status" class="faint" style="margin-bottom:12px">Trạng thái: Đã sẵn sàng kết nối</p>
-              <div style="display:flex;gap:8px">
-                <button class="btn" type="button" onclick="testVisionApiConnection()">Kiểm tra kết nối AI</button>
-                <button class="btn primary" type="button" onclick="saveVisionApiConfig()">Lưu cấu hình AI</button>
-              </div>
-            </section>
-          </div>
-
-          <section class="card" style="max-width:1100px">
-            <h2>🌡️ Ngưỡng cảnh báo sự cố</h2>
-            <p class="muted" style="margin-bottom:14px">Quy định mức chênh lệch nhiệt độ và cảnh báo tự động khi bay kiểm tra.</p>
-            <div id="settings-alert-rules"></div>
-          </section>
-        </div>
-
-        <!-- 2. TAB QUẢN LÝ TÀI KHOẢN (MASTER TABLE + MODAL TÁCH BIỆT) -->
-        <div id="settings-tab-accounts" class="admin-tab-pane" hidden>
+        <section class="page-view view-scrollable" id="view-account-management" aria-label="Quản lý tài khoản">
           <section class="card">
             <div class="card-head">
               <div>
@@ -936,24 +883,10 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
               </table>
             </div>
           </section>
-        </div>
-
-        <!-- 3. TAB BẢN ĐỒ OFFLINE -->
-        <div id="settings-tab-offline-maps" class="admin-tab-pane" hidden>
+        </section>
+        <section class="page-view view-scrollable" id="view-offline-maps" aria-label="Bản đồ offline">
           <div class="grid g-2" style="max-width:1100px">
-            <section class="card">
-              <h2>💾 Tải lên gói Bản đồ Offline</h2>
-              <p class="muted" style="margin-bottom:14px">Hỗ trợ gói bản đồ định dạng MBTiles (.mbtiles) hoặc tệp nén thư mục gạch (.zip) để bay khi không có kết nối Internet.</p>
-              <div class="field" style="margin-bottom:12px">
-                <label>Tên gói bản đồ</label>
-                <input class="input" id="offline-pkg-name" placeholder="Ví dụ: Bản đồ Thác Mơ Offline Zoom 15-20">
-              </div>
-              <div class="field" style="margin-bottom:14px">
-                <label>Chọn tệp MBTiles hoặc ZIP</label>
-                <input type="file" id="offline-pkg-file" accept=".mbtiles,.zip,.tar" class="input" style="padding-top:4px">
-              </div>
-              <button class="btn primary" type="button" onclick="uploadOfflineMapPackage()">Tải lên gói bản đồ</button>
-            </section>
+            <div class="actions"><button type="button" class="btn primary" onclick="openMapRegistration('offline-pkg')">+ Thêm Bản đồ offline</button></div>
 
             <section class="card">
               <h2>Danh sách bản đồ offline hiện có</h2>
@@ -962,42 +895,15 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
                   <thead>
                     <tr><th>Tên gói</th><th>Định dạng</th><th>Dung lượng</th><th>Thao tác</th></tr>
                   </thead>
-                  <tbody id="offline-pkg-table-body">
-                    <tr>
-                      <td><b>ThacMo_Default_Offline</b></td>
-                      <td>MBTiles</td>
-                      <td>128 MB</td>
-                      <td><span class="tag ok">Đang kích hoạt</span></td>
-                    </tr>
-                  </tbody>
+                  <tbody id="offline-pkg-table-body"><tr><td colspan="4">Đang tải danh sách…</td></tr></tbody>
                 </table>
               </div>
             </section>
           </div>
-        </div>
-
-        <!-- 4. TAB BẢN ĐỒ 2D KHU VỰC (ORTHOMOSAIC UAV SCAN) -->
-        <div id="settings-tab-2d-maps" class="admin-tab-pane" hidden>
+        </section>
+        <section class="page-view view-scrollable" id="view-maps-2d" aria-label="Bản đồ 2D khu vực">
           <div class="grid g-2" style="max-width:1100px">
-            <section class="card">
-              <h2>🗺️ Tải lên Bản đồ 2D Trực giao (Drone Scan)</h2>
-              <p class="muted" style="margin-bottom:14px">Nạp ảnh trực giao 2D chụp từ UAV (GeoTIFF / PNG kèm toạ độ phủ) của các khu vực pin hoặc trạm biến áp để lập đường bay chuẩn xác.</p>
-              <div class="field" style="margin-bottom:10px">
-                <label>Tên khu vực bản đồ 2D</label>
-                <input class="input" id="ortho-map-name" placeholder="Ví dụ: Khu Solar Block A (51.27 ha) hoặc Trạm 110kV">
-              </div>
-              <div class="field" style="margin-bottom:10px">
-                <label>Tệp ảnh trực giao (GeoTIFF, PNG, JPG)</label>
-                <input type="file" id="ortho-map-file" accept=".tif,.tiff,.png,.jpg,.jpeg" class="input" style="padding-top:4px">
-              </div>
-              <div class="form-grid" style="margin-bottom:12px">
-                <div class="field"><label>Vĩ độ Bắc (North Lat)</label><input class="input" id="ortho-lat-north" type="number" step="0.000001" placeholder="11.859500"></div>
-                <div class="field"><label>Vĩ độ Nam (South Lat)</label><input class="input" id="ortho-lat-south" type="number" step="0.000001" placeholder="11.849500"></div>
-                <div class="field"><label>Kinh độ Đông (East Lng)</label><input class="input" id="ortho-lng-east" type="number" step="0.000001" placeholder="107.012500"></div>
-                <div class="field"><label>Kinh độ Tây (West Lng)</label><input class="input" id="ortho-lng-west" type="number" step="0.000001" placeholder="107.001500"></div>
-              </div>
-              <button class="btn primary" type="button" onclick="upload2DOrthoMap()">Nạp Bản đồ 2D Khu Vực</button>
-            </section>
+            <div class="actions"><button type="button" class="btn primary" onclick="openMapRegistration('ortho-map')">+ Thêm Bản đồ 2D</button></div>
 
             <section class="card">
               <h2>Bản đồ 2D đã nạp</h2>
@@ -1006,23 +912,205 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
                   <thead>
                     <tr><th>Khu vực</th><th>Kích thước</th><th>Tọa độ bao</th><th>Thao tác</th></tr>
                   </thead>
-                  <tbody id="ortho-2d-table-body">
-                    <tr>
-                      <td><b>Điện mặt trời Thác Mơ - Block A</b><br><span class="faint">51.27 ha · Độ phân giải 2.5cm/px</span></td>
-                      <td>145 MB</td>
-                      <td>11.851°N, 107.005°E</td>
-                      <td><button class="btn sm primary" type="button" onclick="preview2DMapOnGIS()">Xem trên bản đồ</button></td>
-                    </tr>
-                  </tbody>
+                  <tbody id="ortho-map-table-body"><tr><td colspan="4">Đang tải danh sách…</td></tr></tbody>
                 </table>
               </div>
             </section>
           </div>
+        </section>
+<section class="page-view view-scrollable" id="view-maps-2d-edit"><div class="detail-editor"><button class="btn" type="button" onclick="switchView('maps-2d')">← Danh sách Bản đồ 2D</button><section class="card">
+              <h2>🗺️ Tải lên Bản đồ 2D Trực giao (Drone Scan)</h2>
+              <p class="muted" style="margin-bottom:14px">Nạp ảnh trực giao 2D chụp từ UAV (ZIP ô ảnh XYZ/TMS) của các khu vực pin hoặc trạm biến áp để lập đường bay chuẩn xác.</p>
+              <div class="field" style="margin-bottom:10px">
+                <label>Tên khu vực bản đồ 2D</label>
+                <input class="input" id="ortho-map-name" placeholder="Ví dụ: Khu Solar Block A (51.27 ha) hoặc Trạm 110kV">
+              </div>
+              <div class="field" style="margin-bottom:10px">
+                <label>Gói ZIP ô ảnh trực giao XYZ/TMS</label>
+                <input type="file" id="ortho-map-file" accept=".zip" class="input" style="padding-top:4px">
+              </div>
+              <button class="btn primary" type="button" onclick="upload2DOrthoMap()">Nạp Bản đồ 2D Khu Vực</button>
+            </section></div></section>
+<section class="page-view view-scrollable" id="view-offline-maps-edit"><div class="detail-editor"><button class="btn" type="button" onclick="switchView('offline-maps')">← Danh sách Bản đồ offline</button><section class="card">
+              <h2>💾 Tải lên gói Bản đồ Offline</h2>
+              <p class="muted" style="margin-bottom:14px">Tải ZIP ô ảnh XYZ/TMS để hiển thị bản đồ trên mạng local khi không có Internet.</p>
+              <div class="field" style="margin-bottom:12px">
+                <label>Tên gói bản đồ</label>
+                <input class="input" id="offline-pkg-name" placeholder="Ví dụ: Bản đồ Thác Mơ Offline Zoom 15-20">
+              </div>
+              <div class="field" style="margin-bottom:14px">
+                <label>Chọn ZIP ô ảnh XYZ/TMS</label>
+                <input type="file" id="offline-pkg-file" accept=".zip" class="input" style="padding-top:4px">
+              </div>
+              <button class="btn primary" type="button" onclick="uploadOfflineMapPackage()">Tải lên gói bản đồ</button>
+            </section></div></section>
+<section class="page-view view-scrollable" id="view-uav-edit"><div class="detail-editor" id="uav-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 id="uav-modal-title">Thêm thiết bị UAV mới</h2>
+      <button class="icon-btn" onclick="closeUavModal()">✕</button>
+    </div>
+    <input type="hidden" id="modal-uav-is-edit" value="0">
+    <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="field">
+        <label>Mã số seri (SN) *</label>
+        <input id="modal-uav-sn" class="input" placeholder="VD: 1581F5FJC243K00DNRRT">
+      </div>
+      <div class="field">
+        <label>Tên thiết bị *</label>
+        <input id="modal-uav-name" class="input" placeholder="VD: DJI Mavic 3 Enterprise Thermal">
+      </div>
+      <div class="field">
+        <label>Dòng Model *</label>
+        <select id="modal-uav-model" class="input">
+          <option value="Mavic 3T">DJI Mavic 3 Enterprise Thermal (M3T)</option>
+          <option value="Matrice 30T">DJI Matrice 30T (M30T)</option>
+          <option value="Matrice 350 RTK">DJI Matrice 350 RTK</option>
+          <option value="DJI RC Pro">Tay điều khiển DJI RC Pro Enterprise</option>
+        </select>
+      </div>
+      <label class="field">Phân loại thiết bị<select class="input" id="modal-uav-type"><option value="DRONE">Máy bay UAV</option><option value="RC">Tay cầm RC</option></select></label><input type="hidden" id="modal-uav-notes">
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+      <button class="btn" onclick="closeUavModal()">Hủy bỏ</button>
+      <button class="btn primary" onclick="submitUavForm()">Lưu thông tin UAV</button>
+    </div>
+  </div>
+</div></section>
+      <!-- VIEW 9: CÀI ĐẶT CHUNG HỆ THỐNG -->
+      <section class="page-view view-scrollable" id="view-admin">
+        <div class="page-head">
+          <div>
+            <h1>Cài đặt chung</h1>
+            <p class="muted">Cấu hình ngưỡng cảnh báo, kho ảnh đồng bộ và kết nối Vision.</p>
+          </div>
         </div>
+
+
+
+        <!-- 1. TAB THÔNG SỐ HỆ THỐNG -->
+        <div id="settings-tab-system" class="admin-tab-pane">
+          <div class="grid g-2" style="max-width:1100px;margin-bottom:16px">
+            <section class="card">
+              <h2>📁 Kho lưu trữ ảnh & video UAV</h2>
+              <p class="muted" style="margin-bottom:12px">Đường dẫn thư mục lưu ảnh gốc và video tải về từ drone.</p>
+              <div class="field" style="margin-bottom:10px">
+                <label>Đường dẫn thư mục (MEDIA_DIR)</label>
+                <input class="input" id="cfg-media-dir" value="" placeholder="D:/UAV_Media hoặc data/media">
+              </div>
+              <p id="native-storage-status" class="faint" style="margin-bottom:12px">Đang kiểm tra dung lượng ổ đĩa...</p>
+              <div style="display:flex;gap:8px">
+                <button class="btn" type="button" onclick="loadNativeStorageStatus()">Kiểm tra dung lượng</button>
+                <button class="btn primary" type="button" onclick="saveMediaStoragePath()">Lưu đường dẫn</button>
+              </div>
+            </section>
+
+            <section class="card">
+              <h2>🤖 Kết nối Vision AI Phân tích sự cố</h2>
+              <p class="muted" style="margin-bottom:12px">Địa chỉ API dịch vụ AI nhận diện quá nhiệt tấm pin, nứt cell, dao cách ly.</p>
+              <div class="field" style="margin-bottom:10px">
+                <label>Endpoint API Vision AI</label>
+                <input class="input" id="cfg-vision-api" value="" placeholder="http://127.0.0.1:5000/api/vision">
+              </div>
+              <label>URL server UAV để Vision tải ảnh/callback<input class="input" id="cfg-vision-public-base" placeholder="http://IP-máy-UAV:8080"></label>
+              <label>Khóa callback (giữ trống để giữ khóa cũ)<input class="input" id="cfg-vision-secret" type="password" autocomplete="new-password" minlength="16"></label>
+              <label>API token gửi tới Vision (nếu có)<input class="input" id="cfg-vision-token" type="password" autocomplete="new-password" minlength="16"></label>
+              <label><input id="cfg-vision-enabled" type="checkbox"> Bật worker gửi ảnh tự động sau khi khởi động lại</label>
+              <p id="vision-api-status" class="faint" style="margin-bottom:12px">Chưa kiểm tra kết nối</p>
+              <div style="display:flex;gap:8px">
+                <button class="btn" type="button" onclick="testVisionApiConnection()">Kiểm tra kết nối AI</button>
+                <button class="btn primary" type="button" onclick="saveVisionApiConfig()">Lưu cấu hình AI</button>
+              </div>
+            </section>
+          </div>
+
+          <section class="card" style="max-width:1100px">
+            <h2>🌡️ Ngưỡng cảnh báo sự cố</h2>
+            <p class="muted" style="margin-bottom:14px">Quy định mức chênh lệch nhiệt độ và cảnh báo tự động khi bay kiểm tra.</p>
+            <div id="settings-alert-rules"></div>
+          </section>
+        </div>
+
+        <!-- 2. TAB QUẢN LÝ TÀI KHOẢN (MASTER TABLE + MODAL TÁCH BIỆT) -->
+
+
+        <!-- 3. TAB BẢN ĐỒ OFFLINE -->
+
+
+        <!-- 4. TAB BẢN ĐỒ 2D KHU VỰC (ORTHOMOSAIC UAV SCAN) -->
+
       </section>
 
       <!-- MODAL QUẢN LÝ NGƯỜI DÙNG TÁCH BIỆT (MASTER-DETAIL DIALOG) -->
-      <div class="modal-overlay" id="modal-user-form">
+<section class="page-view view-scrollable" id="view-ticket-edit"><div class="detail-editor" id="ticket-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>Tạo phiếu kiểm tra mới</h2>
+      <button class="icon-btn" onclick="closeTicketModal()">✕</button>
+    </div>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="field" style="grid-column:1 / -1">
+        <label>Tiêu đề phiếu kiểm tra *</label>
+        <input id="modal-ticket-name" class="input" placeholder="VD: Kiểm tra định kỳ chuỗi Inverter IS01 - IS04">
+      </div>
+      <div class="field">
+        <label>Chu kỳ kiểm tra</label>
+        <select id="modal-ticket-period" class="input">
+          <option value="Hàng ngày">Hàng ngày (Daily)</option>
+          <option value="Hàng tuần">Hàng tuần (Weekly)</option>
+          <option value="Hàng tháng">Hàng tháng (Monthly)</option>
+          <option value="Đột xuất">Đột xuất / Theo yêu cầu</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Đối tượng kiểm tra</label>
+        <select id="modal-ticket-type" class="input">
+          <option value="SOLAR_PANEL">Pin mặt trời (5 Phân khu / Inverter)</option>
+          <option value="DISCONNECTOR">Dao cách ly 22kV (10 cột / 48 mối nối)</option>
+          <option value="OVERALL_SURVEY">Khảo sát tổng thể toàn nhà máy</option>
+        </select>
+      </div>
+      <div class="field" style="grid-column:1 / -1">
+        <label>Phân khu / Mục tiêu thực hiện *</label>
+        <select id="modal-ticket-preset-facility" class="input" onchange="onSelectPresetFacility(this.value)">
+          <option value="Khu 1.1 (IS05, IS06, IS07 - 47.880 tấm)">Khu 1.1 (IS05, IS06, IS07 - 47.880 tấm)</option>
+          <option value="Khu 1.2 (IS08, IS09 - 23.520 tấm)">Khu 1.2 (IS08, IS09 - 23.520 tấm)</option>
+          <option value="Khu 2 (IS01, IS02 - 31.528 tấm)">Khu 2 (IS01, IS02 - 31.528 tấm)</option>
+          <option value="Khu 3 (IS03, IS04 - 22.064 tấm)">Khu 3 (IS03, IS04 - 22.064 tấm)</option>
+          <option value="Khu 6 (Kết nối về Trạm IS05)">Khu 6 (Kết nối về Trạm IS05)</option>
+          <option value="Trạm biến áp 110kV Thác Mơ">Trạm biến áp 110kV Thác Mơ</option>
+          <option value="Hành lang tuyến 22kV (10 cột / 48 dao cách ly)">Hành lang tuyến 22kV (10 cột / 48 dao cách ly)</option>
+          <option value="CUSTOM">Nhập vị trí tùy chọn khác...</option>
+        </select>
+        <input id="modal-ticket-facility" class="input" style="margin-top:6px" placeholder="Chi tiết vị trí kiểm tra" value="Khu 1.1 (IS05, IS06, IS07 - 47.880 tấm)">
+      </div>
+      <div class="field" style="grid-column:1 / -1">
+        <label>Đường bay mẫu từ Thư viện (chọn nhiều)</label>
+        <select id="modal-ticket-route" class="input" multiple size="3">
+          <option value="">-- Chọn đường bay mẫu có sẵn --</option>
+        </select>
+        <small class="muted" style="display:block;margin-top:2px">Chọn tuyến bay mẫu đã tạo để phi công thực hiện đúng lộ trình tiêu chuẩn.</small>
+      </div>
+      <div class="field" style="grid-column:1 / -1">
+        <label>UAV thực hiện</label>
+        <select id="modal-ticket-drone" class="input">
+          <option value="">Chưa giao UAV</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-grid ticket-assign-grid" style="margin-top:12px;gap:12px">
+      <label>Nhà máy<select class="input" id="modal-ticket-plant"></select></label><label>Đơn vị<select class="input" id="modal-ticket-unit"></select></label>
+      <label>Đối tượng<select class="input" id="modal-ticket-category"><option value="SOLAR_AREA">Khu pin</option><option value="SUBSTATION_110KV">Trạm 110kV</option><option value="FEEDER_22KV">Xuất tuyến 22kV</option><option value="OTHER">Khác</option></select></label>
+      <label>Tổ công tác<select class="input" id="modal-ticket-team"></select></label><label>Kỹ sư phụ trách<select class="input" id="modal-ticket-inspector"></select></label><label>Tay cầm RC<select class="input" id="modal-ticket-rc"></select></label>
+      <label>Bắt đầu kế hoạch<input class="input" id="modal-ticket-start" type="datetime-local"></label><label>Kết thúc kế hoạch<input class="input" id="modal-ticket-end" type="datetime-local"></label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+      <button class="btn" onclick="closeTicketModal()">Hủy bỏ</button>
+      <button class="btn primary" onclick="submitCreateTicket()">Lưu Phiếu Kiểm Tra</button>
+    </div>
+  </div>
+</div></section>
+      <section class="page-view view-scrollable" id="view-account-edit"><div class="detail-editor" id="modal-user-form">
         <div class="modal-box" style="max-width:480px">
           <div class="modal-head">
             <h2 id="modal-user-title">Thêm tài khoản mới</h2>
@@ -1075,21 +1163,14 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
         </div>
       </div>
 
+</section>
       <section class="page-view view-scrollable" id="view-account-admin"><div id="account-admin-root"></div></section>
-      <section class="page-view view-scrollable" id="view-account"><div class="page-head"><div><h1>Cài đặt tài khoản</h1><p class="muted">Thông tin đăng nhập, mật khẩu và quản trị người dùng.</p></div></div><div class="account-settings-grid"><section class="card"><h2>Thông tin tài khoản</h2><dl id="account-profile" class="kv"></dl><a class="btn" id="account-admin-link" href="#account-admin" onclick="switchView('account-admin')" hidden>Quản trị người dùng & phân quyền →</a></section><section class="card"><h2>Đổi mật khẩu</h2><form id="account-password-form" class="account-password-form"><label class="field">Mật khẩu hiện tại<input class="input" type="password" name="old_password" autocomplete="current-password" required></label><label class="field">Mật khẩu mới<input class="input" type="password" name="new_password" autocomplete="new-password" minlength="12" required><small class="muted">Từ 12 đến 72 byte. Bạn sẽ đăng nhập lại sau khi đổi.</small></label><label class="field">Nhập lại mật khẩu mới<input class="input" type="password" name="confirm_password" autocomplete="new-password" minlength="12" required></label><p role="status" id="account-password-status"></p><button class="btn primary" type="submit">Lưu mật khẩu mới</button></form></section></div></section>
+      <section class="page-view view-scrollable" id="view-account"><div class="page-head"><div><h1>Cài đặt tài khoản</h1><p class="muted">Thông tin đăng nhập, mật khẩu và quản trị người dùng.</p></div></div><div class="account-settings-grid"><section class="card"><h2>Thông tin tài khoản</h2><dl id="account-profile" class="kv"></dl><a class="btn" id="account-admin-link" href="#account-management" onclick="switchView('account-management')" hidden>Quản trị người dùng & phân quyền →</a></section><section class="card"><h2>Đổi mật khẩu</h2><form id="account-password-form" class="account-password-form"><label class="field">Mật khẩu hiện tại<input class="input" type="password" name="old_password" autocomplete="current-password" required></label><label class="field">Mật khẩu mới<input class="input" type="password" name="new_password" autocomplete="new-password" minlength="12" required><small class="muted">Từ 12 đến 72 byte. Bạn sẽ đăng nhập lại sau khi đổi.</small></label><label class="field">Nhập lại mật khẩu mới<input class="input" type="password" name="confirm_password" autocomplete="new-password" minlength="12" required></label><p role="status" id="account-password-status"></p><button class="btn primary" type="submit">Lưu mật khẩu mới</button></form></section></div></section>
 
       <!-- VIEW 10: ĐIỀU KHIỂN BUỒNG LÁI & GIÁM SÁT FULL MAP THÔNG MINH -->
       <section class="page-view" id="view-control-manual" style="position:relative;width:100%;height:100%;overflow:hidden">
 
-        <section id="device-readiness" aria-label="Kết nối & quyền thiết bị"><details id="device-readiness-details" open><summary>Kết nối & quyền UAV</summary>
-          <div class="device-controls"><label style="flex:1">UAV<select class="input" id="device-target"><option value="">Chọn máy bay</option></select></label></div>
-          <div class="actions" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">
-            <button class="btn sm" data-refresh-device type="button">Kiểm tra kết nối</button>
-            <button class="btn sm" id="btn-device-auth-status" onclick="manualRequestAuth()" type="button">🔑 Xin quyền Pilot</button>
-            <button class="btn sm primary" id="btn-manual-live-toggle" type="button" onclick="manualToggleLive()">▶ Bật live</button>
-          </div>
-          <p data-device-status role="status">Chọn UAV rồi kiểm tra kết nối. Ảnh gốc được xác nhận riêng khi tải về.</p></details>
-        </section>
+
         <!-- BẢN ĐỒ GIS LEAFLET TOÀN MÀN HÌNH 100% -->
         <div id="real-gis-map-manual" style="position:absolute;inset:0;width:100%;height:100%;z-index:1"></div>
 
@@ -1134,8 +1215,8 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
               <span class="tag info" style="font-size:10px;padding:2px 8px;font-weight:700" id="manual-stream-badge">CHƯA PHÁT</span>
             </div>
             <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
-              <button class="btn sm" id="btn-pip-live-toggle" style="background:#0284c7;color:#fff;border:none;font-size:11px;padding:3px 10px;font-weight:700" onclick="manualToggleLive()">▶ BẬT LIVE</button>
-              <button class="btn sm" id="btn-pip-auth-request" style="background:#0d6e6e;color:#fff;border:none;font-size:11px;padding:3px 10px;font-weight:600" onclick="manualRequestAuth()">🔑 XIN QUYỀN</button>
+              <button class="btn sm" hidden id="btn-pip-live-toggle" style="background:#0284c7;color:#fff;border:none;font-size:11px;padding:3px 10px;font-weight:700" onclick="manualToggleLive()">▶ BẬT LIVE</button>
+              <button class="btn sm" hidden id="btn-pip-auth-request" style="background:#0d6e6e;color:#fff;border:none;font-size:11px;padding:3px 10px;font-weight:600" onclick="manualRequestAuth()">🔑 XIN QUYỀN</button>
               <span id="pip-auth-status-badge" class="tag" style="font-size:10px;padding:2px 6px;background:rgba(255,255,255,0.1);color:#94a3b8">Chưa cấp</span>
             </div>
             <div style="display:flex;align-items:center;gap:3px">
@@ -1144,6 +1225,15 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
             </div>
           </div>
 
+        <section id="device-readiness" aria-label="Kết nối & quyền thiết bị"><div id="device-readiness-details">
+          <label>Camera<select class="input" id="device-video" aria-label="Nguồn video tự chọn"><option value="">Chờ capability camera</option></select></label><div class="device-controls"><label style="flex:1">UAV<select class="input" id="device-target"><option value="">Chọn máy bay</option></select></label></div>
+          <div class="actions" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">
+            <button class="btn sm" data-refresh-device type="button">Kiểm tra kết nối</button>
+            <button class="btn sm" id="btn-device-auth-status" data-device-authorize type="button">🔑 Xin quyền Pilot</button>
+            <button class="btn sm" data-device-release type="button">Trả quyền</button><button class="btn sm" data-device-stop type="button">Dừng live</button><button class="btn sm primary" id="btn-manual-live-toggle" type="button" onclick="manualToggleLive()">▶ Bật live</button>
+          </div>
+          <p data-device-status role="status">Chọn UAV rồi kiểm tra kết nối. Ảnh gốc được xác nhận riêng khi tải về.</p></div>
+        </section>
           <div class="live-pip-body" id="live-pip-body">
             <!-- CAMERA CHÍNH MAVIC 3T -->
             <div class="cam-pane" id="cam-pane-wide" style="position:relative;width:100%;height:100%">
@@ -1152,7 +1242,7 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
                 <div style="font-size:32px">📡</div>
                 <div style="font-size:13px;color:#fff;font-weight:600;margin-top:6px">Màn hình Live Stream Mavic 3T</div>
                 <div class="muted" id="pip-rtmp-hint-wide" style="font-size:11px;margin-top:4px">Bấm nút [▶ BẬT LIVE] hoặc khởi động live từ tay điều khiển DJI Pilot 2</div>
-                <button class="btn sm primary" style="margin-top:10px;font-size:11px;padding:5px 14px;font-weight:700" onclick="manualToggleLive()">▶️ BẬT LIVE STREAM</button>
+
               </div>
             </div>
           </div>
@@ -1271,113 +1361,10 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
 </div>
 
 <!-- MODAL FORM TẠO PHIẾU KIỂM TRA THẬT -->
-<div class="modal-overlay" id="ticket-modal">
-  <div class="modal-box">
-    <div class="modal-head">
-      <h2>Tạo phiếu kiểm tra mới</h2>
-      <button class="icon-btn" onclick="closeTicketModal()">✕</button>
-    </div>
-    <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px;">
-      <div class="field" style="grid-column:1 / -1">
-        <label>Tiêu đề phiếu kiểm tra *</label>
-        <input id="modal-ticket-name" class="input" placeholder="VD: Kiểm tra định kỳ chuỗi Inverter IS01 - IS04">
-      </div>
-      <div class="field">
-        <label>Chu kỳ kiểm tra</label>
-        <select id="modal-ticket-period" class="input">
-          <option value="Hàng ngày">Hàng ngày (Daily)</option>
-          <option value="Hàng tuần">Hàng tuần (Weekly)</option>
-          <option value="Hàng tháng">Hàng tháng (Monthly)</option>
-          <option value="Đột xuất">Đột xuất / Theo yêu cầu</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Đối tượng kiểm tra</label>
-        <select id="modal-ticket-type" class="input">
-          <option value="SOLAR_PANEL">Pin mặt trời (5 Phân khu / Inverter)</option>
-          <option value="DISCONNECTOR">Dao cách ly 22kV (10 cột / 48 mối nối)</option>
-          <option value="OVERALL_SURVEY">Khảo sát tổng thể toàn nhà máy</option>
-        </select>
-      </div>
-      <div class="field" style="grid-column:1 / -1">
-        <label>Phân khu / Mục tiêu thực hiện *</label>
-        <select id="modal-ticket-preset-facility" class="input" onchange="onSelectPresetFacility(this.value)">
-          <option value="Khu 1.1 (IS05, IS06, IS07 - 47.880 tấm)">Khu 1.1 (IS05, IS06, IS07 - 47.880 tấm)</option>
-          <option value="Khu 1.2 (IS08, IS09 - 23.520 tấm)">Khu 1.2 (IS08, IS09 - 23.520 tấm)</option>
-          <option value="Khu 2 (IS01, IS02 - 31.528 tấm)">Khu 2 (IS01, IS02 - 31.528 tấm)</option>
-          <option value="Khu 3 (IS03, IS04 - 22.064 tấm)">Khu 3 (IS03, IS04 - 22.064 tấm)</option>
-          <option value="Khu 6 (Kết nối về Trạm IS05)">Khu 6 (Kết nối về Trạm IS05)</option>
-          <option value="Trạm biến áp 110kV Thác Mơ">Trạm biến áp 110kV Thác Mơ</option>
-          <option value="Hành lang tuyến 22kV (10 cột / 48 dao cách ly)">Hành lang tuyến 22kV (10 cột / 48 dao cách ly)</option>
-          <option value="CUSTOM">Nhập vị trí tùy chọn khác...</option>
-        </select>
-        <input id="modal-ticket-facility" class="input" style="margin-top:6px" placeholder="Chi tiết vị trí kiểm tra" value="Khu 1.1 (IS05, IS06, IS07 - 47.880 tấm)">
-      </div>
-      <div class="field" style="grid-column:1 / -1">
-        <label>Đường bay mẫu từ Thư viện (Tùy chọn)</label>
-        <select id="modal-ticket-route" class="input">
-          <option value="">-- Chọn đường bay mẫu có sẵn --</option>
-        </select>
-        <small class="muted" style="display:block;margin-top:2px">Chọn tuyến bay mẫu đã tạo để phi công thực hiện đúng lộ trình tiêu chuẩn.</small>
-      </div>
-      <div class="field" style="grid-column:1 / -1">
-        <label>UAV thực hiện</label>
-        <select id="modal-ticket-drone" class="input">
-          <option value="1581F5FJC243K00DNRRT">DJI Mavic 3 Enterprise Thermal (1581F5FJC243K00DNRRT)</option>
-        </select>
-      </div>
-    </div>
-    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
-      <button class="btn" onclick="closeTicketModal()">Hủy bỏ</button>
-      <button class="btn primary" onclick="submitCreateTicket()">Lưu Phiếu Kiểm Tra</button>
-    </div>
-  </div>
-</div>
+
 
 <!-- MODAL FORM QUẢN LÝ THIẾT BỊ UAV -->
-<div class="modal-overlay" id="uav-modal">
-  <div class="modal-box">
-    <div class="modal-head">
-      <h2 id="uav-modal-title">Thêm thiết bị UAV mới</h2>
-      <button class="icon-btn" onclick="closeUavModal()">✕</button>
-    </div>
-    <input type="hidden" id="modal-uav-is-edit" value="0">
-    <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px;">
-      <div class="field">
-        <label>Mã số seri (SN) *</label>
-        <input id="modal-uav-sn" class="input" placeholder="VD: 1581F5FJC243K00DNRRT">
-      </div>
-      <div class="field">
-        <label>Tên thiết bị *</label>
-        <input id="modal-uav-name" class="input" placeholder="VD: DJI Mavic 3 Enterprise Thermal">
-      </div>
-      <div class="field">
-        <label>Dòng Model *</label>
-        <select id="modal-uav-model" class="input">
-          <option value="Mavic 3T">DJI Mavic 3 Enterprise Thermal (M3T)</option>
-          <option value="Matrice 30T">DJI Matrice 30T (M30T)</option>
-          <option value="Matrice 350 RTK">DJI Matrice 350 RTK</option>
-          <option value="DJI RC Pro">Tay điều khiển DJI RC Pro Enterprise</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Phân loại thiết bị</label>
-        <select id="modal-uav-type" class="input">
-          <option value="DRONE">Thiết bị bay (Drone UAV)</option>
-          <option value="RC">Tay cầm điều khiển (Remote Controller)</option>
-        </select>
-      </div>
-      <div class="field" style="grid-column:span 2">
-        <label>Ghi chú triển khai</label>
-        <input id="modal-uav-notes" class="input" placeholder="VD: Trang bị camera kép nhiệt + RGB, phục vụ trạm 110kV và NM pin MT">
-      </div>
-    </div>
-    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
-      <button class="btn" onclick="closeUavModal()">Hủy bỏ</button>
-      <button class="btn primary" onclick="submitUavForm()">Lưu thông tin UAV</button>
-    </div>
-  </div>
-</div>
+
 
 <!-- MODAL FORM QUẢN LÝ KHU VỰC PIN MẶT TRỜI -->
 <div class="modal-overlay" id="solar-area-modal">
@@ -1620,6 +1607,14 @@ function toast(msg){
    CHUYỂN TAB CỐ ĐỊNH SIDEBAR (KHÔNG RELOAD, KHÔNG CHỚP NHÁY)
    =================================================================== */
 const VIEW_TITLES = {
+ 'maps-2d-edit':'Thông tin bản đồ 2D',
+ 'offline-maps-edit':'Thông tin bản đồ offline',
+ 'uav-edit':'Thông tin thiết bị UAV',
+ 'account-edit':'Thông tin tài khoản',
+ 'ticket-edit':'Thông tin phiếu kiểm tra',
+ 'account-management':'Quản lý tài khoản',
+ 'maps-2d':'Bản đồ 2D khu vực',
+ 'offline-maps':'Bản đồ offline',
  'account-admin':'Quản lý tài khoản',
   'flight-history': 'Lịch sử Chuyến bay & Vệt bay Drone',
   'dashboard': 'Tổng quan hệ thống',
@@ -1641,7 +1636,7 @@ function switchView(viewName){
  const module=window.UAV_MODULES?.[route];
  if(module) viewName='assets';
  if(window.matchMedia('(max-width:900px)').matches) document.querySelectorAll('.map-workspace').forEach(el=>el.classList.add('panel-collapsed'));
- if(['account-admin','admin'].includes(viewName)&&window.UAV_USER&&window.UAV_USER.role!=='ADMIN')viewName='account';
+ if(['account-admin','admin','account-management','account-edit','maps-2d','offline-maps','maps-2d-edit','offline-maps-edit'].includes(viewName)&&window.UAV_USER&&window.UAV_USER.role!=='ADMIN')viewName='account';
  if(!VIEW_TITLES[viewName]) viewName='dashboard';
  gCurrentView = viewName;
  updateBasemapStatus();
@@ -1709,13 +1704,16 @@ function switchView(viewName){
       window.GIS.FlightHistory.render(fhContainer);
     }
   }, 50);
+ } else if(viewName === 'account-management'){
+  loadAdminUsers();
+ } else if(['maps-2d','offline-maps','maps-2d-edit','offline-maps-edit'].includes(viewName)){
+  loadMapPackages();
  } else if(viewName === 'admin'){
-  loadNativeStorageStatus();
-  GIS.Vision.renderRules(document.getElementById('settings-alert-rules'));
+  switchAdminTab('system');
  } else if(viewName === 'assets'){
   document.getElementById('module-page-title').textContent=module?.title || 'Nhà máy & thiết bị kiểm tra';
   document.getElementById('module-page-description').textContent=module?.description || 'Quản lý nhà máy, khu pin, tấm pin, trạm biến áp, dao cách ly và mối nối được kiểm tra.';
-  if(window.GIS && GIS.AssetsPage) GIS.AssetsPage.open(module?.tab || 'tree');
+  if(window.GIS && GIS.AssetsPage) GIS.AssetsPage.open(module?.tab || 'tree');if(module?.tab==='flights')GIS.FlightPlans.setEditing(!!module.edit);
  }
 }
 
@@ -1742,8 +1740,8 @@ function updateBasemapStatus(){
   const state = gBasemapStates[target], el = document.getElementById('topbar-net-status');
   if(!el || !state) return;
   const cfg = BASEMAPS[state.type] || BASEMAPS.dji;
-  el.textContent = state.type === 'plant_upload' 
-    ? (cfg.name + (state.status === 'ready' ? ' · Đang hiển thị' : '')) 
+  el.textContent = state.type === 'plant_upload'
+    ? (cfg.name + (state.status === 'ready' ? ' · Đang hiển thị' : ''))
     : cfg.name + (state.status === 'ready' ? ' · Đã tải' : state.status === 'error' ? ' · Lỗi tải ô ảnh' : state.status === 'degraded' ? ' · Một số ô ảnh lỗi' : ' · Đang tải');
   el.title = 'Lớp bản đồ nền đang sử dụng trên hệ thống.';
 }
@@ -2162,125 +2160,13 @@ async function triggerMediaSync(){
 /* ===================================================================
    CHỨC NĂNG THẬT 2: TẠO PHIẾU KIỂM TRA (POST /api/tickets)
    =================================================================== */
-function openTicketModal(defaultType){
- if(defaultType) document.getElementById('modal-ticket-type').value = defaultType;
- document.getElementById('ticket-modal').classList.add('active');
-}
+function closeTicketModal(){document.getElementById('ticket-modal').classList.remove('active');}
 
-function closeTicketModal(){
- document.getElementById('ticket-modal').classList.remove('active');
-}
-
-async function submitCreateTicket(){
- const name = document.getElementById('modal-ticket-name').value.trim();
- const type = document.getElementById('modal-ticket-type').value;
- const facility = document.getElementById('modal-ticket-facility').value.trim();
-
- if(!name || !facility){
-  toast('Vui lòng nhập tiêu đề phiếu và khu vực thực hiện');
-  return;
- }
-
- toast('Đang lưu phiếu kiểm tra mới...');
- try{
-  const res = await fetch('/api/tickets', {
-   method: 'POST',
-   headers: { 'Content-Type': 'application/json' },
-   body: JSON.stringify({
-    ticket_name: name,
-    inspection_type: type,
-    target_facility: facility,
-    assigned_device_sn: gSelectedDroneSn
-   })
-  });
-  const data = await res.json();
-  if(data.code === 0){
-   toast(`✓ Đã tạo thành công phiếu: ${data.data.ticket_code}`);
-   closeTicketModal();
-   loadTicketsFromDatabase();
-   refreshDashboardData();
-  } else {
-   toast('Lỗi: ' + data.message);
-  }
- } catch(e){
-  toast('Lỗi gọi API máy chủ: ' + e.message);
- }
-}
-
-
-/* ===================================================================
-   HỆ THỐNG QUẢN LÝ PHIẾU KIỂM TRA & KHO ẢNH & ĐỐI SOÁT ĐƯỜNG BAY
-   =================================================================== */
 let gCurrentDetailData = null;
 let gDetailMiniMap = null;
 let gDetailRouteLayer = null;
 
 // 1. Mở modal tạo phiếu & nạp danh sách đường bay mẫu từ CSDL
-async function openCreateTicketModal(defaultType) {
-  if (defaultType) document.getElementById('modal-ticket-type').value = defaultType;
-  
-  // Nạp danh sách đường bay mẫu có sẵn trong thư viện
-  const routeSelect = document.getElementById('modal-ticket-route');
-  if (routeSelect) {
-    try {
-      const res = await fetch('/api/flight-plans');
-      const data = await res.json();
-      if (data.code === 0 && Array.isArray(data.data)) {
-        if (!data.data.length) {
-          routeSelect.innerHTML = '<option value="">(Chưa có đường bay mẫu - Vào Thư viện đường bay để tạo trước)</option>';
-        } else {
-          routeSelect.innerHTML = '<option value="">-- Chọn đường bay mẫu có sẵn --</option>' +
-            data.data.map(r => `<option value="${r.route_id}">${escapeHtml(r.route_name)} (${r.route_kind === 'POINTS' ? 'Vẽ tay' : 'Quét lưới'} · ${r.photo_count || 0} ảnh)</option>`).join('');
-        }
-      }
-    } catch(e) {
-      routeSelect.innerHTML = '<option value="">-- Lỗi tải danh sách đường bay --</option>';
-    }
-  }
-  
-  document.getElementById('ticket-modal').classList.add('active');
-}
-
-// 2. Lưu phiếu kiểm tra mới
-async function submitCreateTicket() {
-  const name = document.getElementById('modal-ticket-name').value.trim();
-  const type = document.getElementById('modal-ticket-type').value;
-  const facility = document.getElementById('modal-ticket-facility').value.trim();
-  const routeId = document.getElementById('modal-ticket-route').value || null;
-  const droneSn = document.getElementById('modal-ticket-drone').value;
-
-  if (!name || !facility) {
-    toast('Vui lòng nhập tiêu đề phiếu và khu vực thực hiện');
-    return;
-  }
-
-  toast('Đang lưu phiếu kiểm tra mới...');
-  try {
-    const res = await fetch('/api/tickets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ticket_name: name,
-        inspection_type: type,
-        target_facility: facility,
-        assigned_route_id: routeId ? Number(routeId) : undefined,
-        assigned_device_sn: droneSn || gSelectedDroneSn
-      })
-    });
-    const data = await res.json();
-    if (data.code === 0) {
-      toast(`✓ Đã tạo thành công phiếu kiểm tra: ${data.data.ticket_code}`);
-      closeTicketModal();
-      loadTicketsFromDatabase();
-      if (typeof refreshDashboardData === 'function') refreshDashboardData();
-    } else {
-      toast('Lỗi: ' + data.message);
-    }
-  } catch (e) {
-    toast('Lỗi gọi API máy chủ: ' + e.message);
-  }
-}
-
 // 3. Render bảng phiếu kiểm tra chính
 function renderTicketsTable() {
   const tbodyMain = document.getElementById('tickets-table-body-main');
@@ -2305,7 +2191,7 @@ function renderTicketsTable() {
     filtered = filtered.filter(t => t.inspection_type === 'DISCONNECTOR' || t.target_facility?.toLowerCase().includes('dao cách ly'));
   }
   if (searchQ) {
-    filtered = filtered.filter(t => 
+    filtered = filtered.filter(t =>
       (t.ticket_code || '').toLowerCase().includes(searchQ) ||
       (t.ticket_name || '').toLowerCase().includes(searchQ) ||
       (t.target_facility || '').toLowerCase().includes(searchQ) ||
@@ -2320,7 +2206,7 @@ function renderTicketsTable() {
 
   tbodyMain.innerHTML = filtered.map(t => {
     const isLive = (t.status === 'EXECUTING' || t.status === 'RUNNING' || t.status === 'IN_PROGRESS');
-    
+
     let statusBadge = '<span class="tag">⚪ CHỜ BAY</span>';
     if (isLive) {
       statusBadge = '<span class="tag hot" style="animation:pulseLiveBtn 1.5s infinite">🔴 ĐANG BAY</span>';
@@ -2330,8 +2216,8 @@ function renderTicketsTable() {
       statusBadge = '<span class="tag info">🟡 ĐÃ GÁN</span>';
     }
 
-    const liveBtn = isLive 
-      ? `<button class="btn sm danger" style="padding:2px 8px;font-size:11px;animation:pulseLiveBtn 1.5s infinite" onclick="watchTicketLive('${t.ticket_id}', '${t.assigned_device_sn}')" title="Mở trực tiếp luồng video camera UAV">🔴 Xem Live</button>` 
+    const liveBtn = isLive
+      ? `<button class="btn sm danger" style="padding:2px 8px;font-size:11px;animation:pulseLiveBtn 1.5s infinite" onclick="watchTicketLive('${t.ticket_id}', '${t.assigned_device_sn}')" title="Mở trực tiếp luồng video camera UAV">🔴 Xem Live</button>`
       : '';
 
     return `<tr>
@@ -2347,7 +2233,7 @@ function renderTicketsTable() {
       <td style="text-align:center">${statusBadge}</td>
       <td>
         <div>${t.device_name || t.assigned_device_sn || 'DJI Mavic 3T'}</div>
-        <div class="faint" style="font-size:10.5px">${t.inspector_name || 'Kỹ sư Thác Mơ'}</div>
+        <div class="faint" style="font-size:10.5px">${t.inspector_name || 'Chưa phân công'}</div>
       </td>
       <td style="text-align:right;white-space:nowrap">
         ${liveBtn}
@@ -2380,10 +2266,10 @@ async function openTicketDetailModal(ticketId) {
     document.getElementById('dtl-ticket-code').innerText = t.ticket_code;
     document.getElementById('dtl-ticket-name').innerText = t.ticket_name;
     document.getElementById('dtl-ticket-sub').innerText = `Phân khu: ${t.target_facility || 'Toàn trạm'} · Thiết bị: ${t.assigned_device_sn || 'DJI Mavic 3T'}`;
-    
+
     const stEl = document.getElementById('dtl-ticket-status');
     stEl.className = isLive ? 'tag hot' : (t.status === 'COMPLETED' ? 'tag ok' : 'tag info');
-    stEl.innerText = isLive ? '🔴 ĐANG BAY' : (t.status === 'COMPLETED' ? 'HOÀN THÀNH' : t.status);
+    stEl.innerText = isLive ? 'Đang thực hiện' : (t.status === 'COMPLETED' ? 'HOÀN THÀNH' : t.status);
 
     const liveBtn = document.getElementById('dtl-live-btn');
     if (liveBtn) liveBtn.style.display = isLive ? 'inline-block' : 'none';
@@ -2391,12 +2277,12 @@ async function openTicketDetailModal(ticketId) {
     // Tab 1: Thông tin & Tiến độ
     document.getElementById('dtl-info-facility').innerText = t.target_facility || 'Toàn nhà máy';
     document.getElementById('dtl-info-route').innerText = t.route_name || (gCurrentDetailData.routes?.[0]?.route_name) || 'Tuyến bay tự do';
-    document.getElementById('dtl-info-drone').innerText = t.assigned_device_sn || 'DJI Mavic 3T (1581F5FJC243K00DNRRT)';
-    document.getElementById('dtl-info-crew').innerText = gCurrentDetailData.crew?.map(c => c.full_name || c.username).join(', ') || 'Đội bảo trì Thác Mơ';
-    
+    document.getElementById('dtl-info-drone').innerText = t.assigned_device_sn || 'Chưa giao UAV';
+    document.getElementById('dtl-info-crew').innerText = gCurrentDetailData.crew?.map(c => c.full_name || c.username).join(', ') || 'Chưa phân công';
+
     const photos = gCurrentDetailData.photos || [];
     const defects = gCurrentDetailData.defects || [];
-    
+
     document.getElementById('dtl-info-progress').innerText = isLive ? 'Đang thực hiện bay ngoài thực địa' : (t.status === 'COMPLETED' ? '100% Hoàn thành' : 'Đang chờ điều phối bay');
     document.getElementById('dtl-info-photo-summary').innerText = `${photos.length} ảnh đã chụp`;
     document.getElementById('dtl-info-defect-summary').innerText = `${defects.length} điểm phát hiện`;
@@ -2557,10 +2443,10 @@ function renderDetailDefectsTable() {
         <td><b>#${idx + 1}</b></td>
         <td><b style="color:#ef4444">${escapeHtml(d.defect_type || 'Điểm nóng (Hotspot)')}</b></td>
         <td>${escapeHtml(d.location_desc || 'Khu pin Thác Mơ')}</td>
-        <td><b style="color:#ef4444">${d.temperature_c ? d.temperature_c + ' °C' : '--'}</b></td>
-        <td><span class="tag hot">${d.severity || 'CẢNH BÁO'}</span></td>
+        <td><b style="color:#ef4444">${d.max_temperature!=null?v2esc(d.max_temperature)+' °C':'Chưa đo'}</b></td>
+        <td><span class="tag hot">${v2esc(d.defect_code||'Đã phát hiện')}</span></td>
         <td>
-          ${d.file_url ? `<a href="${d.file_url}" target="_blank" class="btn sm" style="padding:2px 8px;font-size:10.5px">Xem ảnh</a>` : '--'}
+          ${d.file_url ? `<a href="${escapeHtml(d.file_url)}" target="_blank" class="btn sm" style="padding:2px 8px;font-size:10.5px">Xem ảnh</a>` : '--'}
         </td>
       </tr>
     `;
@@ -2568,25 +2454,6 @@ function renderDetailDefectsTable() {
 }
 
 // 8. Kích hoạt gọi API AI Vision phân tích ảnh
-async function triggerAnalyzeTicketAI() {
-  if (!gCurrentDetailData || !gCurrentDetailData.ticket) return;
-  const tid = gCurrentDetailData.ticket.ticket_id;
-  toast('Đang gửi danh sách ảnh sang Module AI Vision phân tích...');
-  try {
-    const res = await fetch(`/api/tickets/${tid}/progress`);
-    toast('✓ AI Vision đang xử lý ảnh của phiếu #' + tid + '. Kết quả sẽ tự động đồng bộ.');
-  } catch(e) {
-    toast('Lỗi kết nối AI: ' + e.message);
-  }
-}
-
-// 9. Xuất báo cáo kỹ thuật (In / PDF)
-function exportTicketReport(fmt) {
-  if (!gCurrentDetailData || !gCurrentDetailData.ticket) return;
-  toast('Đang tạo báo cáo kiểm tra định kỳ Thác Mơ...');
-  window.print();
-}
-
 async function loadTicketsFromDatabase(){
  try{
   const res = await fetch('/api/tickets');
@@ -2613,21 +2480,6 @@ function onSelectPresetFacility(val){
   }
 }
 
-function watchTicketLive(ticketId, deviceSn){
-  if(deviceSn){
-    const devSel = document.getElementById('device-target');
-    if(devSel){
-      devSel.value = deviceSn;
-      devSel.dispatchEvent(new Event('change'));
-    }
-  }
-  switchView('control-manual');
-  toast('Đang mở màn hình Điều khiển thủ công & Luồng live của UAV...');
-  setTimeout(()=>{
-    if(typeof manualStartLive === 'function') manualStartLive();
-  }, 350);
-}
-
 function renderDashboardTickets(tickets){
   const tbody = document.getElementById('dashboard-tickets-table-body');
   if(!tbody) return;
@@ -2637,8 +2489,8 @@ function renderDashboardTickets(tickets){
   }
   tbody.innerHTML = tickets.slice(0, 8).map(t => {
     const isLive = (t.status === 'EXECUTING' || t.status === 'RUNNING' || t.status === 'IN_PROGRESS');
-    const liveAction = isLive 
-      ? `<button class="btn sm danger pulse-live" onclick="watchTicketLive('${t.ticket_id}', '${t.assigned_device_sn}')" title="Xem trực tiếp UAV đang bay">🔴 Xem Live</button>` 
+    const liveAction = isLive
+      ? `<button class="btn sm danger pulse-live" onclick="watchTicketLive('${t.ticket_id}', '${t.assigned_device_sn}')" title="Xem trực tiếp UAV đang bay">🔴 Xem Live</button>`
       : `<span class="muted">—</span>`;
     const statusClass = isLive ? 'hot' : (t.status === 'COMPLETED' ? 'ok' : 'info');
     const statusText = isLive ? 'ĐANG BAY' : (t.status === 'COMPLETED' ? 'HOÀN THÀNH' : (t.status === 'ASSIGNED' ? 'ĐÃ PHÂN CÔNG' : 'CHỜ BAY'));
@@ -2664,7 +2516,7 @@ function renderTicketsTable(){
   if(tbodySolar){
     tbodySolar.innerHTML = localTickets.map(t=>{
       const isLive = (t.status === 'EXECUTING' || t.status === 'RUNNING' || t.status === 'IN_PROGRESS');
-      const liveBtn = isLive 
+      const liveBtn = isLive
         ? `<button class="btn sm danger pulse-live" onclick="watchTicketLive('${t.ticket_id}', '${t.assigned_device_sn}')" title="Xem trực tiếp UAV đang bay">🔴 Xem Live</button>`
         : `<button class="btn sm" onclick="triggerThermalPhoto()">Chụp ảnh</button>`;
       return `<tr>
@@ -2912,7 +2764,7 @@ function renderUavTable(){
       <tr>
         <td><b style="font-family:monospace">${escapeHtml(u.device_sn)}</b></td>
         <td><b>${escapeHtml(u.device_name || u.device_sn)}</b></td>
-        <td><span class="chip">${escapeHtml(u.model || 'Mavic 3T')}</span></td>
+        <td><span class="chip">${escapeHtml(u.device_model || 'Mavic 3T')}</span></td>
         <td>${escapeHtml(u.device_type || 'DRONE')}</td>
         <td class="num"><b style="color:${isOnline ? 'var(--ok)' : 'var(--ink3)'}">${batVal}</b></td>
         <td>${statusBadge}</td>
@@ -2946,7 +2798,7 @@ function openUavModal(sn){
     snInput.value = u.device_sn;
     snInput.readOnly = true;
     nameInput.value = u.device_name || '';
-    modelInput.value = u.model || 'Mavic 3T';
+    modelInput.value = u.device_model || 'Mavic 3T';
     typeInput.value = u.device_type || 'DRONE';
     notesInput.value = u.notes || '';
   } else {
@@ -2959,11 +2811,11 @@ function openUavModal(sn){
     typeInput.value = 'DRONE';
     notesInput.value = '';
   }
-  modal.classList.add('active');
+  modal.classList.add('active');switchView('uav-edit');
 }
 
 function closeUavModal(){
-  document.getElementById('uav-modal').classList.remove('active');
+  document.getElementById('uav-modal').classList.remove('active');switchView('uav');
 }
 
 async function submitUavForm(){
@@ -2979,7 +2831,7 @@ async function submitUavForm(){
     return;
   }
 
-  const payload = { device_sn: sn, device_name: name, model, device_type: type, notes };
+  const payload = { device_sn: sn, device_name: name, device_model: model, device_type: type };
   try{
     const url = isEdit ? `/api/devices/${encodeURIComponent(sn)}` : '/api/devices';
     const method = isEdit ? 'PUT' : 'POST';
@@ -4521,7 +4373,7 @@ function openMissionPlanner(targetMap){
 
   const ticketSel = document.getElementById('mp-assign-ticket');
   if(ticketSel && typeof localTickets !== 'undefined'){
-    ticketSel.innerHTML = '<option value="">-- Không gán phiếu (Lưu tự do) --</option>' + 
+    ticketSel.innerHTML = '<option value="">-- Không gán phiếu (Lưu tự do) --</option>' +
       localTickets.map(t => `<option value="${t.ticket_id}">${escapeHtml(t.ticket_code)} (${escapeHtml(t.ticket_name)})</option>`).join('');
   }
   if(!gMissionDrawingMode) toggleMapDrawingMode(true);

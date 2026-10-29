@@ -2,7 +2,7 @@ const fs=require('fs'),path=require('path');
 const {query}=require('../config/db');
 const {Document,Packer,Paragraph,TextRun,ImageRun}=require('docx');
 const PDFDocument=require('pdfkit');
-const FONT=process.env.REPORT_FONT_PATH||'/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+const FONT=process.env.REPORT_FONT_PATH||path.resolve(__dirname,'../../public/dashboard/assets/fonts/BeVietnamPro-Regular.ttf');
 async function snapshot(id){
  const [ticket]=await query('SELECT t.*,u.full_name AS inspector_name FROM inspection_tickets t LEFT JOIN users u ON t.inspector_id=u.user_id WHERE ticket_id=?',[id]);
  if(!ticket)throw new Error('Phiếu không tồn tại');

@@ -31,9 +31,9 @@
    * Gọi API JSON. Ném Error(message) khi server trả lỗi, để nơi gọi hiện thông báo.
    * body là FormData thì gửi nguyên (tải file).
    */
-  GIS.api = async function (method, url, body) {
+  GIS.api = async function (method, url, body, options = {}) {
     const token = localStorage.getItem('uav_token');
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),options.timeoutMs??12000);
     const init = { signal:controller.signal, method, headers: token ? { Authorization: `Bearer ${token}` } : {} };
     if (body instanceof FormData) {
       init.body = body;

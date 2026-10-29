@@ -27,6 +27,12 @@ router.get('/basemaps',asyncHandler(async(req,res)=>{
  a.permission(req.user,'assets:read');const rows=await query('SELECT map_id,map_code,map_name,plant_id,tile_ext,min_zoom,max_zoom,scheme FROM base_maps');
  ok(res,rows.filter(b=>a.allScopes(req.user)||req.user.plant_ids.includes(b.plant_id)).map(b=>({...b,tile_url:`/tiles/basemaps/${b.map_code}/{z}/{x}/{y}.${b.tile_ext}`})));
 }));
+router.get('/assignments',asyncHandler(async(req,res)=>{
+ a.permission(req.user,'tasks:write');const all=a.allScopes(req.user),unit=req.user.unit_id;
+ const people=await query("SELECT user_id,username,full_name FROM users WHERE status='ACTIVE'"+(all?'':' AND unit_id=?'),all?[]:[unit||null]);
+ const units=await query('SELECT unit_id,unit_name FROM units'+(all?'':' WHERE unit_id=?'),all?[]:[unit||null]);
+ const teams=all?await query('SELECT team_id,team_name FROM inspection_teams'):[];ok(res,{people,units,teams});
+}));
 router.get('/context',asyncHandler(async(req,res)=>{
     const u=req.user;
     const plants=a.allScopes(u)?await query('SELECT plant_id,plant_code,plant_name,center_lat,center_lng FROM plants'):u.plant_ids.length?await query(`SELECT plant_id,plant_code,plant_name,center_lat,center_lng FROM plants WHERE plant_id IN (${u.plant_ids.map(()=>'?').join(',')})`,u.plant_ids):[];

@@ -253,6 +253,8 @@ app.get('/tiles/:z/:x/:y.png', (req, res) => {
 
 app.use('/uploads/waylines',express.static(routeLibrary.WAYLINE_DIR));
 app.use('/uploads/media',express.static(mediaUploadRouter.MEDIA_DIR));
+// Originals retain their recorded location when MEDIA_DIR is changed. ACL already ran above.
+app.get('/uploads/media/:name',async(req,res,next)=>{try{const [m]=await query('SELECT file_path_local FROM media_files WHERE file_name=?',[req.params.name]);if(m?.file_path_local&&path.isAbsolute(m.file_path_local)&&fs.existsSync(m.file_path_local))return res.sendFile(m.file_path_local);next();}catch(e){next(e);}});
 app.use('/uploads', (req, res, next) => {
   if (req.path.endsWith('.kmz')) {
     res.set('Content-Type', 'application/vnd.google-earth.kmz');
@@ -1636,7 +1638,7 @@ async function initDatabase() {
       const endpoint = process.env.VISION_ENDPOINT, publicBase = process.env.VISION_PUBLIC_BASE_URL, secret = process.env.VISION_WEBHOOK_SECRET;
       if (!endpoint || !publicBase || !secret) console.warn('[Vision] Chưa đủ VISION_ENDPOINT, VISION_PUBLIC_BASE_URL, VISION_WEBHOOK_SECRET; worker tắt.');
       else {
-        const allowedUrl = value => { try { const u = new URL(value); return !u.username && !u.password && (u.protocol === 'https:' || (u.protocol === 'http:' && ['127.0.0.1','localhost'].includes(u.hostname))); } catch(e) { return false; } };
+        const allowedUrl = require('./src/services/operatorConfig').serviceUrl;
         if (!allowedUrl(endpoint) || !allowedUrl(publicBase)) console.warn('[Vision] Dùng HTTPS hoặc loopback cho endpoint và public base.');
         else visionStop = require('./src/services/visionJobs').startWorker({ endpoint, publicBase, secret, apiToken: process.env.VISION_API_TOKEN });
       }

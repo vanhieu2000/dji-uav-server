@@ -54,7 +54,7 @@ jobs:
           npm run test:mobile
           npm run test:auth
           npm run test:workspace
-          if [ "${{ matrix.engine }}" = "chromium" ]; then npm run test:pilot; fi
+          if [ "${{ matrix.engine }}" = "chromium" ]; then npm run test:pilot && npm run test:live && npm run test:accounts; fi
         working-directory: backend
         env:
           BROWSER_ENGINE: ${{ matrix.engine }}

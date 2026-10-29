@@ -2,6 +2,7 @@
 (()=>{
  const GIS=window.GIS;
  window.UAV_MODULES={
+  'flight-plan-edit':{tab:'flights',edit:true,title:'Thiết lập đường bay mẫu',description:'Điểm chụp, vùng an toàn và thông số từng waypoint.'},
   'flight-plans':{tab:'flights',title:'Lập đường bay',description:'Thiết kế tuyến kiểm tra, xem trước và xuất tuyến bay.'},
   'flight-history':{tab:'history',title:'Lịch sử chuyến bay',description:'Tra cứu chuyến bay và phát lại hành trình đã ghi nhận.'},
   'missions':{tab:'tasks',title:'Phiếu kiểm tra & Lịch bay',description:'Tạo nhiệm vụ, phân công tổ kiểm tra và theo dõi ảnh theo phiếu.'},

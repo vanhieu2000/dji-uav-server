@@ -121,13 +121,13 @@
     box.hidden = false;
 
     // Phân loại ảnh thường vs ảnh sự cố AI
-    const faultPhotos = f.photos.filter(p => (p.max_temperature != null && p.max_temperature >= 55) || (p.lens === 'IR'));
+    const faultPhotos = f.photos.filter(p => Number(p.has_defect)===1);
     const normalPhotos = f.photos.filter(p => !faultPhotos.includes(p));
 
     box.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:10px">
         <h3>Chuyến #${esc(f.flight_session_id)} · <code>${esc(f.device_sn)}</code></h3>
-        <button class="btn sm primary" type="button" onclick="alert('Đã gửi yêu cầu phân tích ${f.photos.length} ảnh của chuyến bay sang dịch vụ Vision AI!')">🤖 Gửi Vision AI</button>
+        <button class="btn sm primary" type="button" onclick="queueFlightVision(${f.flight_session_id}).catch(e=>GIS.toast(e.message,'error'))">🤖 Gửi Vision AI</button>
       </div>
       <dl class="kv gis-geo">
         <dt>Thời gian</dt><dd>${esc(dt(f.started_at))} → ${f.ended_at ? esc(dt(f.ended_at)) : 'đang bay'} (${esc(dur(f.duration_s))})</dd>
@@ -154,12 +154,12 @@
         
         ${faultPhotos.length > 0 ? `
           <div style="margin-bottom:12px">
-            <b style="color:var(--hot);font-size:12px;display:flex;align-items:center;gap:4px">⚠️ Ảnh nghi vấn nhiệt / Sự cố AI (${faultPhotos.length})</b>
+            <b style="color:var(--hot);font-size:12px;display:flex;align-items:center;gap:4px">⚠️ Ảnh có phát hiện lỗi (${faultPhotos.length})</b>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin-top:6px">
               ${faultPhotos.map(p => `
                 <div style="border:1.5px solid var(--hot);border-radius:6px;overflow:hidden;background:#000;text-align:center;position:relative">
                   <a href="${esc(p.file_url)}" target="_blank" rel="noopener">
-                    <img src="${esc(p.file_url)}" style="width:100%;height:75px;object-fit:cover;display:block" onerror="this.src='/dashboard/assets/no-img.svg'">
+                    <img src="${esc(p.file_url)}" style="width:100%;height:75px;object-fit:cover;display:block" onerror="this.onerror=null;this.src='/dashboard/assets/no-img.svg'">
                   </a>
                   <div style="font-size:10px;color:#fff;background:rgba(207,47,94,0.85);padding:2px">
                     ${p.max_temperature != null ? `${esc(p.max_temperature)} °C` : 'IR Thermal'}
@@ -169,15 +169,15 @@
           </div>` : ''}
 
         <div>
-          <b style="font-size:12px;color:var(--ink2)">📸 Ảnh thường RGB / Zoom (${normalPhotos.length})</b>
+          <b style="font-size:12px;color:var(--ink2)">📸 Ảnh chưa có phát hiện lỗi (gồm ảnh chưa phân tích) (${normalPhotos.length})</b>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;margin-top:6px;max-height:220px;overflow-y:auto">
             ${normalPhotos.map(p => `
               <div style="border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#000;position:relative">
                 <a href="${esc(p.file_url)}" target="_blank" rel="noopener">
-                  <img src="${esc(p.file_url)}" style="width:100%;height:65px;object-fit:cover;display:block" onerror="this.src='/dashboard/assets/no-img.svg'">
+                  <img src="${esc(p.file_url)}" style="width:100%;height:65px;object-fit:cover;display:block" onerror="this.onerror=null;this.src='/dashboard/assets/no-img.svg'">
                 </a>
                 <div style="font-size:9.5px;color:#cbd5e1;padding:2px 4px;background:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                  ${esc(p.file_name || 'Ảnh UAV')}
+                  ${esc(p.file_name || 'Ảnh UAV')} · ${esc(p.lens||'UNKNOWN')} · ${p.vision_status==='SUCCEEDED'?'AI chưa phát hiện lỗi':'Chưa có kết quả AI'}
                 </div>
               </div>`).join('')}
           </div>

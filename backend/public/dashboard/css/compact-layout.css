@@ -98,3 +98,41 @@ aside>.nav{overflow-y:auto!important;overflow-x:hidden!important;scrollbar-width
 aside .nav-btn[hidden]{display:none!important}
 #gis-fp-manual-list table{min-width:0;width:100%;table-layout:fixed}#gis-fp-manual-list th:first-child{width:35px}#gis-fp-manual-list th:last-child{width:105px}#gis-fp-manual-list td,#gis-fp-manual-list th{padding:5px;font-size:11px}#gis-fp-manual-list .btn{padding:4px 6px;min-width:0;min-height:32px;font-size:11px;margin:1px}#gis-fp-manual-list td:last-child{white-space:nowrap}
 @media(max-width:700px){#gis-fp-manual-list .btn{min-height:44px}}
+/* Settings must shrink within the viewport; tables scroll inside their own block. */
+:is(#view-admin,#view-account-management,#view-maps-2d,#view-offline-maps) .grid,:is(#view-admin,#view-account-management,#view-maps-2d,#view-offline-maps) .card,:is(#view-admin,#view-account-management,#view-maps-2d,#view-offline-maps) .field,:is(#view-admin,#view-account-management,#view-maps-2d,#view-offline-maps) .admin-tab-pane{min-width:0;max-width:100%}
+:is(#view-admin,#view-account-management,#view-maps-2d,#view-offline-maps) .tbl-wrap{min-width:0;max-width:100%;overflow-x:auto}
+:is(#view-admin,#view-account-management,#view-maps-2d,#view-offline-maps) .settings-tabs{max-width:100%;flex-wrap:wrap;overflow:visible}
+:is(#view-admin,#view-account-management,#view-maps-2d,#view-offline-maps) input[type=file]{max-width:100%;min-width:0}
+#dtl-operations{min-width:0}#dtl-operations .actions,#dtl-operations .ui-filterbar{display:flex;flex-wrap:wrap;gap:8px}#dtl-operations label{min-width:0;max-width:100%}#dtl-operations .input{max-width:100%}
+/* Registration is a dedicated page, with list and editor shown separately. */
+.detail-editor{width:100%;max-width:1080px;margin:0 auto;min-width:0}
+.detail-editor>.modal-box{width:100%!important;max-width:100%!important;max-height:none!important;margin:0;padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:none;color:var(--ink)}
+.detail-editor .modal-head{margin-bottom:16px}.detail-editor .field,.detail-editor label{min-width:0}.detail-editor .input{max-width:100%}
+#form-admin-user{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px}
+#v2-account-scope,#user-form-error,#form-admin-user>div:last-child{grid-column:1/-1}
+#v2-account-scope{border:1px solid var(--line);border-radius:8px;padding:14px;display:grid;gap:10px}
+#user-form-plants{display:flex;flex-wrap:wrap;gap:12px}
+/* Live controls stay inside the frame, with equal touch targets. */
+#manual-live-pip{width:min(560px,calc(100% - 32px));height:430px;max-height:calc(100% - 80px)}
+#manual-live-pip #device-readiness{position:static;width:100%;padding:8px 10px;border:0;border-radius:0;box-shadow:none;background:#10242a;color:#fff;flex-shrink:0}
+#manual-live-pip #device-readiness details{display:contents!important}#manual-live-pip #device-readiness summary{display:none!important}
+#manual-live-pip #device-readiness .device-controls{display:flex}#manual-live-pip #device-readiness .actions{display:flex;gap:6px}
+#manual-live-pip button.btn,#manual-live-pip button.icon-btn{height:34px!important;min-height:34px!important;padding:0 10px!important;font-size:12px!important;line-height:1!important;border-radius:6px!important;display:inline-flex;align-items:center;justify-content:center}
+#manual-live-pip [hidden]{display:none!important}#manual-live-pip .live-pip-body{flex:1;min-height:100px;height:auto}#manual-live-pip .live-pip-head{cursor:move;flex-shrink:0}#manual-live-pip .cam-pane{min-height:0}
+#manual-live-pip #device-readiness p{font-size:10px;color:#cbd5e1;margin-bottom:0}
+@media(max-width:600px){#form-admin-user,.detail-editor .form-grid{grid-template-columns:1fr!important}.detail-editor>.modal-box{padding:14px}#manual-live-pip{bottom:8px;right:8px;width:calc(100% - 16px);height:390px}#manual-live-pip button.btn{flex:1 1 auto}}
+.gis-tab-pane[data-pane=flights]:not(.planner-editing)>.gis-fp,.gis-tab-pane[data-pane=flights]:not(.planner-editing)>.planner-editor-actions{display:none!important}
+.gis-tab-pane[data-pane=flights].planner-editing>.gis-fp-list,.gis-tab-pane[data-pane=flights].planner-editing>.planner-list-actions{display:none!important}
+.planner-list-actions,.planner-editor-actions{margin-bottom:12px}
+#manual-live-pip #device-readiness>details>.device-controls{display:grid;grid-template-columns:1fr}
+#manual-live-pip #device-readiness label{display:inline-grid;width:100%;gap:4px}
+#manual-live-pip{height:460px}
+#manual-live-pip #device-readiness{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 10px}
+#manual-live-pip #device-readiness .actions,#manual-live-pip #device-readiness p{grid-column:1/-1}
+@media(max-height:500px){#manual-live-pip{top:4px;bottom:4px;max-height:none;height:calc(100% - 8px);width:min(640px,calc(100% - 16px))}#manual-live-pip #device-readiness p{display:none}}
+#manual-live-pip #device-readiness-details{display:contents!important}
+#manual-live-pip #device-readiness select{background:#fff!important;color:#10242a!important;height:34px!important;font-size:12px!important;padding:4px 8px!important}
+#manual-live-pip #device-readiness .actions{margin:0!important}
+#manual-live-pip #device-readiness button{background:#f1f5f9!important;color:#10242a!important;border:1px solid #b8cbd0!important;flex:1 1 auto}
+#manual-live-pip #device-readiness button.primary{background:#0d7477!important;color:#fff!important;border-color:#0d7477!important}
+@media(max-width:600px) and (min-height:501px){#manual-live-pip{bottom:72px;max-height:calc(100% - 92px)}}

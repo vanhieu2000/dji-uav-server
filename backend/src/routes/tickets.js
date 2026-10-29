@@ -75,6 +75,20 @@ router.post('/:id/media/:mediaId/assign',asyncHandler(async(req,res)=>{
     ok(res,{ticket_id:id,media_id:mid});
 }));
 
+router.get('/:id/report.:format',asyncHandler(async(req,res)=>{
+ const id=v.parseId(req.params.id,'phiếu'),a=require('../services/authorization');a.permission(req.user,'reports:read');await a.ticket(req.user,id);
+ const format=v.oneOf(req.params.format,['PDF','DOCX'],'định dạng').toLowerCase(),report=await require('../services/taskReport').generate(id,format);
+ res.set('Cache-Control','no-store').attachment(`inspection-${id}.${format}`).type(format==='pdf'?'application/pdf':'application/vnd.openxmlformats-officedocument.wordprocessingml.document').send(report);
+}));
+router.post('/:id/vision',asyncHandler(async(req,res)=>{
+ const id=v.parseId(req.params.id,'phiếu'),a=require('../services/authorization');a.permission(req.user,'tasks:write');await a.ticket(req.user,id);
+ if(process.env.VISION_ENABLED!=='true'||!process.env.VISION_ENDPOINT||!process.env.VISION_WEBHOOK_SECRET||!process.env.VISION_PUBLIC_BASE_URL)return res.status(503).json({code:503,message:'Chưa bật worker Vision hoặc thiếu endpoint/public base/webhook secret. Cấu hình và khởi động lại server trước khi gửi ảnh.'});
+ const after=v.optionalInt(req.body.after_media_id,'mốc ảnh',{min:0,max:Number.MAX_SAFE_INTEGER})||0;
+ const rows=await query('SELECT media_id FROM media_files WHERE ticket_id=? AND media_id>? AND sha256 IS NOT NULL ORDER BY media_id LIMIT 51',[id,after]);
+ const items=[];for(const r of rows.slice(0,50)){const j=await require('../services/visionJobs').enqueue(r.media_id);items.push({media_id:r.media_id,job_id:j.job_id,status:j.status});}
+ ok(res,{items,next_id:items.at(-1)?.media_id||after,has_more:rows.length>50},'Đã ghi nhận job Vision; xem trạng thái job để biết tiến độ, chưa đồng nghĩa đã phân tích xong.');
+}));
+
 // Assign operational context on Web; never sends flight/motion commands.
 router.post('/:id/execution',asyncHandler(async(req,res)=>{
  const a=require('../services/authorization'),id=v.parseId(req.params.id,'phiếu');a.permission(req.user,'tasks:write');const ticket=await a.ticket(req.user,id);
@@ -125,7 +139,7 @@ router.get('/:id', async (req, res) => {
 
         const ticket = { ...tickets[0], livestream_channel: channelForTicket(tickets[0]) };
         // Lấy danh sách ảnh thuộc phiếu này
-        const photos = await query('SELECT * FROM media_files WHERE ticket_id = ? ORDER BY captured_at DESC', [ticketId]);
+        const photos = await query('SELECT m.*,j.status AS vision_status FROM media_files m LEFT JOIN vision_jobs j ON j.media_id=m.media_id AND j.input_sha256=m.sha256 WHERE m.ticket_id = ? ORDER BY m.captured_at DESC', [ticketId]);
         // Lấy danh sách phát hiện khiếm khuyết AI
         const defects = await query(`
             SELECT d.*, m.file_name, m.file_url 
@@ -142,6 +156,7 @@ router.get('/:id', async (req, res) => {
             WHERE td.ticket_id=?`,[ticket.ticket_id]);
         const crew = await query('SELECT u.user_id,u.username,u.full_name FROM ticket_members m JOIN users u ON m.user_id=u.user_id WHERE m.ticket_id=?',[ticket.ticket_id]);
         const progress = await tasks.summary(ticket.ticket_id);
+        const executions=await query('SELECT * FROM ticket_executions WHERE ticket_id=? ORDER BY execution_id DESC LIMIT 30',[ticketId]);
 
         res.json({
             code: 0,
@@ -149,6 +164,7 @@ router.get('/:id', async (req, res) => {
                 ticket,
                 scope, crew, progress,
                 routes,
+                executions,
                 photos,
                 defects
             }

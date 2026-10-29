@@ -6,6 +6,14 @@ const v=require('../utils/validate');
 const router=express.Router();let onChanged=()=>{};router.setOnUserChanged=fn=>{onChanged=fn;};
 router.use(authenticateToken,(req,res,next)=>req.user.role==='ADMIN'?next():res.status(403).json({code:403,message:'Chỉ quản trị viên được quản lý tài khoản'}));
 router.get('/storage',asyncHandler(async(req,res)=>{const fs=require('fs'),folder=require('./mediaUpload').MEDIA_DIR;const [row]=await query('SELECT COUNT(*) AS count,COALESCE(SUM(file_size),0) AS bytes FROM media_files');const disk=fs.statfsSync(folder);ok(res,{...require('../services/objectStorage').readiness(),folder,photos:Number(row.count),bytes:Number(row.bytes),free_bytes:Number(disk.bavail)*Number(disk.bsize)});}));
+router.get('/runtime-config',asyncHandler(async(req,res)=>ok(res,require('../services/operatorConfig').status())));
+router.put('/runtime-config',asyncHandler(async(req,res)=>{const config=require('../services/operatorConfig');config.save(req.body);ok(res,config.status(),'Đã lưu cấu hình trên máy chủ. Khởi động lại server để áp dụng; ảnh cũ giữ nguyên.');}));
+router.post('/runtime-config/test-vision',asyncHandler(async(req,res)=>{
+ const c=require('../services/operatorConfig'),endpoint=c.read().VISION_ENDPOINT||process.env.VISION_ENDPOINT;
+ if(!c.serviceUrl(endpoint))throw new v.ValidationError('Chưa có endpoint Vision hợp lệ');
+ try{const response=await fetch(endpoint,{method:'HEAD',redirect:'error',signal:AbortSignal.timeout(5000),headers:process.env.VISION_API_TOKEN?{Authorization:'Bearer '+process.env.VISION_API_TOKEN}:{}});if(response.body)await response.body.cancel();ok(res,{reachable:true,http_status:response.status,analysis_verified:false},'Máy chủ Vision đã phản hồi HTTP '+response.status+'. Đây chưa phải kiểm tra phân tích ảnh.');}
+ catch(e){res.status(503).json({code:503,message:'Không nhận được phản hồi từ endpoint Vision trong thời gian kiểm tra.'});}
+}));
 const ROLES=['ADMIN','ENGINEER','OPERATOR','VIEWER'],PERMISSIONS=['tasks:read','tasks:write','assets:read','media:write','alerts:write','reports:read'];
 const PUBLIC_COLUMNS='user_id,username,full_name,email,phone,role,status,unit_id,must_change_password,last_login,all_operation_scopes';
 async function scopes(conn,uid,ids){

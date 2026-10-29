@@ -58,6 +58,13 @@ router.get('/', asyncHandler(async (req, res) => {
     ok(res, rows.map(r => ({ ...r, photo_count: Number(r.photo_count) || 0 })));
 }));
 
+router.post('/:id/vision',asyncHandler(async(req,res)=>{
+ const id=v.parseId(req.params.id,'chuyến'),a=require('../services/authorization');a.permission(req.user,'tasks:write');const [f]=await query('SELECT ticket_id FROM flight_sessions WHERE flight_session_id=?',[id]);if(!f)throw new NotFoundError('Không có chuyến bay');if(!f.ticket_id)throw Object.assign(new v.ValidationError('Gắn chuyến với phiếu trước khi gửi Vision'),{status:409});await a.ticket(req.user,f.ticket_id);
+ if(process.env.VISION_ENABLED!=='true'||!process.env.VISION_ENDPOINT||!process.env.VISION_WEBHOOK_SECRET||!process.env.VISION_PUBLIC_BASE_URL)return res.status(503).json({code:503,message:'Worker Vision chưa được bật hoặc chưa đủ cấu hình; chưa gửi ảnh.'});
+ const after=v.optionalInt(req.body.after_media_id,'mốc ảnh',{min:0,max:Number.MAX_SAFE_INTEGER})||0,rows=await query('SELECT media_id FROM media_files WHERE flight_session_id=? AND media_id>? AND sha256 IS NOT NULL ORDER BY media_id LIMIT 51',[id,after]),items=[];
+ for(const r of rows.slice(0,50)){const j=await require('../services/visionJobs').enqueue(r.media_id);items.push({media_id:r.media_id,job_id:j.job_id,status:j.status});}ok(res,{items,next_id:items.at(-1)?.media_id||after,has_more:rows.length>50});
+}));
+
 router.get('/:id', asyncHandler(async (req, res) => {
     const id = v.parseId(req.params.id, 'chuyến bay');
     const rows = await query(`SELECT ${FLIGHT_COLUMNS} ${FLIGHT_JOINS} WHERE f.flight_session_id = ?`, [id]);
@@ -71,9 +78,10 @@ router.get('/:id', asyncHandler(async (req, res) => {
         [id]
     );
     const photos = await query(
-        `SELECT media_id, file_name, file_url, media_type, lens, latitude AS lat, longitude AS lng, relative_altitude,
-                position_quality, max_temperature, captured_at
-         FROM media_files WHERE flight_session_id = ? ORDER BY captured_at, media_id`,
+        `SELECT m.media_id, m.file_name, m.file_url, m.media_type, m.lens, m.latitude AS lat, m.longitude AS lng, m.relative_altitude,
+                m.position_quality, m.max_temperature, m.captured_at,j.status AS vision_status,
+                EXISTS(SELECT 1 FROM ai_defect_detections d WHERE d.media_id=m.media_id) AS has_defect
+         FROM media_files m LEFT JOIN vision_jobs j ON j.media_id=m.media_id AND j.input_sha256=m.sha256 WHERE m.flight_session_id = ? ORDER BY m.captured_at, m.media_id`,
         [id]
     );
     ok(res, { ...flight, track_points_total: track.length, track: thin(track, MAX_TRACK_POINTS), photos });
