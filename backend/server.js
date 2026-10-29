@@ -980,7 +980,8 @@ app.post('/api/pilot/login', loginLimit, async (req, res) => {
       token: pilotToken,
       mqtt: {
         host: process.env.MQTT_PUBLIC_URL || `tcp://${HOST_IP}:${MQTT_PORT}`,
-        ...mqttCredentials,
+        username: 'pilot',
+        password: 'pilot_password',
         clientId: `pilot_${Date.now()}`
       },
       livestream: liveStream&&publishQuery ? { ...liveStream, rtmpUrl: `${process.env.RTMP_PUBLIC_BASE_URL || 'rtmp://'+HOST_IP+':'+(process.env.RTMP_PORT||systemConfig.rtmp_port||1935)}${liveStream.streamPath}?${publishQuery}` } : null,
