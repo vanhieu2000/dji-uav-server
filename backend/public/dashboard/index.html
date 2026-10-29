@@ -990,7 +990,6 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
           <option value="Mavic 3T">DJI Mavic 3 Enterprise Thermal (M3T)</option>
           <option value="Matrice 30T">DJI Matrice 30T (M30T)</option>
           <option value="Matrice 350 RTK">DJI Matrice 350 RTK</option>
-          <option value="DJI Dock">Trạm sạc tự động DJI Dock</option>
           <option value="DJI RC Pro">Tay điều khiển DJI RC Pro Enterprise</option>
         </select>
       </div>
@@ -999,7 +998,6 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
         <select id="modal-uav-type" class="input">
           <option value="DRONE">Thiết bị bay (Drone UAV)</option>
           <option value="RC">Tay cầm điều khiển (Remote Controller)</option>
-          <option value="DOCK">Trạm sạc tự động (Dock)</option>
         </select>
       </div>
       <div class="field" style="grid-column:span 2">
@@ -1045,7 +1043,7 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
       </div>
       <div class="field">
         <label>Tọa độ Kinh độ (Lng) *</label>
-        <input id="modal-area-lng" type="number" step="0.000001" class="input" value="106.591000">
+        <input id="modal-area-lng" type="number" step="0.000001" class="input" placeholder="Kinh độ (VD: 106.xxxxxx)">
       </div>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
@@ -1099,7 +1097,7 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
       </div>
       <div class="field">
         <label>Tọa độ Kinh độ (Lng)</label>
-        <input id="modal-dcl-lng" type="number" step="0.000001" class="input" value="106.592700">
+        <input id="modal-dcl-lng" type="number" step="0.000001" class="input" placeholder="Kinh độ (VD: 106.xxxxxx)">
       </div>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
@@ -1441,7 +1439,7 @@ function setBasemap(type, target){
 
 async function initSolarMap(){
   if(gMap) return;
-  gMap = L.map('real-gis-map', { center: [11.831200, 106.591300], zoom: 17, zoomControl: false });
+  gMap = L.map('real-gis-map', { center: [16.0, 108.0], zoom: 6, zoomControl: false });
   L.control.zoom({ position: 'topright' }).addTo(gMap);
   await fetchActivePlantBasemap();
   setBasemap(savedBasemap('solar'), 'solar');
@@ -1499,7 +1497,7 @@ function showDclDetail(item){
 
 async function initSubstationMap(){
  if(gMapSub) return;
- gMapSub = L.map('real-gis-map-sub', { center: [11.832600, 106.592600], zoom: 18, zoomControl: false });
+ gMapSub = L.map('real-gis-map-sub', { center: [16.0, 108.0], zoom: 6, zoomControl: false });
  L.control.zoom({ position: 'topright' }).addTo(gMapSub);
  await fetchActivePlantBasemap();
  setBasemap(savedBasemap('substation'), 'substation');
@@ -1518,7 +1516,7 @@ async function initSubstationMap(){
 
 async function initManualMap(){
  if(gMapManual) return;
- gMapManual = L.map('real-gis-map-manual', { center: [11.831200, 106.591300], zoom: 17, zoomControl: false });
+ gMapManual = L.map('real-gis-map-manual', { center: [16.0, 108.0], zoom: 6, zoomControl: false });
  L.control.zoom({ position: 'topright' }).addTo(gMapManual);
  await fetchActivePlantBasemap();
  setBasemap(savedBasemap('manual'), 'manual');
@@ -1535,7 +1533,7 @@ async function initManualMap(){
  gMapManual.on('click', function(e){
   const lat = e.latlng.lat;
   const lng = e.latlng.lng;
-  const droneLatLng = manualDroneMarker ? manualDroneMarker.getLatLng() : L.latLng(11.831200, 106.591300);
+  const droneLatLng = manualDroneMarker ? manualDroneMarker.getLatLng() : gMapManual.getCenter();
   const distM = Math.round(gMapManual.distance(droneLatLng, e.latlng));
   const distStr = distM > 1000 ? (distM / 1000).toFixed(2) + ' km' : distM + ' m';
 
@@ -2309,10 +2307,10 @@ function openSolarAreaModal(areaId){
     codeIn.value = '';
     codeIn.readOnly = false;
     nameIn.value = '';
-    stringsIn.value = '12';
-    pwrIn.value = '3360';
-    latIn.value = '11.831500';
-    lngIn.value = '106.591000';
+    stringsIn.value = '';
+    pwrIn.value = '';
+    latIn.value = '';
+    lngIn.value = '';
   }
   modal.classList.add('active');
 }
@@ -2459,12 +2457,12 @@ function openDclModal(code){
     codeIn.value = '';
     codeIn.readOnly = false;
     nameIn.value = '';
-    bayIn.value = 'Ngăn 171';
-    phaseIn.value = 'A';
+    bayIn.value = '';
+    phaseIn.value = '3PHASE';
     vIn.value = '110';
     thIn.value = '75.0';
-    latIn.value = '11.832620';
-    lngIn.value = '106.592610';
+    latIn.value = '';
+    lngIn.value = '';
   }
   modal.classList.add('active');
 }

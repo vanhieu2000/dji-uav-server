@@ -53,7 +53,7 @@
   function preview(m) {
     st.root.querySelector('#gis-bm-preview').hidden = false;
     if (!st.map) {
-      st.map = L.map(st.root.querySelector('#gis-bm-map'), { zoom: 16, center: [11.83, 106.59] });
+      st.map = L.map(st.root.querySelector('#gis-bm-map'), { zoom: 16, center: [16.0, 108.0] });
       const sat = (typeof BASEMAPS !== 'undefined' && BASEMAPS.satellite);
       if (sat) L.tileLayer(sat.url, { maxZoom: 22, maxNativeZoom: sat.native || 18, attribution: sat.attr }).addTo(st.map);
     }

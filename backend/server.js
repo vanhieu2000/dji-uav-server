@@ -1631,5 +1631,5 @@ server.listen(PORT, '0.0.0.0', () => {
   setupMqtt();
   setupRtmpServer();
   testConnection().catch(err => console.warn('[DB Init]', err.message));
-  startMapHealthCheck(broadcastWebSocket);
+  // startMapHealthCheck(broadcastWebSocket); // Không thăm dò OSM internet khi chạy hệ thống bản đồ thật nội bộ
 });
