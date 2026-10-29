@@ -43,9 +43,9 @@ Các kiểm thử phần mềm dùng MySQL cách ly dji_uav_test, telemetry/ản
 
 ## Kết quả kiểm tra trước bàn giao
 
-- Backend:104/104 đạt,0bỏ qua, chạy vớiMySQL cách ly; có server thật, MQTT thật qua loopback và bộ phát/ảnh fixture trong test.
-- Trình duyệt Chromium: khởi động, điều hướng bằng nút thật khiAPI503, nhậnpublisher và tự chọnstream, desktop/mobile, luồngphiếu/waypoint, đăngnhập vàPilotBridge đềuđạt.
-- Giao diện mobile390px và đăngnhập1440/768/390/320px đã kiểm tra.
-- npm audit --omit=dev:0lỗhổng được công cụbáo tại thờiđiểmchạy.
-- deviceCommands.js không thay đổi so với main b42fe0f.
-- Chưa coi đây là nghiệm thu RC thật hoặc kết quảGitHubActions sau push.
+- Backend: 104/104 đạt, không bỏ qua bài nào; chạy với MySQL cách ly, server và MQTT thật qua loopback. Bộ phát/ảnh fixture chỉ dùng trong test.
+- Trình duyệt Chromium: khởi động, điều hướng bằng nút thật khi API trả 503, nhận publisher và tự chọn stream, luồng phiếu/waypoint, đăng nhập và Pilot Bridge đều đạt.
+- Đã kiểm tra giao diện mobile 390 px; trang đăng nhập ở 1440/768/390/320 px.
+- `npm audit --omit=dev`: công cụ báo 0 lỗ hổng tại thời điểm chạy.
+- `deviceCommands.js` không thay đổi so với main `b42fe0f`.
+- Chưa coi đây là nghiệm thu RC thật hoặc kết quả GitHub Actions sau push.
