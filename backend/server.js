@@ -600,8 +600,7 @@ async function handleDjiMqttMessage(topic, json) {
       first_seen: new Date()
     };
 
-    if (d.latitude !== undefined) dev.lat = d.latitude;
-    if (d.longitude !== undefined) dev.lng = d.longitude;
+    if (d.latitude !== undefined && d.longitude !== undefined && (d.latitude !== 0 || d.longitude !== 0)) { dev.lat = d.latitude; dev.lng = d.longitude; }
     if (d.height !== undefined) dev.alt = d.height;
     if (d.elevation !== undefined) dev.rel_alt = d.elevation;
     else if (d.relative_height !== undefined) dev.rel_alt = d.relative_height;
@@ -651,7 +650,7 @@ async function handleDjiMqttMessage(topic, json) {
         dev.rtk_state = r.rtk;
         const st = flightTracker.snapshot().find(x => x.device_sn === sn);
         dev.ticket_id = st ? st.ticket_id : null;
-        broadcastWebSocket({ type: 'osd', device_sn: sn, data: { ...dev } });
+        // Đã phát trực tiếp ở dưới, không phát đúp
       }).catch(err => console.warn('[Chuyến bay] OSD:', err.message));
     }
 
@@ -707,11 +706,7 @@ async function handleDjiMqttMessage(topic, json) {
           }
 
           console.log(`[UAV Detected] ✓ Đã phát hiện máy bay Mavic 3T thật từ Topo: SN = ${uavSn}`);
-          broadcastWebSocket({
-            type: 'osd',
-            device_sn: uavSn,
-            data: dev
-          });
+          // state không phát lặp osd
           broadcastWebSocket({
             type: 'device_status',
             device_sn: uavSn,
@@ -745,7 +740,7 @@ async function handleDjiMqttMessage(topic, json) {
     const oldState=stateTimestamps.get(sn);
     if(Number.isSafeInteger(json.timestamp)&&oldState!=null&&json.timestamp<oldState)return;
     if(Number.isSafeInteger(json.timestamp)){if(stateTimestamps.size>=1000&&!stateTimestamps.has(sn))stateTimestamps.delete(stateTimestamps.keys().next().value);stateTimestamps.set(sn,json.timestamp);}
-    if(typeof d.is_cloud_control_auth==='boolean') memoryStore.gateways[sn]={...memoryStore.gateways[sn],gateway_sn:sn,is_cloud_control_auth:d.is_cloud_control_auth};
+    if(typeof d.is_cloud_control_auth==='boolean') { const gw = gatewayOfAircraft[sn] || sn; if(memoryStore.gateways[gw]) memoryStore.gateways[gw].is_cloud_control_auth = d.is_cloud_control_auth; if(memoryStore.devices[sn]) memoryStore.devices[sn].is_cloud_control_auth = d.is_cloud_control_auth; broadcastWebSocket({ type: 'cloud_control_status', authorized: d.is_cloud_control_auth, sn: sn, gateway_sn: gw }); }
     if(Array.isArray(d.live_status)&&memoryStore.gateways[sn])memoryStore.gateways[sn].live_status=d.live_status;
     if (d.live_capacity) {
       memoryStore.gateways[sn] = { ...memoryStore.gateways[sn], gateway_sn: sn, live_capacity: d.live_capacity };

@@ -8,7 +8,7 @@
   let deviceMode='single',defaultDevice=null,configLoaded=false;
   let onSelect = () => {}, streams = [], currentPath = null;
   const finite = x => x != null && Number.isFinite(Number(x));
-  const position = d => finite(d.lat) && finite(d.lng) && Math.abs(d.lat) <= 90 && Math.abs(d.lng) <= 180;
+  const position = d => finite(d.lat) && finite(d.lng) && Math.abs(d.lat) <= 90 && Math.abs(d.lng) <= 180 && !(Number(d.lat) === 0 && Number(d.lng) === 0);
   const visible = d => !ticketId || String(d.ticket_id) === ticketId;
 
   function popup(d) {
