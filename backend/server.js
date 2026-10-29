@@ -832,6 +832,29 @@ async function handleDjiMqttMessage(topic, json) {
     if (event === 'hms') {
       monitoring.hms(sn, json, gatewayOfAircraft[sn] || sn).catch(err => console.warn('[HMS]', err.message));
     }
+    // Xử lý tiến độ bay tự động theo đường bay KMZ
+    if (event === 'flighttask_progress') {
+      const ext = json.data?.output?.ext || {};
+      broadcastWebSocket({
+        type: 'flighttask_progress',
+        sn: sn,
+        flight_id: ext.flight_id,
+        current_waypoint: ext.current_waypoint_index,
+        status: json.data?.output?.status,
+        percent: json.data?.output?.progress?.percent
+      });
+    }
+    // Xử lý sự kiện tay cầm RC nạp ảnh lên Server thành công
+    if (event === 'file_upload_callback') {
+      const file = json.data?.file || {};
+      console.log(`[MQTT PHOTO] Tay cầm ${sn} báo tải ảnh: ${file.name || 'ảnh mới'}`);
+      broadcastWebSocket({
+        type: 'photo_uploaded',
+        sn: sn,
+        file_name: file.name,
+        flight_id: file.ext?.flight_id
+      });
+    }
     broadcastWebSocket({
       type: 'device_event',
       sn: sn,
@@ -1109,7 +1132,7 @@ app.post('/api/routes/generate-kmz', async (req, res) => {
 });
 
 // 5.2 Bắn lệnh nạp đường bay KMZ trực tiếp vào Drone / DJI Pilot 2 qua DJI Cloud API
-app.post('/api/routes/push-to-drone', (req,res) => res.status(410).json({code:410,message:'Thao tác này không thuộc luồng M3T/Pilot 2 đã hỗ trợ. Dùng hồ sơ chụp KMZ và vận hành trên Pilot 2; server chỉ nhận ảnh gốc.'}));
+app.use('/api/routes', require('./src/routes/waylines').createRouter({ getMqttClient: () => mqttClient }));
 
 app.use('/api/control',require('./src/routes/deviceControl').createRouter({
  commands:deviceCommands,devices:memoryStore.devices,gateways:memoryStore.gateways,gatewayOfAircraft,

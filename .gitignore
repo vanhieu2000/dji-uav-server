@@ -30,3 +30,5 @@ deploy/certs/
 
 # Generated source archive revision (embedded in release ZIP only)
 /release-info.json
+
+source_code.txt

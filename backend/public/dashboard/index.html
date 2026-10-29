@@ -210,7 +210,7 @@ tbody tr.click:hover td,tbody tr.sel td{background:var(--surface2)}
 .slide-drawer-head{padding:10px 14px;background:#060d13;border-bottom:1px solid #1e3a47;display:flex;align-items:center;justify-content:space-between}
 .slide-drawer-body{flex:1;overflow-y:auto;padding:12px}
 
-/* GIAO DIỆN BUỒNG LÁI (COCKPIT) VÀ TEST DEBUG CONSOLE */
+/* GIAO DIỆN ĐIỀU KHIỂN THỦ CÔNG (MANUAL CONTROL) VÀ NHẬT KÝ LỆNH */
 .cockpit-row{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,0.9fr);gap:12px;height:55%;padding:12px 14px 0;min-height:280px;position:relative}
 .console-box{flex:1;margin:10px 14px 12px;background:#090d16;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.35);transition:all .25s ease}
 .console-box.expanded{position:absolute;inset:12px 14px;z-index:1000;margin:0}
@@ -320,6 +320,27 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
  .modal-box{max-height:90dvh;overflow-y:auto;margin:12px}
  .top #topbar-current-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
+
+.pulse-live {
+  background: #dc2626 !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  border: none !important;
+  padding: 4px 10px !important;
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.6);
+  animation: pulseLiveBtn 1.8s infinite;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+@keyframes pulseLiveBtn {
+  0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+  70% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
 </style>
 <link rel="icon" type="image/x-icon" href="/dashboard/assets/rtc-logo.ico"><link rel="apple-touch-icon" href="/dashboard/assets/rtc-logo.png"><link rel="stylesheet" href="/dashboard/css/rtc-brand.css">
 <link rel="stylesheet" href="css/workspace.css"/>
@@ -337,7 +358,7 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
       <div><b>Giám sát UAV</b><span>Điện mặt trời & Trạm 110kV</span></div>
     </div>
 
-<nav class="nav" aria-label="Điều hướng chính"><a class="nav-btn" data-target="dashboard" href="#dashboard" title="Tổng quan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><span class="nav-label">Tổng quan</span></a><details class="nav-tree" open><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span>Bản đồ</span></summary><div class="nav-children"><a class="nav-btn" data-target="map-solar" href="#map-solar" title="Pin mặt trời"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span class="nav-label">Pin mặt trời</span></a><a class="nav-btn" data-target="map-substation" href="#map-substation" title="Trạm biến áp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span class="nav-label">Trạm biến áp</span></a></div></details><details class="nav-tree" open><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span>Kiểm tra & vận hành</span></summary><div class="nav-children"><a class="nav-btn" data-target="missions" href="#missions" title="Nhiệm vụ & phân công"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Nhiệm vụ & phân công</span></a><a class="nav-btn" data-target="tickets-solar" href="#tickets-solar" title="Phiếu kiểm tra pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H6a1 1 0 00-1 1v16a1 1 0 001 1h12a1 1 0 001-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg><span class="nav-label">Phiếu kiểm tra pin</span></a><a class="nav-btn" data-target="tickets-dcl" href="#tickets-dcl" title="Phiếu kiểm tra DCL"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 14.8V5a2 2 0 10-4 0v9.8a4 4 0 104 0z"/></svg><span class="nav-label">Phiếu kiểm tra DCL</span></a><a class="nav-btn" data-target="flight-plans" href="#flight-plans" title="Lập đường bay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Lập đường bay</span></a><a class="nav-btn" data-target="flight-history" href="#flight-history" title="Lịch sử chuyến bay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Lịch sử chuyến bay</span></a><a class="nav-btn" data-target="uav" href="#uav" title="Thiết bị UAV"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="5" cy="5" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg><span class="nav-label">Thiết bị UAV</span></a><a class="nav-btn" data-target="control-manual" href="#control-manual" title="Điều khiển & live"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4m-2-2v4m10-2h.01m-3 0h.01"/></svg><span class="nav-label">Điều khiển & live</span></a></div></details><details class="nav-tree"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span>Ảnh & phân tích</span></summary><div class="nav-children"><a class="nav-btn" data-target="media-import" href="#media-import" title="Nhập ảnh thẻ nhớ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Nhập ảnh thẻ nhớ</span></a><a class="nav-btn" data-target="photo-coverage" href="#photo-coverage" title="Kiểm tra đủ ảnh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Kiểm tra đủ ảnh</span></a><a class="nav-btn" data-target="vision" href="#vision" title="Xử lý Vision"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Xử lý Vision</span></a><a class="nav-btn" data-target="vision-datasets" href="#vision-datasets" title="Xuất ảnh cho Vision"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Xuất ảnh cho Vision</span></a><a class="nav-btn" data-target="alerts" href="#alerts" title="Cảnh báo & lịch sử nhiệt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Cảnh báo & lịch sử nhiệt</span></a></div></details><details class="nav-tree" open><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span>Danh mục & báo cáo</span></summary><div class="nav-children"><a class="nav-btn" data-target="assets" href="#assets" title="Nhà máy & thiết bị kiểm tra"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Nhà máy & thiết bị kiểm tra</span></a><a class="nav-btn" data-target="reports" href="#reports" title="Báo cáo & thống kê"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V4M4 20h16"/><path d="M8 16v-5M12 16V8M16 16v-3"/></svg><span class="nav-label">Báo cáo & thống kê</span></a></div></details><details class="nav-tree"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span>Cài đặt</span></summary><div class="nav-children"><a class="nav-btn" data-admin-only hidden data-target="admin" href="#admin" title="Cài đặt chung"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.3l2-1.5-2-3.4-2.3.9a7 7 0 00-2.2-1.3L14 3h-4l-.4 2.4a7 7 0 00-2.2 1.3l-2.3-.9-2 3.4 2 1.5A7 7 0 005 12c0 .4 0 .9.1 1.3l-2 1.5 2 3.4 2.3-.9c.7.5 1.4.9 2.2 1.3L10 21h4l.4-2.4c.8-.4 1.5-.8 2.2-1.3l2.3.9 2-3.4-2-1.5c.1-.4.1-.9.1-1.3z"/></svg><span class="nav-label">Cài đặt chung</span></a><a class="nav-btn" data-admin-only hidden data-target="account-admin" href="#account-admin" title="Quản lý tài khoản"><span>Quản lý tài khoản</span></a><a class="nav-btn" data-target="account" href="#account" title="Tài khoản cá nhân"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Tài khoản cá nhân</span></a></div></details></nav>
+<nav class="nav" aria-label="Điều hướng chính"><a class="nav-btn" data-target="dashboard" href="#dashboard" title="Tổng quan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><span class="nav-label">Tổng quan</span></a><details class="nav-tree" open><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span>Bản đồ</span></summary><div class="nav-children"><a class="nav-btn" data-target="map-solar" href="#map-solar" title="Pin mặt trời"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span class="nav-label">Pin mặt trời</span></a><a class="nav-btn" data-target="map-substation" href="#map-substation" title="Trạm biến áp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span class="nav-label">Trạm biến áp</span></a></div></details><details class="nav-tree" open><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span>Kiểm tra & vận hành</span></summary><div class="nav-children"><a class="nav-btn" data-target="missions" href="#missions" title="Nhiệm vụ & phân công"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Nhiệm vụ & phân công</span></a><a class="nav-btn" data-target="tickets-solar" href="#tickets-solar" title="Phiếu kiểm tra pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H6a1 1 0 00-1 1v16a1 1 0 001 1h12a1 1 0 001-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg><span class="nav-label">Phiếu kiểm tra pin</span></a><a class="nav-btn" data-target="tickets-dcl" href="#tickets-dcl" title="Phiếu kiểm tra DCL"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 14.8V5a2 2 0 10-4 0v9.8a4 4 0 104 0z"/></svg><span class="nav-label">Phiếu kiểm tra DCL</span></a><a class="nav-btn" data-target="flight-plans" href="#flight-plans" title="Lập đường bay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Lập đường bay</span></a><a class="nav-btn" data-target="flight-history" href="#flight-history" title="Lịch sử chuyến bay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Lịch sử chuyến bay</span></a><a class="nav-btn" data-target="uav" href="#uav" title="Thiết bị UAV"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="5" cy="5" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg><span class="nav-label">Thiết bị UAV</span></a><a class="nav-btn" data-target="control-manual" href="#control-manual" title="Điều khiển thủ công"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4m-2-2v4m10-2h.01m-3 0h.01"/></svg><span class="nav-label">Điều khiển thủ công</span></a></div></details><details class="nav-tree"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span>Ảnh & phân tích</span></summary><div class="nav-children"><a class="nav-btn" data-target="media-import" href="#media-import" title="Nhập ảnh thẻ nhớ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Nhập ảnh thẻ nhớ</span></a><a class="nav-btn" data-target="photo-coverage" href="#photo-coverage" title="Kiểm tra đủ ảnh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Kiểm tra đủ ảnh</span></a><a class="nav-btn" data-target="vision" href="#vision" title="Xử lý Vision"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Xử lý Vision</span></a><a class="nav-btn" data-target="vision-datasets" href="#vision-datasets" title="Xuất ảnh cho Vision"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Xuất ảnh cho Vision</span></a><a class="nav-btn" data-target="alerts" href="#alerts" title="Cảnh báo & lịch sử nhiệt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Cảnh báo & lịch sử nhiệt</span></a></div></details><details class="nav-tree" open><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span>Danh mục & báo cáo</span></summary><div class="nav-children"><a class="nav-btn" data-target="assets" href="#assets" title="Nhà máy & thiết bị kiểm tra"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Nhà máy & thiết bị kiểm tra</span></a><a class="nav-btn" data-target="reports" href="#reports" title="Báo cáo & thống kê"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V4M4 20h16"/><path d="M8 16v-5M12 16V8M16 16v-3"/></svg><span class="nav-label">Báo cáo & thống kê</span></a></div></details><details class="nav-tree"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span>Cài đặt</span></summary><div class="nav-children"><a class="nav-btn" data-admin-only hidden data-target="admin" href="#admin" title="Cài đặt chung"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.3l2-1.5-2-3.4-2.3.9a7 7 0 00-2.2-1.3L14 3h-4l-.4 2.4a7 7 0 00-2.2 1.3l-2.3-.9-2 3.4 2 1.5A7 7 0 005 12c0 .4 0 .9.1 1.3l-2 1.5 2 3.4 2.3-.9c.7.5 1.4.9 2.2 1.3L10 21h4l.4-2.4c.8-.4 1.5-.8 2.2-1.3l2.3.9 2-3.4-2-1.5c.1-.4.1-.9.1-1.3z"/></svg><span class="nav-label">Cài đặt chung</span></a><a class="nav-btn" data-admin-only hidden data-target="account-admin" href="#account-admin" title="Quản lý tài khoản"><span>Quản lý tài khoản</span></a><a class="nav-btn" data-target="account" href="#account" title="Tài khoản cá nhân"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="nav-label">Tài khoản cá nhân</span></a></div></details></nav>
 
     <div class="side-foot" id="account-sidebar">
       <div class="avatar" id="account-avatar">?</div>
@@ -374,23 +395,51 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
         </div>
 
         <div class="grid g-4 overview-kpis">
-          <div class="card stat"><span class="l">UAV đang chọn</span><span class="v num" id="kpi-drone-st">CHƯA KẾT NỐI</span><span class="d muted" id="kpi-drone-sub">Pin: --% · Độ cao: -- m</span></div>
-          <div class="card stat"><span class="l">Phiếu hoàn tất / tổng số</span><span class="v num" id="kpi-ticket-count">—</span><span class="d muted">Toàn bộ phiếu kiểm tra</span></div>
-          <div class="card stat"><span class="l">Tấm pin cần kiểm tra</span><span class="v num down" id="kpi-panel-fault">—</span><span class="d muted">Trạng thái lỗi / cảnh báo</span></div>
-          <div class="card stat"><span class="l">DCL vượt ngưỡng</span><span class="v num down" id="kpi-dcl-alert">—</span><span class="d muted" id="kpi-dcl-alert-detail">Chưa có dữ liệu đo</span></div>
+          <div class="card stat"><span class="l">Trạng thái UAV</span><span class="v num" id="kpi-drone-st">CHƯA KẾT NỐI</span><span class="d muted" id="kpi-drone-sub">Pin: --% · Độ cao: -- m</span></div>
+          <div class="card stat"><span class="l">Phiếu hoàn tất / Tổng số</span><span class="v num" id="kpi-ticket-count">—</span><span class="d muted" id="kpi-ticket-sub">Nhiệm vụ kiểm tra</span></div>
+          <div class="card stat"><span class="l">Tấm pin cần xử lý</span><span class="v num down" id="kpi-panel-fault">0</span><span class="d muted">Điểm nóng, nứt, bụi che</span></div>
+          <div class="card stat"><span class="l">Dao cách ly quá nhiệt</span><span class="v num down" id="kpi-dcl-alert">0</span><span class="d muted" id="kpi-dcl-alert-detail">Tối đa: -- °C</span></div>
         </div>
         <div class="overview-primary">
           <section class="card overview-live-card">
-            <div class="card-head"><div><h2>Giám sát trực tiếp</h2><p class="muted">Chọn phiếu và kênh live để theo dõi chuyến bay.</p></div><div class="r"><span class="tag off" id="dash-drone-badge">UAV: OFFLINE</span></div></div>
+            <div class="card-head"><div><h2>Giám sát trực tiếp</h2></div><div class="r"><span class="tag off" id="dash-drone-badge">UAV: OFFLINE</span></div></div>
             <div class="overview-live-filters"><label class="field">Chọn UAV<select class="input" id="uav-monitor-target"><option value="">Chọn UAV để xem thông số</option></select></label><label class="field">Phiếu kiểm tra<select class="input" id="uav-live-ticket"><option value="">Tất cả phiếu</option></select></label><label class="field">Kênh livestream<select class="input" id="uav-live-stream"><option value="">Chọn phiếu để xem kênh live</option></select></label></div>
-            <label class="field">Camera đang phát<select class="input" id="device-video-dashboard"><option value="">Chờ thiết bị công bố camera</option></select></label><div class="overview-live-stage" id="dashboard-live-stage"><div id="dashboard-live-placeholder"><span class="live-empty-icon" aria-hidden="true">▷</span><b>Chưa có luồng trực tiếp</b><p>Chọn kênh đang phát từ DJI Pilot 2.</p></div></div>
+            <label class="field">Camera đang phát<select class="input" id="device-video-dashboard"><option value="">Chờ thiết bị công bố camera</option></select></label><div class="overview-live-stage" id="dashboard-live-stage"><div id="dashboard-live-placeholder"><span class="live-empty-icon" aria-hidden="true">▷</span><b>Chưa có luồng trực tiếp</b></div></div>
             <div class="overview-telemetry"><div>Độ cao<b id="hud-alt-dash">-- m</b></div><div>Tốc độ<b id="hud-spd-dash">-- m/s</b></div><div>Pin<b id="hud-bat-dash">--%</b></div><div>Nhiệt cao nhất<b id="hud-th-dash">-- °C</b></div></div>
-            <div id="uav-live-devices"></div><div class="overview-live-footer"><span class="muted" id="uav-photo-count">Chưa nhận dữ liệu ảnh</span><button class="btn sm primary" onclick="manualStartLive()">Bật live</button><button class="btn sm" onclick="switchView('control-manual')">Mở buồng lái</button></div>
+            <div id="uav-live-devices"></div><div class="overview-live-footer"><span class="muted" id="uav-photo-count">Chưa nhận dữ liệu ảnh</span><button class="btn sm primary" onclick="manualStartLive()">Bật live</button><button class="btn sm" onclick="switchView('control-manual')">Điều khiển thủ công</button></div>
             <details class="overview-hms"><summary>Cảnh báo thiết bị (HMS)</summary><div id="uav-hms-list">Đang tải…</div></details>
           </section>
           <section class="card overview-statistics"><div class="card-head"><h2>Kiểm tra gần đây</h2><div class="r"><select class="input" id="dashboard-period" aria-label="Kỳ thống kê tổng quan"><option value="7">7 ngày</option><option value="30" selected>30 ngày</option><option value="90">90 ngày</option></select></div></div><div id="dashboard-bar-chart"><div class="gis-empty">Đang tải biểu đồ…</div></div><div id="dashboard-status-chart"></div><button class="btn overview-detail" onclick="GIS.Insights.openReports()">Xem báo cáo chi tiết →</button></section>
         </div>
-        <div class="overview-secondary"><section class="card"><div class="card-head"><div><h2>Sự cố mới nhất</h2><p class="muted">Tối đa 5 cảnh báo gần nhất trong hệ thống.</p></div><div class="r"><button class="btn sm" id="overview-all-issues" onclick="GIS.Insights.openReports(true)">Xem tất cả →</button></div></div><div id="dashboard-alerts-list" class="overview-issues"><div class="gis-empty">Đang tải cảnh báo…</div></div></section><section class="card"><div class="card-head"><h2>Lỗi theo khu vực</h2><div class="r"><button class="btn sm" onclick="switchView('map-solar')">Bản đồ</button></div></div><div id="dashboard-area-chart"><div class="gis-empty">Đang tải…</div></div></section></div>
+        
+        <!-- BẢNG PHIẾU KIỂM TRA HÔM NAY KÈM NÚT XEM LIVE THÔNG MINH -->
+        <section class="card" style="margin-top:16px;">
+          <div class="card-head">
+            <div><h2>Phiếu kiểm tra & Lịch bay</h2></div>
+            <div class="r">
+              <button class="btn sm" onclick="switchView('tickets-solar')">Xem toàn bộ phiếu →</button>
+            </div>
+          </div>
+          <div class="table-wrap" style="margin-top:8px">
+            <table class="table" style="width:100%;font-size:13px">
+              <thead>
+                <tr>
+                  <th style="width:130px">Mã phiếu</th>
+                  <th>Nhiệm vụ kiểm tra</th>
+                  <th>Phân khu / Đối tượng</th>
+                  <th style="width:110px">Trạng thái</th>
+                  <th style="width:140px">Thiết bị bay</th>
+                  <th style="width:120px;text-align:center">Xem trực tiếp</th>
+                </tr>
+              </thead>
+              <tbody id="dashboard-tickets-table-body">
+                <tr><td colspan="6" style="text-align:center;padding:16px" class="muted">Đang tải danh sách phiếu...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <div class="overview-secondary"><section class="card"><div class="card-head"><div><h2>Sự cố mới nhất</h2></div><div class="r"><button class="btn sm" id="overview-all-issues" onclick="GIS.Insights.openReports(true)">Xem tất cả →</button></div></div><div id="dashboard-alerts-list" class="overview-issues"><div class="gis-empty">Đang tải cảnh báo…</div></div></section><section class="card"><div class="card-head"><h2>Lỗi theo khu vực</h2><div class="r"><button class="btn sm" onclick="switchView('map-solar')">Bản đồ</button></div></div><div id="dashboard-area-chart"><div class="gis-empty">Đang tải…</div></div></section></div>
       </section>
 
       <!-- VIEW 2: BẢN ĐỒ PIN MẶT TRỜI (TRÀN VIỀN FULL-HEIGHT) -->
@@ -494,6 +543,12 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
                   <div>Số ảnh chụp: <b id="mp-stat-photos" style="color:#f59e0b">0 tấm</b></div>
                 </div>
 
+                <div class="field" style="margin-bottom:8px">
+                  <label style="color:#cbd5e1;font-size:11.5px">Khóa đường bay vào Phiếu:</label>
+                  <select id="mp-assign-ticket" class="input" style="height:32px;font-size:12px;background:#1e293b;color:#38bdf8;border-color:#334155">
+                    <option value="">-- Không gán phiếu (Lưu tự do) --</option>
+                  </select>
+                </div>
                 <div style="display:flex;flex-direction:column;gap:8px">
                   <button class="btn primary" style="justify-content:center;font-weight:700" onclick="generateAndPushKmzToDrone()">🚀 NẠP ĐƯỜNG BAY VÀO DRONE (PILOT 2)</button>
                   <button class="btn" style="justify-content:center;background:#1e293b;color:#cbd5e1" onclick="generateAndDownloadKmz()">💾 Tải Về Máy File .KMZ Chuẩn DJI</button>
@@ -937,26 +992,46 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
       <h2>Tạo phiếu kiểm tra mới</h2>
       <button class="icon-btn" onclick="closeTicketModal()">✕</button>
     </div>
-    <div class="form-grid" style="grid-template-columns:1fr;gap:12px;">
-      <div class="field">
-        <label>Tiêu đề phiếu kiểm tra</label>
-        <input id="modal-ticket-name" class="input" placeholder="VD: Kiểm tra phát nhiệt dãy Inverter 01">
+    <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="field" style="grid-column:1 / -1">
+        <label>Tiêu đề phiếu kiểm tra *</label>
+        <input id="modal-ticket-name" class="input" placeholder="VD: Kiểm tra định kỳ chuỗi Inverter IS01 - IS04">
       </div>
       <div class="field">
-        <label>Loại kiểm tra</label>
-        <select id="modal-ticket-type" class="input">
-          <option value="SOLAR_PANEL">Pin mặt trời</option>
-          <option value="DISCONNECTOR">Dao cách ly trạm 110kV</option>
+        <label>Chu kỳ kiểm tra</label>
+        <select id="modal-ticket-period" class="input">
+          <option value="Hàng ngày">Hàng ngày (Daily)</option>
+          <option value="Hàng tuần">Hàng tuần (Weekly)</option>
+          <option value="Hàng tháng">Hàng tháng (Monthly)</option>
+          <option value="Đột xuất">Đột xuất / Theo yêu cầu</option>
         </select>
       </div>
       <div class="field">
-        <label>Khu vực thực hiện</label>
-        <input id="modal-ticket-facility" class="input" placeholder="VD: Dãy Pin Inverter 01 hoặc Ngăn 171">
+        <label>Đối tượng kiểm tra</label>
+        <select id="modal-ticket-type" class="input">
+          <option value="SOLAR_PANEL">Pin mặt trời (5 Phân khu / Inverter)</option>
+          <option value="DISCONNECTOR">Dao cách ly 22kV (10 cột / 48 mối nối)</option>
+          <option value="OVERALL_SURVEY">Khảo sát tổng thể toàn nhà máy</option>
+        </select>
       </div>
-      <div class="field">
+      <div class="field" style="grid-column:1 / -1">
+        <label>Phân khu / Mục tiêu thực hiện *</label>
+        <select id="modal-ticket-preset-facility" class="input" onchange="onSelectPresetFacility(this.value)">
+          <option value="Khu 1.1 (IS05, IS06, IS07 - 47.880 tấm)">Khu 1.1 (IS05, IS06, IS07 - 47.880 tấm)</option>
+          <option value="Khu 1.2 (IS08, IS09 - 23.520 tấm)">Khu 1.2 (IS08, IS09 - 23.520 tấm)</option>
+          <option value="Khu 2 (IS01, IS02 - 31.528 tấm)">Khu 2 (IS01, IS02 - 31.528 tấm)</option>
+          <option value="Khu 3 (IS03, IS04 - 22.064 tấm)">Khu 3 (IS03, IS04 - 22.064 tấm)</option>
+          <option value="Khu 6 (Kết nối về Trạm IS05)">Khu 6 (Kết nối về Trạm IS05)</option>
+          <option value="Trạm biến áp 110kV Thác Mơ">Trạm biến áp 110kV Thác Mơ</option>
+          <option value="Hành lang tuyến 22kV (10 cột / 48 dao cách ly)">Hành lang tuyến 22kV (10 cột / 48 dao cách ly)</option>
+          <option value="CUSTOM">Nhập vị trí tùy chọn khác...</option>
+        </select>
+        <input id="modal-ticket-facility" class="input" style="margin-top:6px" placeholder="Chi tiết vị trí kiểm tra" value="Khu 1.1 (IS05, IS06, IS07 - 47.880 tấm)">
+      </div>
+      <div class="field" style="grid-column:1 / -1">
         <label>UAV thực hiện</label>
         <select id="modal-ticket-drone" class="input">
-          <option value="1581F5FJC243K00DNRRT">DJI Mavic 3T (1581F5FJC243K00DNRRT)</option>
+          <option value="1581F5FJC243K00DNRRT">DJI Mavic 3 Enterprise Thermal (1581F5FJC243K00DNRRT)</option>
         </select>
       </div>
     </div>
@@ -1843,37 +1918,100 @@ async function loadTicketsFromDatabase(){
  } catch(e){}
 }
 
+
+/* ===================================================================
+   TÍNH NĂNG XEM LIVE THÔNG MINH THEO PHIẾU ĐANG BAY
+   =================================================================== */
+function onSelectPresetFacility(val){
+  const inp = document.getElementById('modal-ticket-facility');
+  if(!inp) return;
+  if(val === 'CUSTOM'){
+    inp.value = '';
+    inp.focus();
+  } else {
+    inp.value = val;
+  }
+}
+
+function watchTicketLive(ticketId, deviceSn){
+  if(deviceSn){
+    const devSel = document.getElementById('device-target');
+    if(devSel){
+      devSel.value = deviceSn;
+      devSel.dispatchEvent(new Event('change'));
+    }
+  }
+  switchView('control-manual');
+  toast('Đang mở màn hình Điều khiển thủ công & Luồng live của UAV...');
+  setTimeout(()=>{
+    if(typeof manualStartLive === 'function') manualStartLive();
+  }, 350);
+}
+
+function renderDashboardTickets(tickets){
+  const tbody = document.getElementById('dashboard-tickets-table-body');
+  if(!tbody) return;
+  if(!tickets || !tickets.length){
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:16px" class="muted">Chưa có phiếu kiểm tra nào. Bấm "+ Tạo phiếu kiểm tra" để lập lịch.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = tickets.slice(0, 8).map(t => {
+    const isLive = (t.status === 'EXECUTING' || t.status === 'RUNNING' || t.status === 'IN_PROGRESS');
+    const liveAction = isLive 
+      ? `<button class="btn sm danger pulse-live" onclick="watchTicketLive('${t.ticket_id}', '${t.assigned_device_sn}')" title="Xem trực tiếp UAV đang bay">🔴 Xem Live</button>` 
+      : `<span class="muted">—</span>`;
+    const statusClass = isLive ? 'hot' : (t.status === 'COMPLETED' ? 'ok' : 'info');
+    const statusText = isLive ? 'ĐANG BAY' : (t.status === 'COMPLETED' ? 'HOÀN THÀNH' : (t.status === 'ASSIGNED' ? 'ĐÃ PHÂN CÔNG' : 'CHỜ BAY'));
+    return `<tr>
+      <td><b>${t.ticket_code}</b></td>
+      <td>${escapeHtml(t.ticket_name)}</td>
+      <td>${escapeHtml(t.target_facility || 'Toàn nhà máy')}</td>
+      <td><span class="tag ${statusClass}">${statusText}</span></td>
+      <td>${t.device_name || t.assigned_device_sn || 'DJI Mavic 3T'}</td>
+      <td style="text-align:center">${liveAction}</td>
+    </tr>`;
+  }).join('');
+}
+
 function renderTicketsTable(){
- const tbodySolar = document.getElementById('tickets-solar-table-body');
- const tbodyDcl = document.getElementById('dcl-table-body');
+  const tbodySolar = document.getElementById('tickets-solar-table-body');
+  const tbodyDcl = document.getElementById('dcl-table-body');
 
- if(tbodySolar){
-  tbodySolar.innerHTML = localTickets.map(t=>`
-   <tr>
-    <td><b>${t.ticket_code}</b></td>
-    <td>${t.ticket_name}</td>
-    <td>${t.target_facility}</td>
-    <td><span class="tag ${t.status==='COMPLETED'?'ok':'info'}">${t.status}</span></td>
-    <td>${t.device_name || 'DJI Mavic 3T'}</td>
-    <td>${t.inspector_name || 'Kỹ sư vận hành'}</td>
-    <td><button class="btn sm" onclick="triggerThermalPhoto()">Chụp ảnh</button></td>
-   </tr>
-  `).join('');
- }
+  if(typeof renderDashboardTickets === 'function'){
+    renderDashboardTickets(localTickets);
+  }
 
- if(tbodyDcl){
-  tbodyDcl.innerHTML = localDcls.map(d=>`
-   <tr>
-    <td><b>${d.name}</b></td>
-    <td>${d.bay}</td>
-    <td>Pha ${d.phase}</td>
-    <td class="num"><b>${d.t} °C</b></td>
-    <td class="num">${d.th} °C</td>
-    <td><span class="tag ${d.st==='bad'?'bad':'ok'}">${d.st==='bad'?'Quá nhiệt':'Đạt'}</span></td>
-    <td style="text-align:right"><button class="btn sm" onclick="triggerThermalPhoto()">Đo lại</button></td>
-   </tr>
-  `).join('');
- }
+  if(tbodySolar){
+    tbodySolar.innerHTML = localTickets.map(t=>{
+      const isLive = (t.status === 'EXECUTING' || t.status === 'RUNNING' || t.status === 'IN_PROGRESS');
+      const liveBtn = isLive 
+        ? `<button class="btn sm danger pulse-live" onclick="watchTicketLive('${t.ticket_id}', '${t.assigned_device_sn}')" title="Xem trực tiếp UAV đang bay">🔴 Xem Live</button>`
+        : `<button class="btn sm" onclick="triggerThermalPhoto()">Chụp ảnh</button>`;
+      return `<tr>
+        <td><b>${t.ticket_code}</b></td>
+        <td>${escapeHtml(t.ticket_name)}</td>
+        <td>${escapeHtml(t.target_facility)}</td>
+        <td><span class="tag ${isLive ? 'hot' : (t.status==='COMPLETED'?'ok':'info')}">${isLive ? 'ĐANG BAY' : t.status}</span></td>
+        <td>${t.device_name || 'DJI Mavic 3T'}</td>
+        <td>${t.inspector_name || 'Kỹ sư vận hành'}</td>
+        <td>${liveBtn}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  if(tbodyDcl){
+    tbodyDcl.innerHTML = localDcls.map(d=>`
+      <tr>
+        <td><b>${d.name}</b></td>
+        <td>${d.bay}</td>
+        <td>Pha ${d.phase}</td>
+        <td class="num"><b>${d.t} °C</b></td>
+        <td class="num">${d.th} °C</td>
+        <td><span class="tag ${d.st==='bad'?'bad':'ok'}">${d.st==='bad'?'Quá nhiệt':'Đạt'}</span></td>
+        <td style="text-align:right"><button class="btn sm" onclick="triggerThermalPhoto()">Đo lại</button></td>
+      </tr>
+    `).join('');
+  }
 }
 
 /* ===================================================================
@@ -3023,7 +3161,7 @@ function setupThermalCanvasEvents(){
 }
 
 /* ===================================================================
-   HỆ THỐNG LIVE CONSOLE DEBUG SOI GÓI TIN MQTT THÔ
+   NHẬT KÝ ĐIỀU KHIỂN UAV & GÓI TIN THIẾT BỊ
    =================================================================== */
 let gConsoleAutoScroll = true;
 let gConsoleLogs = [];
@@ -3152,7 +3290,7 @@ function toggleConsoleExpand(){
  if(!box) return;
  const isExp = box.classList.toggle('expanded');
  if(btn) btn.innerText = isExp ? '🗗 Thu nhỏ' : '⛶ Mở rộng';
- toast(isExp ? 'Đã mở rộng toàn màn hình Console Test Debug' : 'Đã thu nhỏ Console Test Debug về chế độ buồng lái');
+ toast(isExp ? 'Đã mở rộng toàn màn hình Nhật ký điều khiển' : 'Đã thu nhỏ Console Test Debug về chế độ buồng lái');
 }
 
 function downloadConsoleLogs(){
@@ -3396,7 +3534,32 @@ function setupRealtimeTelemetry(){
 
    // Stream selection/publisher state is handled by GIS.LiveMonitor within its selected ticket.
    // 2. Ảnh chụp đồng bộ mới từ Mavic 3T
-   if(msg.type === 'media_synced' && msg.data){
+   // 3. Tiến độ bay nhiệm vụ tự động (Flighttask progress)
+    if(msg.type === 'flighttask_progress'){
+      const curWp = msg.current_waypoint;
+      const status = msg.status;
+      if(curWp != null){
+        toast(`✈️ UAV đang bay tới Waypoint #${curWp} (${status || 'in_progress'})`);
+        if(typeof gMissionMarkers !== 'undefined' && gMissionMarkers[curWp - 1]){
+          gMissionMarkers.forEach((mk, idx) => {
+            if(idx === curWp - 1){
+              mk.setIcon(L.divIcon({
+                html: `<div style="background:#10b981;color:#fff;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:12px;border:3px solid #fff;box-shadow:0 0 14px #10b981;animation:pulseLiveBtn 1.5s infinite">${curWp}</div>`,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+              }));
+            }
+          });
+        }
+      }
+    }
+    // 4. Nhận ảnh nạp từ RC
+    if(msg.type === 'photo_uploaded'){
+      toast(`📸 Đã nhận ảnh mới từ UAV: ${msg.file_name || 'ảnh nhiệm vụ'}`);
+      if(typeof loadTicketsFromDatabase === 'function') loadTicketsFromDatabase();
+    }
+
+    if(msg.type === 'media_synced' && msg.data){
     toast(`📸 Đã nhận ảnh mới từ Mavic 3T: ${msg.data.file_name}`);
     gSyncedMediaList.unshift(msg.data);
     renderMediaGrid();
@@ -3667,6 +3830,11 @@ function openMissionPlanner(targetMap){
     if(pitchSelect) pitchSelect.value = '0';
   }
 
+  const ticketSel = document.getElementById('mp-assign-ticket');
+  if(ticketSel && typeof localTickets !== 'undefined'){
+    ticketSel.innerHTML = '<option value="">-- Không gán phiếu (Lưu tự do) --</option>' + 
+      localTickets.map(t => `<option value="${t.ticket_id}">${escapeHtml(t.ticket_code)} (${escapeHtml(t.ticket_name)})</option>`).join('');
+  }
   if(!gMissionDrawingMode) toggleMapDrawingMode(true);
   toast('Đã mở Bộ lập trình đường bay KMZ. Hãy nhấp chuột lên bản đồ để chấm điểm bay!');
 }
@@ -3722,25 +3890,101 @@ function onMapMissionClick(e){
   addMissionWaypoint(lat, lng);
 }
 
-function addMissionWaypoint(lat, lng){
+function addMissionWaypoint(lat, lng, customParams = {}){
   const index = gMissionWaypoints.length + 1;
   const curMap = gMissionTargetMap === 'substation' ? gMapSub : gMap;
   if(!curMap) return;
 
-  gMissionWaypoints.push({ lat, lng });
+  const defaultAlt = Number(document.getElementById('mp-altitude')?.value) || 30;
+  const defaultSpeed = Number(document.getElementById('mp-speed')?.value) || 3.5;
+  const defaultPitch = Number(document.getElementById('mp-gimbal-pitch')?.value) || -90;
 
-  // Vẽ marker điểm Waypoint
+  const wpData = {
+    lat: Number(lat.toFixed(6)),
+    lng: Number(lng.toFixed(6)),
+    alt: customParams.alt ?? defaultAlt,
+    speed: customParams.speed ?? defaultSpeed,
+    gimbalPitch: customParams.gimbalPitch ?? defaultPitch,
+    hoverTime: customParams.hoverTime ?? 1,
+    lenses: customParams.lenses || 'ir,wide'
+  };
+
+  gMissionWaypoints.push(wpData);
+
+  // Tạo icon đánh số
   const icon = L.divIcon({
-    html: `<div style="background:#eab308;color:#0f172a;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:11px;border:2px solid #fff;box-shadow:0 0 8px rgba(0,0,0,0.5)">${index}</div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12]
+    html: `<div style="background:#eab308;color:#0f172a;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:11px;border:2px solid #fff;box-shadow:0 0 10px rgba(0,0,0,0.6);cursor:move">${index}</div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13]
   });
-  const m = L.marker([lat, lng], { icon: icon }).addTo(curMap);
-  m.bindPopup(`<b>Điểm Waypoint #${index}</b><br>Lat: ${lat}<br>Lng: ${lng}`);
+
+  const m = L.marker([lat, lng], { icon: icon, draggable: true }).addTo(curMap);
+
+  // Kéo thả di chuyển điểm
+  m.on('dragend', function(ev){
+    const pos = ev.target.getLatLng();
+    const idx = gMissionMarkers.indexOf(m);
+    if(idx !== -1 && gMissionWaypoints[idx]){
+      gMissionWaypoints[idx].lat = Number(pos.lat.toFixed(6));
+      gMissionWaypoints[idx].lng = Number(pos.lng.toFixed(6));
+      redrawMissionPolyline();
+      updateMissionStats();
+      toast(`✓ Đã dời Waypoint #${idx + 1} tới [${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}]`);
+    }
+  });
+
+  // Popup chỉnh sửa chi tiết thông số điểm
+  m.bindPopup(() => {
+    const idx = gMissionMarkers.indexOf(m);
+    const p = gMissionWaypoints[idx] || wpData;
+    return `<div style="min-width:210px;font-family:sans-serif;padding:2px;font-size:12px">
+      <div style="font-weight:700;color:var(--brand);margin-bottom:6px">⚙️ CÀI ĐẶT WAYPOINT #${idx + 1}</div>
+      <div style="margin-bottom:4px">Tọa độ: <b>${p.lat}, ${p.lng}</b></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0">
+        <label>Độ cao (m):<input type="number" class="input" style="height:26px;padding:2px 6px" value="${p.alt}" onchange="updateWpParam(${idx}, 'alt', this.value)"></label>
+        <label>Tốc độ (m/s):<input type="number" step="0.5" class="input" style="height:26px;padding:2px 6px" value="${p.speed}" onchange="updateWpParam(${idx}, 'speed', this.value)"></label>
+        <label>Gimbal (°):<input type="number" class="input" style="height:26px;padding:2px 6px" value="${p.gimbalPitch}" onchange="updateWpParam(${idx}, 'gimbalPitch', this.value)"></label>
+        <label>Dừng (giây):<input type="number" class="input" style="height:26px;padding:2px 6px" value="${p.hoverTime}" onchange="updateWpParam(${idx}, 'hoverTime', this.value)"></label>
+      </div>
+      <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">
+        <span style="color:#10b981;font-weight:600">✓ Chụp Wide + IR</span>
+        <button class="btn sm danger" style="padding:2px 6px;font-size:10px" onclick="deleteSpecificWaypoint(${idx})">Xóa điểm</button>
+      </div>
+    </div>`;
+  });
+
   gMissionMarkers.push(m);
+  redrawMissionPolyline();
+  updateMissionStats();
+}
+
+function updateWpParam(idx, key, val){
+  if(gMissionWaypoints[idx]){
+    gMissionWaypoints[idx][key] = Number(val);
+    toast(`Đã lưu thông số ${key} cho WP #${idx + 1}`);
+  }
+}
+
+function deleteSpecificWaypoint(idx){
+  const curMap = gMissionTargetMap === 'substation' ? gMapSub : gMap;
+  if(!curMap || idx < 0 || idx >= gMissionWaypoints.length) return;
+  curMap.closePopup();
+  curMap.removeLayer(gMissionMarkers[idx]);
+  gMissionWaypoints.splice(idx, 1);
+  gMissionMarkers.splice(idx, 1);
+
+  // Đánh lại số thứ tự icon
+  gMissionMarkers.forEach((mk, i) => {
+    mk.setIcon(L.divIcon({
+      html: `<div style="background:#eab308;color:#0f172a;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:11px;border:2px solid #fff;box-shadow:0 0 10px rgba(0,0,0,0.6);cursor:move">${i + 1}</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    }));
+  });
 
   redrawMissionPolyline();
   updateMissionStats();
+  toast(`Đã xóa Waypoint #${idx + 1}`);
 }
 
 function undoLastWaypoint(){
@@ -3862,12 +4106,13 @@ async function generateAndPushKmzToDrone(){
   const routeType = document.getElementById('mp-route-type')?.value;
   const altitude = Number(document.getElementById('mp-altitude')?.value) || 30;
   const speed = Number(document.getElementById('mp-speed')?.value) || 3.5;
-  const triggerDist = Number(document.getElementById('mp-trigger-dist')?.value) || 4.0;
+  const triggerDist = Number(document.getElementById('mp-trigger-dist')?.value) || 0;
   const gimbalPitch = Number(document.getElementById('mp-gimbal-pitch')?.value) || -90;
+  const assignedTicketId = document.getElementById('mp-assign-ticket')?.value || null;
 
-  toast('Đang khởi tạo KMZ và bắn lệnh nạp trực tiếp xuống Mavic 3T...');
+  toast('Đang đóng gói file KMZ chuẩn Mavic 3T và tính mã băm MD5...');
   try{
-    // Bước 1: Tạo KMZ
+    // Bước 1: Tạo và lưu file KMZ
     const genRes = await fetch('/api/routes/generate-kmz', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3877,36 +4122,39 @@ async function generateAndPushKmzToDrone(){
         altitude: altitude,
         speed: speed,
         trigger_distance: triggerDist,
-        waypoints: gMissionWaypoints.map(p => ({ lat: p.lat, lng: p.lng, gimbalPitch }))
+        gimbal_pitch: gimbalPitch,
+        waypoints: gMissionWaypoints,
+        ticket_id: assignedTicketId
       })
     });
     const genData = await genRes.json();
     if(!genRes.ok || genData.code !== 0){
-      toast('⚠️ Không thể đóng gói KMZ: ' + (genData.message || ''));
+      toast('⚠️ Lỗi đóng gói KMZ: ' + (genData.message || ''));
       return;
     }
 
-    // Bước 2: Bắn lệnh nạp xuống DJI Pilot 2
+    const routeInfo = genData.data;
+    toast(`✓ Đã đóng gói KMZ (${routeInfo.file_name}). Đang bắn lệnh flighttask_prepare xuống tay cầm RC...`);
+
+    // Bước 2: Bắn lệnh nạp xuống tay cầm RC
+    const targetGateway = gSelectedGatewaySn || (typeof gDeviceList !== 'undefined' && gDeviceList[0]?.gateway_sn) || '5YSZM3K0031EYQ';
     const pushRes = await fetch('/api/routes/push-to-drone', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        route_id: genData.data.route_id,
-        file_url: genData.data.full_url,
-        md5: genData.data.md5,
-        device_sn: gSelectedDroneSn
+        route_id: routeInfo.route_id,
+        gateway_sn: targetGateway,
+        flight_id: assignedTicketId ? ('TICKET_' + assignedTicketId) : ('MISSION_' + Date.now())
       })
     });
     const pushData = await pushRes.json();
-
     if(pushRes.ok && pushData.code === 0){
-      toast('✓ THÀNH CÔNG: Đã nạp tuyến bay KMZ trực tiếp vào DJI Pilot 2 & Mavic 3T!');
-      alert(`✓ THÀNH CÔNG!\n\nTuyến bay: ${routeName}\nSố điểm: ${gMissionWaypoints.length} waypoints\nĐộ cao: ${altitude}m · Tốc độ: ${speed}m/s\n\nĐã phát lệnh flighttask_prepare xuống tay cầm Pilot 2 qua MQTT Broker!`);
+      toast('🎉 THÀNH CÔNG! Tay cầm DJI Pilot 2 đã nhận đường bay. Bạn có thể bấm Start để bay tự động.');
     } else {
-      toast('⚠️ ' + (pushData.message || 'Thiết bị UAV đang OFFLINE!'));
-      alert(`⚠️ THÔNG BÁO TỪ HỆ THỐNG:\n\n${pushData.message || 'Mavic 3T hoặc Tay Cầm đang OFFLINE.'}\n\nFile KMZ đã được lưu tại server: ${genData.data.file_name}.\nBạn hãy bật nguồn máy bay và kết nối DJI Pilot 2 vào Wi-Fi 10.20.28.50 để nạp lệnh!`);
+      toast('⚠️ Đã lưu đường bay vào thư viện. Lỗi gửi MQTT: ' + (pushData.message || ''));
     }
-  }catch(e){
+
+  } catch(e){
     toast('Lỗi kết nối máy chủ: ' + e.message);
   }
 }
