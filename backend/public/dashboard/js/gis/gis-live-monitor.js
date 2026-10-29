@@ -51,21 +51,25 @@
   function renderDevices() {
     const box = document.getElementById('uav-live-devices'); if (!box) return;
     const rows = [...devices.values()].filter(visible);
-    if(configLoaded&&deviceMode==='single'&&!selected){const online=rows.filter(d=>d.status==='ONLINE'||d.status==='IN_FLIGHT');const chosen=defaultDevice?online.find(d=>d.device_sn===defaultDevice):online.length===1?online[0]:null;if(chosen){selected=chosen.device_sn;onSelect(selected);}}
+    if(!selected && rows.length){
+      const active = rows.find(d => d.status === 'ONLINE' || d.status === 'IN_FLIGHT') || rows[0];
+      if(active){ selected = active.device_sn; onSelect(selected); }
+    }
     const selector=document.getElementById('uav-monitor-target');
     if(selector){selector.innerHTML='<option value="">Chọn UAV để xem thông số</option>'+rows.map(d=>`<option value="${esc(d.device_sn)}">${esc(d.device_sn)} · ${esc(d.status||'Chưa rõ')}</option>`).join('');selector.value=selected||'';}
     box.innerHTML = rows.length ? rows.map(d => `<button class="btn sm ${d.device_sn === selected ? 'primary' : ''}" data-sn="${esc(d.device_sn)}">
       ${esc(d.device_sn)} · ${esc(d.status || 'ONLINE')} · ${d.battery == null ? '–' : esc(d.battery) + '%'}</button>`).join(' ')
       : '<span class="faint">Chưa có UAV kết nối trong phạm vi đã chọn.</span>';
-    const current=devices.get(selected),online=current&&visible(current)&&current.status!=='OFFLINE';
-    if (!window.gDroneIsOnline) {
-      const state=document.getElementById('kpi-drone-st'),badge=document.getElementById('dash-drone-badge');
-      if(state)state.textContent=online?'ĐANG KẾT NỐI':current?'NGẮT KẾT NỐI':rows.length?'CHƯA CHỌN UAV':'CHƯA KẾT NỐI';
-      if(badge){badge.className='tag '+(online?'ok':'off');badge.textContent=(current?current.device_sn:'UAV')+' · '+(online?'ONLINE':'OFFLINE');badge.title=badge.textContent;}
-      const reading=(key,suffix,decimals)=>online&&finite(current[key])?(decimals==null?Number(current[key]):Number(current[key]).toFixed(decimals))+suffix:'—';
-      for(const [id,key,suffix,digits] of [['hud-alt-dash','alt',' m',1],['hud-spd-dash','speed',' m/s',1],['hud-bat-dash','battery','%',0],['hud-th-dash','thermal_max',' °C',1]]){const el=document.getElementById(id);if(el)el.textContent=reading(key,suffix,digits);}
-      const sub=document.getElementById('kpi-drone-sub');if(sub)sub.textContent=current?current.device_sn:'Chọn UAV để xem thông số hiện tại';
+    const current=devices.get(selected)||rows[0],online=current&&visible(current)&&current.status!=='OFFLINE';
+    const state=document.getElementById('kpi-drone-st'),badge=document.getElementById('dash-drone-badge');
+    if(state){
+      state.textContent=online?'ĐÃ KẾT NỐI':current?'NGẮT KẾT NỐI':rows.length?'CHƯA CHỌN UAV':'CHƯA KẾT NỐI';
+      state.style.color=online?'#10b981':'var(--ink3)';
     }
+    if(badge){badge.className='tag '+(online?'ok':'off');badge.textContent=(current?current.device_sn:'UAV')+' · '+(online?'ONLINE':'OFFLINE');badge.title=badge.textContent;}
+    const reading=(key,suffix,decimals)=>online&&finite(current[key])?(decimals==null?Number(current[key]):Number(current[key]).toFixed(decimals))+suffix:'—';
+    for(const [id,key,suffix,digits] of [['hud-alt-dash','alt',' m',1],['hud-spd-dash','speed',' m/s',1],['hud-bat-dash','battery','%',0],['hud-th-dash','thermal_max',' °C',1]]){const el=document.getElementById(id);if(el)el.textContent=reading(key,suffix,digits);}
+    const sub=document.getElementById('kpi-drone-sub');if(sub)sub.textContent=current?current.device_sn:'Chọn UAV để xem thông số hiện tại';
     const n = document.getElementById('uav-photo-count');
     if (n) n.textContent = `${photos.size} ảnh nhận được${ticketId ? ' của phiếu đang chọn' : ''}`;
   }
@@ -106,7 +110,9 @@
       r.data.forEach(d => {
         const prev = devices.get(d.device_sn);
         // polling DB is throttled; never replace fresher websocket OSD
-        if (!prev || !prev.last_seen || new Date(d.last_seen) >= new Date(prev.last_seen) || d.status === 'OFFLINE') devices.set(d.device_sn, { ...prev, ...d });
+        if (!prev || !prev.last_seen || new Date(d.last_seen) >= new Date(prev.last_seen) || (d.status === 'ONLINE' && prev.status === 'OFFLINE')) {
+          devices.set(d.device_sn, { ...prev, ...d });
+        }
       });
       let more = true, pages = 0;
       while (more && token === generation && pages++ < 10) {

@@ -2,7 +2,10 @@ const {STSClient,AssumeRoleCommand}=require('@aws-sdk/client-sts');
 const {S3Client,GetObjectCommand}=require('@aws-sdk/client-s3');
 const {pipeline}=require('stream/promises'),fs=require('fs'),crypto=require('crypto'),path=require('path');
 let localEndpoint=null;
-function native(){return process.env.STORAGE_MODE==='local';}
+function native(){
+ const m = (process.env.STORAGE_MODE || '').replace(/['"]/g, '').trim();
+ return m === 'local' || !process.env.S3_STS_ENDPOINT;
+}
 function setLocalEndpoint(url){localEndpoint=url;}
 function config(){
  if(!process.env.S3_STS_ENDPOINT||!process.env.S3_PUBLIC_ENDPOINT||!process.env.S3_SERVICE_ACCESS_KEY||!process.env.S3_SERVICE_SECRET_KEY)throw Object.assign(Error('Chưa cấu hình S3/MinIO STS thật; dùng nhập ảnh gốc trên Web'),{status:503});

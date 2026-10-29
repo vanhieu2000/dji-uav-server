@@ -72,7 +72,11 @@
     const act = e.target.closest('[data-act]');
     if (e.target.name === 'gis-bm-active') {
       const res = await GIS.run(() => GIS.api('PUT', `/api/basemaps/${m.map_id}`, { is_active: true }), 'Đã đặt làm bản đồ nền mặc định');
-      if (res) { GIS.emit('basemaps-changed'); loadList(); }
+      if (res) {
+        GIS.emit('basemaps-changed');
+        if (window.fetchActivePlantBasemap) window.fetchActivePlantBasemap().then(()=>{ if(window.setBasemap) window.setBasemap('plant_upload'); });
+        loadList();
+      }
       return;
     }
     if (!act) return;
@@ -112,6 +116,7 @@
       GIS.toast(res.message);
       formEl.reset();
       GIS.emit('basemaps-changed');
+      if (window.fetchActivePlantBasemap) window.fetchActivePlantBasemap().then(()=>{ if(window.setBasemap) window.setBasemap('plant_upload'); });
       await loadList();
       preview(res.data);
     } catch (err) {
@@ -135,6 +140,7 @@
     GIS.toast(res.message);
     f.reset();
     GIS.emit('basemaps-changed');
+    if (window.fetchActivePlantBasemap) window.fetchActivePlantBasemap().then(()=>{ if(window.setBasemap) window.setBasemap('plant_upload'); });
     loadList();
   }
 

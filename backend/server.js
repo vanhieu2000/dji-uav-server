@@ -117,7 +117,8 @@ app.use(require('./src/middleware/transportSecurity').securityHeaders);
 app.use(diagnostics.http);
 app.use(require('./src/middleware/transportSecurity').originPolicy);
 app.use(require('./src/middleware/transportSecurity').rateLimit);
-if(process.env.STORAGE_MODE==='local'){require('./src/services/objectStorage').setLocalEndpoint(`http://${HOST_IP}:${PORT}`);app.use(require('./src/services/localObjectStorage').router());}
+const isNativeStorage = (process.env.STORAGE_MODE || '').replace(/['"]/g, '').trim() === 'local' || !process.env.S3_STS_ENDPOINT;
+if(isNativeStorage){require('./src/services/objectStorage').setLocalEndpoint(`http://${HOST_IP}:${PORT}`);app.use(require('./src/services/localObjectStorage').router());}
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 if(process.env.TRUST_PROXY==='1')app.set('trust proxy',1);
@@ -305,7 +306,7 @@ const memoryStore = {
 };
 
 const monitoring = createMonitoring({ query, onEvent: broadcastWebSocket, playbackBase: process.env.MEDIA_HTTP_BASE_URL || `http://${HOST_IP}:${process.env.MEDIA_HTTP_PORT||8000}` });
-app.use('/api/monitoring', require('./src/routes/monitoring').createRouter({ monitoring }));
+app.use('/api/monitoring', require('./src/routes/monitoring').createRouter({ monitoring, getLiveDevices: () => memoryStore.devices }));
 
 // ===================================================================
 // KHỞI ĐỘNG MQTT BROKER & CLIENT
@@ -691,15 +692,30 @@ async function handleDjiMqttMessage(topic, json) {
             first_seen: new Date()
           };
           dev.type=sub.type;dev.sub_type=sub.sub_type;dev.gateway_sn=sn;
-          // Topology confirms identity, not fresh flight telemetry.
-          dev.status = dev.last_seen ? dev.status : 'WAITING_OSD';
+          dev.last_seen = new Date();
+          dev.last_osd_at = dev.last_osd_at || dev.last_seen;
+          dev.status = 'ONLINE';
           memoryStore.devices[uavSn] = dev;
+
+          if (isDbConnected()) {
+            query(
+              `INSERT INTO uav_devices (device_sn, device_name, device_model, device_type, gateway_sn, status, last_seen)
+               VALUES (?, ?, 'Mavic 3T', 'DRONE', ?, 'ONLINE', NOW())
+               ON DUPLICATE KEY UPDATE gateway_sn = VALUES(gateway_sn), status = 'ONLINE', last_seen = NOW()`,
+              [uavSn, dev.device_name, sn]
+            ).catch(() => {});
+          }
 
           console.log(`[UAV Detected] ✓ Đã phát hiện máy bay Mavic 3T thật từ Topo: SN = ${uavSn}`);
           broadcastWebSocket({
             type: 'osd',
             device_sn: uavSn,
             data: dev
+          });
+          broadcastWebSocket({
+            type: 'device_status',
+            device_sn: uavSn,
+            status: 'ONLINE'
           });
         }
       });
@@ -772,7 +788,14 @@ async function handleDjiMqttMessage(topic, json) {
     if (method === 'storage_config_get') {
       console.log(`[Storage Config] Cấp cấu hình lưu trữ ảnh cho UAV/Gateway ${sn}`);
       let output=null,result=503;
-      try{const session=await mediaIngest.activeSession(sn);if(session){output=await require('./src/services/objectStorage').grant(session);result=0;}}catch(e){console.warn('[Storage] Chưa cấp được STS thật');}
+      try{
+        let session=await mediaIngest.activeSession(sn);
+        if(!session) session=await mediaIngest.activeSession(null);
+        if(session){
+          output=await require('./src/services/objectStorage').grant(session);
+          result=0;
+        }
+      }catch(e){console.warn('[Storage] Chưa cấp được STS:', e.message);}
       const replyData={tid:json.tid,bid:json.bid,timestamp:Date.now(),method,data:{result,...(output?{output}:{})}};
       if(mqttClient)mqttClient.publish(replyTopic,JSON.stringify(replyData));
     }

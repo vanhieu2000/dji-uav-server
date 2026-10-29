@@ -3,7 +3,7 @@ const { query } = require('../config/db');
 const { asyncHandler, ok, NotFoundError } = require('../utils/http');
 const v = require('../utils/validate');
 
-function createRouter({ monitoring }) {
+function createRouter({ monitoring, getLiveDevices }) {
     const router = express.Router();
     router.get('/config',(req,res)=>ok(res,{device_mode:process.env.UAV_DEVICE_MODE==='multi'?'multi':'single',default_device_sn:process.env.UAV_DEFAULT_SN||null}));
     router.get('/devices', asyncHandler(async (req, res) => {
@@ -11,13 +11,50 @@ function createRouter({ monitoring }) {
         const rows = await query(`SELECT d.device_sn, d.device_name, d.gateway_sn, d.last_latitude AS lat,
             d.last_longitude AS lng, d.last_altitude AS alt, d.last_relative_height AS rel_alt, d.last_yaw AS yaw,
             d.last_battery AS battery, d.rtk_state, d.last_seen,
-            CASE WHEN d.last_seen < NOW() - INTERVAL 30 SECOND THEN 'OFFLINE' ELSE d.status END AS status,
+            d.status,
             f.flight_session_id, f.ticket_id, t.ticket_code
             FROM uav_devices d LEFT JOIN flight_sessions f ON f.flight_session_id =
                 (SELECT MAX(f2.flight_session_id) FROM flight_sessions f2 WHERE f2.device_sn = d.device_sn AND f2.ended_at IS NULL)
             LEFT JOIN inspection_tickets t ON t.ticket_id = f.ticket_id
             WHERE d.device_type = 'DRONE' ${ticket ? 'AND f.ticket_id = ?' : ''} ORDER BY d.device_sn`, ticket ? [ticket] : []);
-        ok(res, rows);
+        const live = (typeof getLiveDevices === 'function' ? getLiveDevices() : null) || {};
+        const now = Date.now();
+        const merged = rows.map(r => {
+            const dev = live[r.device_sn];
+            const liveSeen = dev?.last_seen ? new Date(dev.last_seen).getTime() : 0;
+            const dbSeen = r.last_seen ? new Date(r.last_seen).getTime() : 0;
+            const latestSeen = Math.max(liveSeen, dbSeen);
+            const isOnline = (now - latestSeen < 35000) && (dev?.status !== 'OFFLINE');
+            return {
+                ...r,
+                battery: dev?.battery != null ? dev.battery : r.battery,
+                lat: dev?.lat != null ? dev.lat : r.lat,
+                lng: dev?.lng != null ? dev.lng : r.lng,
+                alt: dev?.alt != null ? dev.alt : r.alt,
+                rel_alt: dev?.rel_alt != null ? dev.rel_alt : r.rel_alt,
+                last_seen: latestSeen ? new Date(latestSeen) : r.last_seen,
+                status: isOnline ? 'ONLINE' : 'OFFLINE'
+            };
+        });
+        for (const [sn, d] of Object.entries(live)) {
+            if (!merged.find(r => r.device_sn === sn)) {
+                const liveSeen = d?.last_seen ? new Date(d.last_seen).getTime() : 0;
+                const isOnline = (now - liveSeen < 35000) && (d.status !== 'OFFLINE');
+                merged.push({
+                    device_sn: sn,
+                    device_name: d.device_name || `DJI Mavic 3T (${sn})`,
+                    gateway_sn: d.gateway_sn || null,
+                    lat: d.lat || null,
+                    lng: d.lng || null,
+                    alt: d.alt || null,
+                    rel_alt: d.rel_alt || null,
+                    battery: d.battery != null ? d.battery : null,
+                    last_seen: d.last_seen || new Date(),
+                    status: isOnline ? 'ONLINE' : 'OFFLINE'
+                });
+            }
+        }
+        ok(res, merged);
     }));
     router.get('/photos', asyncHandler(async (req, res) => {
         const after = v.isBlank(req.query.after_id) ? 0 : v.optionalInt(req.query.after_id, 'mốc ảnh', { min: 0, max: Number.MAX_SAFE_INTEGER });

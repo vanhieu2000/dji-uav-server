@@ -10,12 +10,8 @@ window.PilotBridge = (() => {
  function load(name,params){call('platformLoadComponent',name,JSON.stringify(params));}
  function connected(raw){try{const v=value(raw);return v===true||v==='true';}catch{return false;}}
  function freshThing(config){
-  const loaded=connected(call('platformIsComponentLoaded','thing'));
-  if(loaded){call('thingDisconnect');call('platformUnloadComponent','thing');if(connected(call('platformIsComponentLoaded','thing')))throw Error('Không gỡ được cấu hình MQTT cũ; thoát Cloud Service trên Pilot rồi đăng nhập lại.');}
   const params={host:config.host,username:config.username,password:config.password,connectCallback:'connectCallback'};
   load('thing',params);
-  // Optional native config read-back is omitted: it returned615011 on the real RC.
-
  }
  async function enableOriginalPhotos(isCurrent=()=>true){
   let lastError='Pilot chưa xác nhận cấu hình media';
