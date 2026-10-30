@@ -220,7 +220,7 @@ const engines = require("playwright-core"),
       "view-uav-edit",
     );
     await page.evaluate(() => closeUavModal());
-    await page.evaluate(()=>{selectUav('REAL-SN');window.fixturePlayback=[];window.startFlvLivePlayer=(...args)=>window.fixturePlayback.push(args);switchView('control-manual');});
+    await page.evaluate(()=>{selectUav('REAL-SN');window.fixtureNativeStartLivePlayer=window.startFlvLivePlayer;window.fixturePlayback=[];window.startFlvLivePlayer=(...args)=>window.fixturePlayback.push(args);switchView('control-manual');});
     await page.locator('#btn-manual-live-toggle').click();
     await page.waitForFunction(()=>window.fixturePlayback.length>0);
     const liveCalls=writes.filter(x=>x.url==='/api/control/live');assert.equal(liveCalls.length,1);assert.equal(liveCalls[0].body.action,'start');assert.equal(liveCalls[0].body.device_sn,'REAL-SN');assert.equal(await page.locator('#btn-manual-live-toggle').isEnabled(),true);
@@ -308,6 +308,13 @@ const engines = require("playwright-core"),
         });
       }
     }
+    await page.evaluate(async()=>{
+      window.startFlvLivePlayer=window.fixtureNativeStartLivePlayer;window.fixturePlayers=[];const video=document.getElementById('manual-live-video');video.play=()=>Promise.resolve();
+      window.flvjs={isSupported:()=>true,Events:{ERROR:'error',LOADING_COMPLETE:'complete'},createPlayer:()=>{const p={events:{},unloads:0,detaches:0,destroys:0,attachMediaElement(){},load(){},on(k,fn){this.events[k]=fn;},unload(){this.unloads++;},detachMediaElement(){this.detaches++;},destroy(){this.destroys++;}};fixturePlayers.push(p);return p;}};
+      await fixtureNativeStartLivePlayer('/live/restart','http://fixture/restart.flv');stopFlvLivePlayer();await fixtureNativeStartLivePlayer('/live/restart','http://fixture/restart.flv');fixturePlayers[0].events.error('old error');
+    });
+    assert.deepEqual(await page.evaluate(()=>[fixturePlayers.length,fixturePlayers[0].unloads,fixturePlayers[0].detaches,fixturePlayers[0].destroys]),[2,1,1,1]);
+    await page.evaluate(()=>fixturePlayers[1].events.complete());await page.waitForFunction(()=>fixturePlayers.length===3);await page.evaluate(()=>stopFlvLivePlayer());
     assert.deepEqual(errors, []);
     console.log(
       "PASS flat UI: real weekly/multi-template ticket payload, persisted settings request, honest map upload, Vision enqueue, planner plant, and responsive pages",

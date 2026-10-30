@@ -1237,13 +1237,8 @@ aside>.nav{overflow-y:auto;min-height:0;margin-bottom:12px}
           <div class="live-pip-body" id="live-pip-body">
             <!-- CAMERA CHÍNH MAVIC 3T -->
             <div class="cam-pane" id="cam-pane-wide" style="position:relative;width:100%;height:100%">
-              <video id="manual-live-video" autoplay muted playsinline controls style="width:100%;height:100%;object-fit:cover;display:none"></video>
-              <div id="manual-live-placeholder" style="text-align:center;padding:20px;z-index:1;color:#fff">
-                <div style="font-size:32px">📡</div>
-                <div style="font-size:13px;color:#fff;font-weight:600;margin-top:6px">Màn hình Live Stream Mavic 3T</div>
-                <div class="muted" id="pip-rtmp-hint-wide" style="font-size:11px;margin-top:4px">Bấm nút [▶ BẬT LIVE] hoặc khởi động live từ tay điều khiển DJI Pilot 2</div>
-
-              </div>
+              <video id="manual-live-video" autoplay muted playsinline controls style="width:100%;height:100%;object-fit:contain;display:none"></video>
+              <div id="manual-live-placeholder" style="text-align:center;padding:16px;color:#cbd5e1"><span aria-hidden="true" style="font-size:26px">▷</span><div id="pip-rtmp-hint-wide">Chưa có video</div></div>
             </div>
           </div>
         </div>
@@ -3272,6 +3267,7 @@ async function manualStartLive(){
   const d=await res.json();
   if(!res.ok||d.code!==0)throw Error(d.message||'Không thể mở live stream');
   window.DeviceReadiness?.accepted(d.data);
+  if(d.data?.camera_switch_error)toast('Chưa đổi được camera: '+d.data.camera_switch_error);
   const badge=document.getElementById('manual-stream-badge');if(badge)badge.textContent=d.data?.publisher_confirmed?'ĐÃ NHẬN LUỒNG':'ĐANG CHỜ VIDEO';
   toast(d.data?.publisher_confirmed?'Máy chủ đã nhận luồng; đang mở video.':'Pilot đã chấp nhận yêu cầu; đang chờ video về máy chủ.');
   const url=d.data?.playback_url;
@@ -3284,9 +3280,10 @@ async function manualStartLive(){
 function stopFlvLivePlayer(){
   clearTimeout(gLiveRetryTimer);gLiveRetryTimer=null;
   clearInterval(gLiveEdgeTimer);gLiveEdgeTimer=null;
-  if(gFlvPlayer){ try { gFlvPlayer.destroy(); } catch(e){} gFlvPlayer = null; }
+  if(gFlvPlayer){const old=gFlvPlayer;gFlvPlayer=null;for(const method of ['pause','unload','detachMediaElement','destroy']){try{old[method]?.();}catch(e){}}}
+  window.GIS?.LiveMonitor?.playbackStopped?.();
   const video = document.getElementById('manual-live-video');
-  if(video){ video.pause(); video.style.display = 'none'; }
+  if(video){video.pause();video.removeAttribute('src');video.load();video.style.display='none';}
   const ph = document.getElementById('manual-live-placeholder'); if(ph) ph.style.display = 'block';
   const badge = document.getElementById('manual-stream-badge'); if(badge) badge.textContent = 'CHƯA PHÁT';
   const dash=document.getElementById('dashboard-live-placeholder');if(dash){dash.hidden=false;dash.querySelector('b').textContent='Chưa có luồng trực tiếp';if(dash.querySelector('p'))dash.querySelector('p').textContent='Chờ tín hiệu từ Pilot 2.';}
@@ -3314,6 +3311,7 @@ async function startFlvLivePlayer(streamPath, playbackUrl,retry=false){
   const flvUrl=playbackUrl||window.GIS?.LiveMonitor?.playbackUrl?.();
   if(!streamPath||!flvUrl){toast('Chưa có luồng được cấp quyền; đang chờ publisher từ Pilot.');return;}
   stopFlvLivePlayer();
+  window.GIS?.LiveMonitor?.trackPlayback?.(streamPath,flvUrl);
   const stream={stream_path:streamPath};
   console.log('[FLV Player] Khởi tạo luồng phát:', flvUrl);
 
@@ -3333,7 +3331,7 @@ async function startFlvLivePlayer(streamPath, playbackUrl,retry=false){
     });
 
     gFlvPlayer.attachMediaElement(videoEl);
-    gFlvPlayer.load();
+
     videoEl.muted=true;videoEl.playsInline=true;videoEl.playbackRate=1;
     // Keep close to the buffered live edge; this measures browser buffer, not RC-to-Web latency.
     gLiveEdgeTimer=setInterval(()=>{
@@ -3348,16 +3346,15 @@ async function startFlvLivePlayer(streamPath, playbackUrl,retry=false){
     if (dashPh) dashPh.hidden = true;
     if(placeholderEl) placeholderEl.style.display = 'none';
     if(badgeEl){
-      badgeEl.innerText = '● LIVE ' + (stream.ticket_code || stream.channel || streamPath.split('/').pop());
-      badgeEl.title = stream.ticket_name || '';
+      badgeEl.innerText = '● LIVE';
+      badgeEl.title = streamPath;
       badgeEl.style.background = '#cf2f5e';
       badgeEl.style.color = '#fff';
     }
-    const p = videoEl.play();
-    if(p !== undefined) p.catch(err => console.warn('[FLV Player] Autoplay bị chặn hoặc đang chờ dữ liệu RTMP:', err));
+
 
     const activePlayer=gFlvPlayer;
-    gFlvPlayer.on(flvjs.Events.ERROR, (errType, errDetail)=>{
+    const interrupted=(errType, errDetail)=>{
       if(gFlvPlayer!==activePlayer)return;
       if(gLiveRetryCount<4){const delay=Math.min(8000,1000*2**gLiveRetryCount++);clearTimeout(gLiveRetryTimer);gLiveRetryTimer=setTimeout(()=>startFlvLivePlayer(streamPath,flvUrl,true),delay);}
       console.warn('[FLV Player Error]', errType, errDetail);
@@ -3373,7 +3370,11 @@ async function startFlvLivePlayer(streamPath, playbackUrl,retry=false){
         badgeEl.style.background = 'rgba(0,0,0,0.65)';
         badgeEl.style.color = '#fff';
       }
-    });
+    };
+    gFlvPlayer.on(flvjs.Events.ERROR,interrupted);
+    if(flvjs.Events.LOADING_COMPLETE)gFlvPlayer.on(flvjs.Events.LOADING_COMPLETE,()=>interrupted('Stream ended','Chờ publisher kết nối lại'));
+    gFlvPlayer.load();
+    const p=videoEl.play();if(p!==undefined)p.catch(err=>console.warn('[FLV Player] Chờ video/autoplay:',err));
   }catch(e){
     console.error('[FLV Init Error]', e);
   }

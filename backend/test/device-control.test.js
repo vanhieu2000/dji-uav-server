@@ -30,9 +30,12 @@ test('control HTTP: no fallback target, authorization, ordered photo ACKs, revok
  client=false;assert.equal((await post('photo')).status,503);client=true;
  assert.equal((await post('live',{device_sn:'UAV1234',action:'start',video_id:'OTHER/67-0-0/normal-0'})).status,400);
  assert.equal((await post('live',{device_sn:'UAV1234',action:'start',video_id:'UAV1234/67-0-0/real-index'})).status,200);assert.match(calls.at(-1).d.url,/fixture-grant/);
+ const mark=calls.length;assert.equal((await post('live',{device_sn:'UAV1234',action:'start',video_id:'UAV1234/67-0-0/normal-0',video_type:'normal'})).status,200);assert.deepEqual(calls.slice(mark).map(x=>x.m),['live_start_push']);
  const changed=await post('live',{device_sn:'UAV1234',action:'switch',video_id:'UAV1234/67-0-0/real-index',video_type:'thermal'});assert.equal(changed.status,200);assert.equal(calls.at(-1).m,'live_lens_change');assert.deepEqual(calls.at(-1).d,{video_id:'UAV1234/67-0-0/normal-0',video_type:'ir'});
+ const followMark=calls.length;assert.equal((await post('live',{device_sn:'UAV1234',action:'switch',video_type:'normal'})).status,200);assert.deepEqual(calls.slice(followMark).map(x=>x.m),['live_stop_push','live_start_push']);
  assert.equal((await post('live',{device_sn:'UAV1234',action:'switch',video_id:'UAV1234/67-0-0/real-index',video_type:'invented'})).status,400);
  failMethod='live_lens_change';assert.equal((await post('live',{device_sn:'UAV1234',action:'switch',video_id:'UAV1234/67-0-0/real-index',video_type:'wide'})).status,422);failMethod=null;
+ failMethod='live_lens_change';const partial=await post('live',{device_sn:'UAV1234',action:'start',video_type:'wide'});assert.equal(partial.status,200);assert.match(partial.body.data.camera_switch_error,/rejected/);assert.equal(partial.body.data.video_type,null);failMethod=null;
  failMethod='live_start_push';assert.equal((await post('live',{device_sn:'UAV1234',action:'start'})).status,422);failMethod=null;
  assert.equal((await post('rth')).status,410);const n=calls.length;const sync=await post('media-sync');assert.equal(sync.status,503);assert.equal(sync.body.data.sync_command_sent,false);assert.match(sync.body.message,/STORAGE_MODE/);assert.equal(calls.length,n);
 });

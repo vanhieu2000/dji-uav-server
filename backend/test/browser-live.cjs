@@ -8,7 +8,7 @@ const {chromium}=require('playwright-core'),assert=require('node:assert/strict')
  });
  await page.goto('http://local.test/');await page.evaluate(()=>{window.gSelectedDroneSn='UAV1234';window.gCurrentCamMode='normal';window.getAuthHeaders=()=>({'Content-Type':'application/json'});window.toast=()=>{};window.stopFlvLivePlayer=()=>{};});await page.addScriptTag({path:path.resolve(__dirname,'../public/dashboard/js/device-readiness.js')});await page.evaluate(()=>DeviceReadiness.refresh());
  const wide='UAV1234/67-0-0/normal-0|wide',thermal='UAV1234/67-0-0/normal-0|thermal';
- await page.selectOption('#device-video',wide);await page.waitForFunction(()=>!document.getElementById('device-video').disabled);assert.equal(calls[0].action,'switch');assert.equal(calls[0].video_type,'wide');
+ assert.equal(await page.locator('#device-video').inputValue(),'UAV1234/67-0-0/normal-0|normal');await page.selectOption('#device-video',wide);await page.waitForFunction(()=>!document.getElementById('device-video').disabled);assert.equal(calls[0].action,'switch');assert.equal(calls[0].video_type,'wide');
  await page.selectOption('#device-video-dashboard',thermal);await page.waitForFunction(()=>!document.getElementById('device-video').disabled);assert.equal(calls[1].video_type,'thermal');assert.equal(await page.locator('#device-video').inputValue(),thermal);
  reject=true;await page.selectOption('#device-video',wide);await page.waitForFunction(()=>!document.getElementById('device-video').disabled);assert.equal(await page.locator('#device-video').inputValue(),thermal);assert.deepEqual(errors,[]);
  console.log('PASS live camera combos: switch on active live, PiP synchronization, rejected switch rolls back.');

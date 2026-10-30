@@ -104,7 +104,7 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
  router.post('/live',asyncHandler(async(req,res)=>{
   const t=await target(req);ready(t,false);
   if(!liveEnabled()||!liveReady())throw failure('Media server chưa sẵn sàng; kiểm tra LIVE_STREAM_ENABLED và cổng RTMP/FLV',503);
-  
+
   let id=req.body.video_id || '';
   if(!['start','stop','switch'].includes(req.body.action))throw failure('Thao tác live không hợp lệ',400);
 
@@ -124,10 +124,12 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
     pushVideoId = `${t.sn}/67-0-0/normal-0`;
   }
 
+  // normal-0 without live_lens_change follows the Pilot view. Only explicit lens choices pin a lens.
+  if(lens==='normal')lens=null;
   const stream=await monitoring.ensureStream(t.session.ticket_id,t.sn),quality=Number(req.body.video_quality??2);
   const url=`${rtmpBase()}${stream.streamPath}?${streamAccess.mint(stream.streamPath,'publish',req.user)}`;
-  
-  let result = null;
+
+  let result = null,lensChangeError=null;
   try {
    result=await commands.exclusive(t.gateway,async()=>{
     const reported=(gateways[t.gateway].live_status||[]).find(v=>v.status===1&&v.video_id?.startsWith(t.sn+'/'));
@@ -137,23 +139,24 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
       activeLives.delete(t.sn);
       return resStop;
     }
-    
+
     let resAction;
     if(req.body.action==='switch' && lens){
       const lensParam = lens === 'thermal' ? 'ir' : lens;
       resAction = await commands.send(t.gateway,'live_lens_change',{video_id:pushVideoId,video_type:lensParam});
     } else {
-      if(previous && previous.video_id!==pushVideoId){
-        try{ await commands.send(t.gateway,'live_stop_push',{video_id:previous.video_id}); }catch(e){}
+      if(previous && (previous.video_id!==pushVideoId||(!lens&&previous.video_type&&previous.video_type!=='normal'))){
+        await commands.send(t.gateway,'live_stop_push',{video_id:previous.video_id});
+        activeLives.delete(t.sn);
       }
       resAction = await commands.send(t.gateway,'live_start_push',{url_type:1,url,video_id:pushVideoId,video_quality:quality});
       activeLives.set(t.sn,{video_id:pushVideoId,video_type:null});
       if(lens){
         const lensParam = lens === 'thermal' ? 'ir' : lens;
-        try{ await commands.send(t.gateway,'live_lens_change',{video_id:pushVideoId,video_type:lensParam}); }catch(e){}
+        try{ await commands.send(t.gateway,'live_lens_change',{video_id:pushVideoId,video_type:lensParam}); }catch(e){lensChangeError=e.message;}
       }
     }
-    activeLives.set(t.sn,{video_id:pushVideoId,video_type:lens||'normal'});
+    activeLives.set(t.sn,{video_id:pushVideoId,video_type:lensChangeError?null:(lens||'normal')});
     return resAction;
    });
   } catch(err) {
@@ -169,7 +172,8 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
     channel:stream.channel,
     publisher_confirmed:row?.status==='STREAMING'||row?.status==='RECONNECTING',
     video_id:pushVideoId,
-    video_type:lens||null
+    video_type:lensChangeError?null:(lens||null),
+    camera_switch_error:lensChangeError
   },req.body.action==='stop'?'Pilot đã chấp nhận lệnh dừng live.':'Pilot đã chấp nhận yêu cầu live; chờ xác nhận video từ media server.');
  }));
  router.post('/media-sync',(req,res)=>{if(!require('../services/objectStorage').readiness().configured)return res.status(503).json({code:503,message:'Chưa cấu hình kho ảnh. Đặt STORAGE_MODE=local, khởi động lại server rồi đăng nhập lại Pilot 2.',data:{sync_command_sent:false}});return res.json({code:0,message:'Ảnh gốc được tải bằng Media File Upload của Pilot 2. Bật tự tải ảnh gốc hoặc chọn tải thủ công trong thư viện Pilot; không phát lệnh media_files_sync không được xác nhận.',data:{strategy:'pilot-native-upload',sync_command_sent:false}});});

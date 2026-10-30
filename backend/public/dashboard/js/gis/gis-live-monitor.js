@@ -6,7 +6,7 @@
   const devices = new Map(), photos = new Map(), maps = new Map();
   let selected = null, ticketId = '', photoCursor = 0, generation = 0, loading = false, mounted = false;
   let deviceMode='single',defaultDevice=null,configLoaded=false;
-  let onSelect = () => {}, streams = [], currentPath = null;
+  let onSelect = () => {}, streams = [], currentPath = null, trackedUrl=null, pendingPlaybackUntil=0;
   const finite = x => x != null && Number.isFinite(Number(x));
   const position = d => finite(d.lat) && finite(d.lng) && Math.abs(d.lat) <= 90 && Math.abs(d.lng) <= 180 && !(Number(d.lat) === 0 && Number(d.lng) === 0);
   const visible = d => !ticketId || String(d.ticket_id) === ticketId;
@@ -77,7 +77,7 @@
     currentPath = null;
     if (typeof window.stopFlvLivePlayer === 'function') window.stopFlvLivePlayer();
   }
-  async function refreshStreams() {
+  async function refreshStreams(afterStop=false) {
     const selectEl = document.getElementById('uav-live-stream'); if (!selectEl) return;
     const token = generation;
     if (!ticketId&&!selected) {streams=[];return;}
@@ -87,7 +87,7 @@
       streams = r.data;
       selectEl.innerHTML = '<option value="">Chọn kênh phát</option>' + streams.map(s => `<option value="${esc(s.streamPath)}">${esc(s.device_sn)} · ${s.status === 'STREAMING' ? 'Đang phát' : s.status === 'RECONNECTING' ? 'Đang kết nối lại' : 'Chưa phát'}</option>`).join('');
       if (currentPath && streams.some(s => s.streamPath === currentPath && ['STREAMING','RECONNECTING'].includes(s.status))) selectEl.value = currentPath;
-      else if (currentPath) stopPlayback();
+      else if (currentPath&&(afterStop||Date.now()>pendingPlaybackUntil)) stopPlayback();
       const active=streams.find(s=>s.status==='STREAMING'&&(!selected||s.device_sn===selected));
       if(active&&!currentPath){currentPath=active.streamPath;selectEl.value=currentPath;window.startFlvLivePlayer?.(active.streamPath,active.flv_url);}
     } catch (e) { selectEl.innerHTML = '<option value="">Không tải được kênh</option>'; }
@@ -154,8 +154,8 @@
       } else if (msg.type === 'hms') refreshHms();
       else if (msg.type === 'stream_started' || msg.type === 'stream_stopped') {
         if (!ticketId || String(msg.ticket_id) === ticketId) {
-          if (msg.type === 'stream_stopped' && msg.streamPath === currentPath) stopPlayback();
-          refreshStreams();
+          // Re-read publisher state: a delayed stop event can belong to the previous connection.
+          refreshStreams(msg.type==='stream_stopped');
         }
       }
       renderDevices(); draw();
@@ -164,8 +164,10 @@
     selected: () => selected,
     selectDevice: select,
     openTicket(id,sn){ticketId=String(id);generation++;select(sn);const el=document.getElementById('uav-live-ticket');if(el)el.value=ticketId;stopPlayback();catchUp();},
+    playbackStopped(){currentPath=null;trackedUrl=null;pendingPlaybackUntil=0;},
+    trackPlayback(path,url){currentPath=path;trackedUrl=url;pendingPlaybackUntil=Date.now()+15000;},
     streamPath: () => currentPath,
-    playbackUrl: () => streams.find(s=>s.streamPath===currentPath)?.flv_url || null,
+    playbackUrl: () => streams.find(s=>s.streamPath===currentPath)?.flv_url || trackedUrl || null,
     mount(callback) {
       if (mounted) return; mounted = true; onSelect = callback;
       const selector=document.getElementById('uav-monitor-target');if(selector)selector.addEventListener('change',()=>select(selector.value));
