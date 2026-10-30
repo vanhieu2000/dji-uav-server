@@ -47,6 +47,7 @@ const engines = require("playwright-core"),
             : null,
         });
       let data = [];
+      if(u.pathname==='/api/control/live')data={playback_url:base+'/fixture.flv',streamPath:'/live/fixture',publisher_confirmed:false};
       if (u.pathname === "/api/health") data = { db: { connected: true } };
       if (u.pathname === "/api/auth/me")
         data = { user_id: 1, username: "review-admin", role: "ADMIN" };
@@ -219,6 +220,11 @@ const engines = require("playwright-core"),
       "view-uav-edit",
     );
     await page.evaluate(() => closeUavModal());
+    await page.evaluate(()=>{selectUav('REAL-SN');window.fixturePlayback=[];window.startFlvLivePlayer=(...args)=>window.fixturePlayback.push(args);switchView('control-manual');});
+    await page.locator('#btn-manual-live-toggle').click();
+    await page.waitForFunction(()=>window.fixturePlayback.length>0);
+    const liveCalls=writes.filter(x=>x.url==='/api/control/live');assert.equal(liveCalls.length,1);assert.equal(liveCalls[0].body.action,'start');assert.equal(liveCalls[0].body.device_sn,'REAL-SN');assert.equal(await page.locator('#btn-manual-live-toggle').isEnabled(),true);
+    await page.evaluate(()=>{setDroneOnlineState(true,'REAL-SN',{device_sn:'REAL-SN',battery:80,alt:12});});assert.equal(await page.locator('#kpi-drone-st').innerText(),'ĐÃ KẾT NỐI');await page.evaluate(()=>GIS.LiveMonitor.onEvent({type:'osd',device_sn:'REAL-SN',data:{device_sn:'REAL-SN',status:'ONLINE',battery:80,alt:12,last_seen:new Date().toISOString()}}));assert.equal(await page.locator('#kpi-drone-st').innerText(),'ĐÃ KẾT NỐI');
     await page.evaluate(() => queueTicketVision(1));
     assert.ok(writes.some((x) => x.url === "/api/tickets/1/vision"));
     await page.evaluate(() => switchView("flight-plans"));

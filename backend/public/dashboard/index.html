@@ -3256,30 +3256,31 @@ async function manualSendRth(){
   }
 }
 
+let gLiveStartPending=false;
+// Bật và dừng là hai thao tác riêng; không suy ra lệnh từ nhãn/trạng thái player.
+function manualToggleLive(){return manualStartLive();}
+function manualRequestAuth(){return window.DeviceReadiness?.authorize();}
 async function manualStartLive(){
-  toast('Đang yêu cầu phát kênh camera đã chọn…');
-  try {
-    const res = await fetch('/api/control/live', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({
-        action: 'start',
-        video_type:window.DeviceReadiness?.videoType()||undefined,
-        video_id: window.DeviceReadiness?.videoId() || '',
-        device_sn: gSelectedDroneSn
-      })
-    });
-    const d = await res.json();
-    if (res.ok && d.code === 0) {
-      toast(d.message);
-      updateLiveButtons(true);
-      window.DeviceReadiness?.accepted(d.data);
-      const flvUrl = d.data?.playback_url || `http://${window.location.hostname}:8000${d.data?.streamPath || ''}.flv`;
-      startFlvLivePlayer(d.data?.streamPath, flvUrl);
-    } else { toast('⚠ '+(d.message||'Không thể mở live stream')); }
-  } catch(err){ toast('Lỗi live: '+err.message); }
-
+ if(gLiveStartPending)return;
+ const sn=window.DeviceReadiness?.target()||gSelectedDroneSn;
+ if(!sn){toast('Chọn UAV đã kết nối trước khi bật live.');return;}
+ const buttons=[...document.querySelectorAll('[onclick*="manualStartLive"],[onclick*="manualToggleLive"]')];
+ gLiveStartPending=true;buttons.forEach(b=>b.disabled=true);
+ toast('Đang yêu cầu phát kênh camera đã chọn…');
+ try{
+  const res=await fetch('/api/control/live',{method:'POST',headers:getAuthHeaders(),body:JSON.stringify({action:'start',device_sn:sn,video_id:window.DeviceReadiness?.videoId()||'',video_type:window.DeviceReadiness?.videoType()||undefined})});
+  const d=await res.json();
+  if(!res.ok||d.code!==0)throw Error(d.message||'Không thể mở live stream');
+  window.DeviceReadiness?.accepted(d.data);
+  const badge=document.getElementById('manual-stream-badge');if(badge)badge.textContent=d.data?.publisher_confirmed?'ĐÃ NHẬN LUỒNG':'ĐANG CHỜ VIDEO';
+  toast(d.data?.publisher_confirmed?'Máy chủ đã nhận luồng; đang mở video.':'Pilot đã chấp nhận yêu cầu; đang chờ video về máy chủ.');
+  const url=d.data?.playback_url;
+  if(!url||!d.data?.streamPath)throw Error('Máy chủ chưa cấp địa chỉ xem live; kiểm tra cấu hình media server.');
+  await startFlvLivePlayer(d.data.streamPath,url);
+ }catch(err){toast('Lỗi live: '+err.message);}
+ finally{gLiveStartPending=false;buttons.forEach(b=>b.disabled=false);}
 }
+
 function stopFlvLivePlayer(){
   clearTimeout(gLiveRetryTimer);gLiveRetryTimer=null;
   clearInterval(gLiveEdgeTimer);gLiveEdgeTimer=null;
@@ -4234,7 +4235,7 @@ function setDroneOnlineState(isOnline, sn, d){
   dashBadge.className = 'tag ok';
   dashBadge.innerText = (sn || 'Mavic 3T') + ` · ONLINE · ${bat}`;
  }
- if(kpiSt) { kpiSt.innerText = 'ONLINE'; kpiSt.style.color = 'var(--ok)'; }
+ if(kpiSt) { kpiSt.innerText = 'ĐÃ KẾT NỐI'; kpiSt.style.color = 'var(--ok)'; }
  if(kpiSub) kpiSub.innerText = `${sn || 'Mavic 3T'} · Pin: ${bat} · Alt: ${alt}`;
 
  const elAltDash = document.getElementById('hud-alt-dash'); if(elAltDash) elAltDash.innerText = alt;

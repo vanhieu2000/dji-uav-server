@@ -66,10 +66,10 @@
       state.textContent=online?'ĐÃ KẾT NỐI':current?'NGẮT KẾT NỐI':rows.length?'CHƯA CHỌN UAV':'CHƯA KẾT NỐI';
       state.style.color=online?'#10b981':'var(--ink3)';
     }
-    if(badge){badge.className='tag '+(online?'ok':'off');badge.textContent=(current?current.device_sn:'UAV')+' · '+(online?'ONLINE':'OFFLINE');badge.title=badge.textContent;}
+    if(badge){badge.className='tag '+(online?'ok':'off');badge.textContent=(current?current.device_sn:'UAV')+' · '+(online?'ONLINE · '+(current.battery==null?'--%':current.battery+'%'):'OFFLINE');badge.title=badge.textContent;}
     const reading=(key,suffix,decimals)=>online&&finite(current[key])?(decimals==null?Number(current[key]):Number(current[key]).toFixed(decimals))+suffix:'—';
     for(const [id,key,suffix,digits] of [['hud-alt-dash','alt',' m',1],['hud-spd-dash','speed',' m/s',1],['hud-bat-dash','battery','%',0],['hud-th-dash','thermal_max',' °C',1]]){const el=document.getElementById(id);if(el)el.textContent=reading(key,suffix,digits);}
-    const sub=document.getElementById('kpi-drone-sub');if(sub)sub.textContent=current?current.device_sn:'Chọn UAV để xem thông số hiện tại';
+    const sub=document.getElementById('kpi-drone-sub');if(sub)sub.textContent=current?`${current.device_sn} · Pin: ${reading('battery','%',0)} · Alt: ${reading('alt',' m',1)}`:'Chọn UAV để xem thông số hiện tại';
     const n = document.getElementById('uav-photo-count');
     if (n) n.textContent = `${photos.size} ảnh nhận được${ticketId ? ' của phiếu đang chọn' : ''}`;
   }

@@ -17,7 +17,7 @@ test('commands: overlapping sequences cannot interleave',async()=>{
 test('control HTTP: no fallback target, authorization, ordered photo ACKs, revoked authority, real live capability',async t=>{
  const calls=[],devices={UAV1234:{type:77,sub_type:1,last_seen:new Date(),last_osd_at:new Date(),status:'ONLINE'}},gateways={RC1234:{is_cloud_control_auth:false,live_capacity:{device_list:[{sn:'UAV1234',camera_list:[{camera_index:'67-0-0',video_list:[{video_index:'real-index',video_type:'normal',switchable_video_types:['wide','thermal','zoom']}]}]}]}}};
  let failMethod=null,client=true,revoke=false;
- const commands={exclusive:async(g,fn)=>fn(),send:async(g,m,d)=>{calls.push({g,m,d});if(revoke&&m==='camera_mode_switch')gateways[g].is_cloud_control_auth=false;if(m===failMethod)throw Object.assign(new (require('../src/utils/validate').ValidationError)('Device rejected'),{status:422});return {result:0,status:'accepted'};}};
+ const commands={exclusive:async(g,fn)=>fn(),send:async(g,m,d)=>{calls.push({g,m,d});if(revoke&&m==='camera_mode_switch')gateways[g].is_cloud_control_auth=false;if(m===failMethod)throw Object.assign(new (require('../src/utils/validate').ValidationError)('Device rejected 513003'),{status:422});return {result:0,status:'accepted'};}};
  const app=express();app.use(express.json(),(req,res,next)=>{req.user={user_id:1,role:'ADMIN',username:'fixture'};next();});
  app.use('/api/control',require('../src/routes/deviceControl').createRouter({commands,devices,gateways,gatewayOfAircraft:{UAV1234:'RC1234'},activeSession:async()=>({rc_sn:'RC1234',aircraft_sn:'UAV1234',ticket_id:1}),monitoring:{ensureStream:async()=>({streamPath:'/live/ticket_1_0123456789abcdef',channel:'ticket_1_0123456789abcdef'}),streams:async()=>[]},streamAccess:{mint:()=> 'fixture-grant'},getClient:()=>({connected:client}),liveEnabled:()=>true,liveReady:()=>true,rtmpBase:()=> 'rtmp://fixture:1935',access:{permission(){},async ticket(){}}}));
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.on('listening',r));t.after(()=>new Promise(r=>server.close(r)));const base='http://127.0.0.1:'+server.address().port;
@@ -33,6 +33,7 @@ test('control HTTP: no fallback target, authorization, ordered photo ACKs, revok
  const changed=await post('live',{device_sn:'UAV1234',action:'switch',video_id:'UAV1234/67-0-0/real-index',video_type:'thermal'});assert.equal(changed.status,200);assert.equal(calls.at(-1).m,'live_lens_change');assert.deepEqual(calls.at(-1).d,{video_id:'UAV1234/67-0-0/normal-0',video_type:'ir'});
  assert.equal((await post('live',{device_sn:'UAV1234',action:'switch',video_id:'UAV1234/67-0-0/real-index',video_type:'invented'})).status,400);
  failMethod='live_lens_change';assert.equal((await post('live',{device_sn:'UAV1234',action:'switch',video_id:'UAV1234/67-0-0/real-index',video_type:'wide'})).status,422);failMethod=null;
+ failMethod='live_start_push';assert.equal((await post('live',{device_sn:'UAV1234',action:'start'})).status,422);failMethod=null;
  assert.equal((await post('rth')).status,410);const n=calls.length;const sync=await post('media-sync');assert.equal(sync.status,503);assert.equal(sync.body.data.sync_command_sent,false);assert.match(sync.body.message,/STORAGE_MODE/);assert.equal(calls.length,n);
 });
 test('MQTT: unknown serials cannot learn from arbitrary topics or wildcard subscriptions',()=>{

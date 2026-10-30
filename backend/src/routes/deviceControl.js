@@ -157,13 +157,8 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
     return resAction;
    });
   } catch(err) {
-    // Nếu lỗi báo 513003 hoặc đã phát live thì coi như luồng đã sẵn sàng để phát
-    if (err.message && err.message.includes('513003')) {
-      result = { result: 0, status: 'already_streaming' };
-      activeLives.set(t.sn,{video_id:pushVideoId,video_type:lens||'normal'});
-    } else {
-      throw err;
-    }
+    // A rejected command is not proof that a publisher exists. Preserve the real DJI error.
+    throw err;
   }
 
   const row=(await monitoring.streams(t.session.ticket_id)).find(r=>r.device_sn===t.sn);
@@ -175,7 +170,7 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
     publisher_confirmed:row?.status==='STREAMING'||row?.status==='RECONNECTING',
     video_id:pushVideoId,
     video_type:lens||null
-  },'Pilot 2 đã kích hoạt phát luồng live stream thành công.');
+  },req.body.action==='stop'?'Pilot đã chấp nhận lệnh dừng live.':'Pilot đã chấp nhận yêu cầu live; chờ xác nhận video từ media server.');
  }));
  router.post('/media-sync',(req,res)=>{if(!require('../services/objectStorage').readiness().configured)return res.status(503).json({code:503,message:'Chưa cấu hình kho ảnh. Đặt STORAGE_MODE=local, khởi động lại server rồi đăng nhập lại Pilot 2.',data:{sync_command_sent:false}});return res.json({code:0,message:'Ảnh gốc được tải bằng Media File Upload của Pilot 2. Bật tự tải ảnh gốc hoặc chọn tải thủ công trong thư viện Pilot; không phát lệnh media_files_sync không được xác nhận.',data:{strategy:'pilot-native-upload',sync_command_sent:false}});});
  router.post(['/rth','/fly-to','/flyto'],(req,res)=>res.status(410).json({code:410,message:'Điều khiển chuyển động chưa được kiểm chứng theo DRC trên thiết bị này. Thực hiện trên Pilot 2; không phát lệnh suy đoán.'}));
