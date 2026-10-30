@@ -100,19 +100,16 @@
           <div style="margin-bottom:4px"><b>Tọa độ:</b> ${wp.lat.toFixed(6)}, ${wp.lng.toFixed(6)}</div>
           <div style="margin-bottom:6px">
             <label style="display:block;margin-bottom:2px"><b>Độ cao bay (m):</b></label>
-            <input type="number" id="pop-alt-${idx}" class="input" style="width:100%;padding:3px;font-size:11px" value="${wp.altitude_m || 35}" min="5" max="300">
+            <input type="number" id="pop-alt-${idx}" class="input" style="width:100%;padding:3px;font-size:11px" value="${wp.altitude_m ?? 35}" min="2" max="500" step="0.1" required>
           </div>
           <div style="margin-bottom:6px">
             <label style="display:block;margin-bottom:2px"><b>Góc Gimbal Pitch:</b></label>
-            <select id="pop-gimbal-${idx}" class="input" style="width:100%;padding:3px;font-size:11px">
-              <option value="-90" ${wp.gimbal_pitch === -90 ? 'selected' : ''}>-90° (Soi thẳng mặt pin)</option>
-              <option value="0" ${wp.gimbal_pitch === 0 ? 'selected' : ''}>0° (Soi ngang DCL / Trạm)</option>
-              <option value="-45" ${wp.gimbal_pitch === -45 ? 'selected' : ''}>-45° (Góc chéo cận cảnh)</option>
-            </select>
+            <input type="number" id="pop-gimbal-${idx}" class="input" value="${wp.gimbal_pitch??-90}" min="-90" max="35" step="1" required>
           </div>
+          <label>Tốc độ (m/s)<input type="number" class="input" id="pop-speed-${idx}" value="${wp.speed_mps??3}" min="0.1" max="15" step="0.1" required></label>
           <div style="margin-bottom:8px">
             <label style="display:block;margin-bottom:2px"><b>Dừng tại điểm (s):</b></label>
-            <input type="number" id="pop-hover-${idx}" class="input" style="width:100%;padding:3px;font-size:11px" value="${wp.hover_seconds !== undefined ? wp.hover_seconds : 1}" min="0" max="60">
+            <input type="number" id="pop-hover-${idx}" class="input" style="width:100%;padding:3px;font-size:11px" value="${wp.hover_seconds !== undefined ? wp.hover_seconds : 1}" min="0" max="120" step="0.1" required>
           </div>
           <div style="display:flex;justify-content:space-between;gap:6px">
             <button class="btn sm primary" style="flex:1;padding:3px 6px;font-size:11px" onclick="window.GIS_FP_UPDATE_WP(${idx})">Lưu</button>
@@ -139,21 +136,22 @@
     updateStatsAndList(totalDist, hasOutsideGeofence);
   }
 
+  function pointInput(i,field,value,min,max,step){return `<input class="input fp-point-number" type="number" data-wp-row="${i}" data-wp-field="${field}" aria-label="${({altitude_m:"Độ cao",speed_mps:"Tốc độ",gimbal_pitch:"Gimbal",hover_seconds:"Thời gian dừng"})[field]} điểm ${i+1}" value="${value}" min="${min}" max="${max}" step="${step}" required>`;}
   // Cập nhật thống kê tuyến bay & bảng danh sách
   function updateStatsAndList(distMeters, hasOutsideGeofence) {
     const wpCount = st.waypoints.length;
-    const estTimeSec = (distMeters / 3.0) + (wpCount * 2.0); // Tốc độ ~3m/s + thời gian dừng chụp
-    const photoCount = wpCount * 2; // Mavic 3T chụp kép Wide RGB + Thermal RJPEG
+    const estTimeSec=st.waypoints.reduce((sum,p,i)=>sum+Number(p.hover_seconds??1)+(i?calcDistanceMeters(st.waypoints[i-1].lat,st.waypoints[i-1].lng,p.lat,p.lng)/Number(p.speed_mps||3):0),0); // Tốc độ ~3m/s + thời gian dừng chụp
+    const photoCount=st.waypoints.reduce((n,p)=>n+String(p.lenses||'wide,ir').split(',').length,0); // Mavic 3T chụp kép Wide RGB + Thermal RJPEG
 
     const statsBox = st.root.querySelector('#gis-fp-stats');
     if (statsBox) {
       statsBox.innerHTML = `
-        <div style="background:rgba(15,23,42,0.85);border:1px solid #334155;border-radius:8px;padding:10px;margin-top:10px;font-size:12px">
+        <div class="fp-stats-panel">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;line-height:1.6">
             <div>📍 Số điểm: <b>${wpCount}</b> điểm</div>
             <div>📏 Chiều dài: <b>${Math.round(distMeters)} m</b></div>
             <div>⏱ Thời gian: <b>${fmtTime(estTimeSec)}</b></div>
-            <div>📸 Tổng ảnh (RGB+IR): <b>${photoCount} ảnh</b></div>
+            <div>📸 Ảnh dự kiến: <b>${photoCount} ảnh</b></div>
           </div>
           ${hasOutsideGeofence ? '<div style="margin-top:6px;color:#ef4444;font-weight:600">⚠️ Cảnh báo: Có waypoint ngoài vùng an toàn, trong vùng cấm hoặc chưa có ranh giới.</div>' : '<div style="margin-top:6px;color:#10b981">✓ Các điểm nằm trong vùng đã lưu. Máy chủ sẽ kiểm tra cả đoạn nối khi lưu tuyến.</div>'}
         </div>
@@ -163,20 +161,20 @@
     const listBox = st.root.querySelector('#gis-fp-manual-list');
     if (listBox) {
       if (!wpCount) {
-        listBox.innerHTML = '<p class="gis-empty" style="padding:12px;text-align:center">Bấm nút <b>➕ Thêm Waypoint</b> ở trên, rồi click trực tiếp lên bản đồ vệ tinh để thả các điểm bay.</p>';
+        listBox.innerHTML = '<p class="gis-empty" style="padding:12px;text-align:center">Bấm nút <b>➕ Chọn điểm</b> ở trên, rồi click trực tiếp lên bản đồ vệ tinh để thả các điểm bay.</p>';
       } else {
         listBox.innerHTML = `
-          <div class="tbl-wrap" style="max-height:180px;overflow-y:auto;border:1px solid #334155;border-radius:6px;margin-top:8px">
+          <div class="tbl-wrap fp-points-scroll">
             <table class="ui-table" style="font-size:11px;width:100%" data-no-paging>
-              <thead><tr><th>#</th><th>Tọa độ</th><th>Độ cao</th><th>Gimbal</th><th>Dừng</th><th></th></tr></thead>
+              <thead><tr><th>#</th><th>Tọa độ (lat, lng)</th><th title="Độ cao so với điểm cất cánh">Độ cao (m)</th><th>Tốc độ (m/s)</th><th>Gimbal (°)</th><th>Dừng (s)</th><th>Ảnh lưu</th><th>Thao tác</th></tr></thead>
               <tbody>
                 ${st.waypoints.map((wp, i) => `
                   <tr>
                     <td><b>${i + 1}</b></td>
-                    <td>${wp.lat.toFixed(5)}<br>${wp.lng.toFixed(5)}</td>
-                    <td>${wp.altitude_m || 35} m</td>
-                    <td>${wp.gimbal_pitch !== undefined ? wp.gimbal_pitch : -90}°</td>
-                    <td>${wp.hover_seconds !== undefined ? wp.hover_seconds : 1}s</td>
+                    <td class="fp-coordinates">${wp.lat.toFixed(6)}, ${wp.lng.toFixed(6)}</td>
+                    <td>${pointInput(i,"altitude_m",wp.altitude_m??35,2,500,0.1)}</td><td>${pointInput(i,"speed_mps",wp.speed_mps??3,0.1,15,0.1)}</td>
+                    <td>${pointInput(i,"gimbal_pitch",wp.gimbal_pitch??-90,-90,35,1)}</td>
+                    <td>${pointInput(i,"hover_seconds",wp.hover_seconds??1,0,120,0.1)}</td><td><select class="input" data-wp-row="${i}" data-wp-field="lenses" aria-label="Ảnh lưu điểm ${i+1}">${["wide,ir","wide","ir","zoom"].map(l=>`<option value="${l}" ${(wp.lenses||"wide,ir")===l?"selected":""}>${l==="wide,ir"?"Wide + IR":l}</option>`).join("")}</select></td>
                     <td style="white-space:nowrap">
                       <button type="button" class="btn sm" onclick="window.GIS_FP_MOVE_WP(${i}, -1)" ${i === 0 ? 'disabled' : ''}>↑</button>
                       <button type="button" class="btn sm" onclick="window.GIS_FP_MOVE_WP(${i}, 1)" ${i === wpCount - 1 ? 'disabled' : ''}>↓</button>
@@ -197,19 +195,12 @@
   }
 
   // Toàn cục để các nút trong Leaflet Popup và Table gọi được
-  window.GIS_FP_UPDATE_WP = function(idx) {
-    st.waypoints[idx].lenses=document.getElementById(`pop-lenses-${idx}`)?.value||'wide,ir';
-    const altInput = document.getElementById(`pop-alt-${idx}`);
-    const gimbalInput = document.getElementById(`pop-gimbal-${idx}`);
-    const hoverInput = document.getElementById(`pop-hover-${idx}`);
-    if (altInput && st.waypoints[idx]) {
-      st.waypoints[idx].altitude_m = Number(altInput.value) || 35;
-      st.waypoints[idx].gimbal_pitch = Number(gimbalInput.value);
-      st.waypoints[idx].hover_seconds = Number(hoverInput.value) || 1;
-      st.map.closePopup();
-      refreshMapWaypoints();
-      GIS.toast(`Đã cập nhật thông số Waypoint #${idx + 1}`);
-    }
+  window.GIS_FP_UPDATE_WP=function(idx){
+    const wp=st.waypoints[idx];if(!wp)return;
+    const fields=[['alt','altitude_m'],['speed','speed_mps'],['gimbal','gimbal_pitch'],['hover','hover_seconds']];
+    for(const [key]of fields){const input=document.getElementById(`pop-${key}-${idx}`);if(!input||!input.reportValidity())return;}
+    for(const [key,field]of fields)wp[field]=Number(document.getElementById(`pop-${key}-${idx}`).value);
+    wp.lenses=document.getElementById(`pop-lenses-${idx}`).value;st.map.closePopup();refreshMapWaypoints();GIS.toast(`Đã cập nhật điểm ${idx+1}`);
   };
 
   window.GIS_FP_DELETE_WP = function(idx) {
@@ -356,7 +347,7 @@
       if (!st.root) {
         st.root = root;
         root.innerHTML = `<div class="planner-list-actions actions"><button type="button" class="btn primary" onclick="switchView('flight-plan-edit')">+ Thêm đường bay mẫu</button></div><div class="planner-editor-actions actions"><button type="button" class="btn" onclick="switchView('flight-plans')">← Danh sách đường bay</button></div>
-          <div class="gis-fp" style="display:grid;grid-template-columns:360px 1fr;gap:12px;height:calc(100vh - 120px)">
+          <div class="gis-fp" style="display:grid;grid-template-columns:320px minmax(0,1fr);gap:12px;height:auto">
             <!-- BẢNG ĐIỀU KHIỂN LẬP ĐƯỜNG BAY MẪU -->
             <section class="card gis-fp-form" style="display:flex;flex-direction:column;gap:10px;overflow-y:auto;padding:14px">
               <div>
@@ -364,8 +355,8 @@
                 <p class="faint" style="font-size:11px;margin:0">Tạo trước các tuyến bay chuẩn cho khu pin và dao cách ly. Sau này chỉ cần chọn tuyến khi lập phiếu.</p>
               </div>
 
-              <div class="field"><label>Nhà máy / vùng an toàn<select class="input" id="gis-fp-plant"></select></label><label>Bản đồ nền<select class="input" id="gis-fp-basemap"></select></label></div>
-              <div class="actions"><button type="button" class="btn sm" data-draw-fence="boundary">Vẽ ranh giới</button><button type="button" class="btn sm" data-draw-fence="excluded">Vẽ vùng cấm</button><button type="button" class="btn sm" id="fp-save-fence">Lưu vùng an toàn</button></div>
+              <div class="field"><label for="gis-fp-plant">Nhà máy / vùng an toàn</label><select class="input" id="gis-fp-plant"></select></div><div class="field"><label for="gis-fp-basemap">Bản đồ nền</label><select class="input" id="gis-fp-basemap"></select></div>
+              <div class="actions fp-fence-actions"><button type="button" class="btn sm" data-draw-fence="boundary">Vẽ ranh giới</button><button type="button" class="btn sm" data-draw-fence="excluded">Vẽ vùng cấm</button><button type="button" class="btn sm" id="fp-save-fence">Lưu vùng an toàn</button></div>
               <div class="field">
                 <label for="gis-fp-name" style="font-size:11.5px;font-weight:600">Tên đường bay mẫu *</label>
                 <input class="input" id="gis-fp-name" style="padding:6px;font-size:12px" placeholder="VD: Tuyến quét nhiệt Khu 1.1">
@@ -377,8 +368,8 @@
               </div>
 
               <!-- HÀNG NÚT CÔNG CỤ THAO TÁC TRÊN BẢN ĐỒ -->
-              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
-                <button class="btn sm" id="gis-fp-pick-btn" type="button" style="background:#0284c7;color:#fff;font-weight:700;flex:1">➕ Thêm Waypoint</button>
+              <div class="fp-point-actions">
+                <button class="btn sm" id="gis-fp-pick-btn" type="button" style="background:#0284c7;color:#fff;font-weight:700;flex:1">➕ Chọn điểm</button>
                 <button class="btn sm" id="gis-fp-undo-btn" type="button" title="Xóa điểm cuối vừa thả">🧹 Xóa cuối</button>
                 <button class="btn sm danger" id="gis-fp-clear-btn" type="button" title="Xóa toàn bộ các điểm">🗑️ Xóa hết</button>
               </div>
@@ -386,11 +377,6 @@
               <!-- BẢNG THỐNG KÊ TUYẾN BAY -->
               <div id="gis-fp-stats"></div>
 
-              <!-- NÚT TẠO KMZ -->
-              <button class="btn primary" type="button" id="gis-fp-create" disabled style="padding:8px;font-weight:700;font-size:13px;margin-top:6px">💾 LƯU ĐƯỜNG BAY MẪU (KMZ)</button>
-
-              <!-- DANH SÁCH CHI TIẾT TỪNG ĐIỂM -->
-              <div id="gis-fp-manual-list" style="flex:1"></div>
             </section>
 
             <!-- BẢN ĐỒ VỆ TINH LEAFLET -->
@@ -399,6 +385,7 @@
             </section>
           </div>
 
+          <section class="card gis-fp-waypoints"><div class="fp-points-heading"><h3>Thông số từng điểm</h3><button class="btn primary" type="button" id="gis-fp-create" disabled>Lưu đường bay mẫu (KMZ)</button></div><p id="gis-fp-edit-error" role="alert"></p><div id="gis-fp-manual-list"></div></section>
           <!-- DANH SÁCH ĐƯỜNG BAY MẪU ĐÃ LƯU TRONG THƯ VIỆN -->
           <section class="card flat gis-fp-list" style="margin-top:12px">
             <h3 class="gis-fp-list-title" style="font-size:15px;margin-bottom:8px">📋 Danh sách Đường bay mẫu trong Thư viện</h3>
@@ -406,16 +393,20 @@
           </section>
         `;
 
+        root.addEventListener('change',e=>{const input=e.target,field=input.dataset.wpField,i=Number(input.dataset.wpRow);if(!field||!st.waypoints[i])return;
+          const error=root.querySelector('#gis-fp-edit-error');if(field!=='lenses'&&!input.checkValidity()){input.setAttribute('aria-invalid','true');error.textContent='Giá trị ngoài giới hạn: '+input.min+' đến '+input.max;root.querySelector('#gis-fp-create').disabled=true;return;}
+          st.waypoints[i][field]=field==='lenses'?input.value:Number(input.value);error.textContent='';refreshMapWaypoints();
+        });
         // Bắt sự kiện các nút
         const pickBtn = root.querySelector('#gis-fp-pick-btn');
         pickBtn.addEventListener('click', () => {
           st.picking = !st.picking;
           if (st.picking) {
-            pickBtn.innerText = '⏹ Đang chọn điểm (Click bản đồ)';
+            pickBtn.innerText = '⏹ Đang chọn điểm';
             pickBtn.style.background = '#e11d48';
             GIS.toast('Chế độ chọn điểm ĐÃ BẬT: Hãy click chuột lên bản đồ để thả Waypoint');
           } else {
-            pickBtn.innerText = '➕ Thêm Waypoint';
+            pickBtn.innerText = '➕ Chọn điểm';
             pickBtn.style.background = '#0284c7';
           }
         });

@@ -140,3 +140,15 @@ aside .nav-btn[hidden]{display:none!important}
 #manual-live-pip #device-readiness p[data-device-status]{display:none!important}
 #manual-live-pip #manual-live-placeholder{font-size:12px;color:#94a3b8}
 #manual-stream-badge{max-width:110px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+/* Flight editor: aligned toolbar, full-width map, editable point table. */
+.gis-tab-pane[data-pane=flights]>.gis-fp{grid-template-columns:minmax(0,1fr)!important;height:auto!important;min-height:0}
+.gis-tab-pane[data-pane=flights] .gis-fp-form{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));align-items:end;overflow:visible!important;gap:10px 14px!important;padding:12px!important;min-width:0}
+.gis-fp-form>div:first-child{display:none}.gis-fp-form>.field{display:flex;flex-direction:column;gap:5px;margin:0!important;min-width:0;grid-column:auto!important}.gis-fp-form>.field>label{white-space:normal!important;width:auto!important;max-width:none!important;overflow:visible!important}.gis-fp-form select{width:100%;min-width:0}
+.gis-fp-form .fp-fence-actions,.gis-fp-form .fp-point-actions{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:0!important;border:0!important;background:none!important}.gis-fp-form .fp-fence-actions button,.gis-fp-form .fp-point-actions button{grid-column:auto!important}
+.gis-fp-form .btn{height:34px;min-width:0;font-size:11px!important;white-space:nowrap;padding:0 6px!important}
+#gis-fp-stats{grid-column:1/-1}.fp-stats-panel{padding:8px 10px;background:var(--surface2);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:12px}.fp-stats-panel>div:first-child{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+.gis-fp-mapbox{height:340px!important;min-height:340px!important}.gis-fp-waypoints{margin-top:12px;min-width:0}.fp-points-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.fp-points-heading h3{margin:0;font-size:14px}
+.fp-points-scroll{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px}.fp-points-scroll table{min-width:860px;width:100%}.fp-points-scroll th{white-space:nowrap;position:sticky;top:0;background:var(--surface2);z-index:1}.fp-points-scroll td{vertical-align:middle}.fp-point-number{width:82px!important;min-width:70px}.fp-coordinates{white-space:nowrap;min-width:160px}.fp-points-scroll select{min-width:110px}.fp-points-scroll input[aria-invalid=true]{border-color:#e11d48}
+.gis-tab-pane[data-pane=flights]:not(.planner-editing)>.gis-fp-waypoints{display:none}
+@media(max-width:1100px){.gis-tab-pane[data-pane=flights] .gis-fp-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.gis-tab-pane[data-pane=flights] .gis-fp-form{grid-template-columns:1fr}.fp-stats-panel>div:first-child{grid-template-columns:repeat(2,minmax(0,1fr))!important}.gis-fp-mapbox{height:300px!important;min-height:300px!important}}

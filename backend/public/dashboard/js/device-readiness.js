@@ -34,7 +34,7 @@
    select.value=chosen||'';const sn=select.value;if(sn&&!gSelectedDroneSn){if(window.GIS?.LiveMonitor?.selectDevice)GIS.LiveMonitor.selectDevice(sn);else selectUav(sn);}
    if(!sn){state=null;video.replaceChildren(new Option('Chờ camera',''));box.querySelector('[data-device-status]').textContent='Chọn UAV đã kết nối để kiểm tra';return;}
    const result=await call('status?device_sn='+encodeURIComponent(sn));if(select.value!==sn||gSelectedDroneSn!==sn)return;state=result.data;
-   fillCameras();lastChoice=video.value;
+   fillCameras();lastChoice=video.value;if(currentChoice()?.id===state.active_video_id)followAttemptId=null;
    const auth=document.getElementById('pip-auth-status-badge');if(auth)auth.textContent=state.cloud_control_authorized?'Đã cấp quyền':'Chưa cấp quyền';
    const follow=currentChoice();if(video.value==='pilot-follow'&&state.is_live&&state.active_video_id&&follow?.id!==state.active_video_id&&followAttemptId!==follow.id&&typeof window.manualStartLive==='function'){
     followAttemptId=follow.id;switching=true;try{await window.manualStartLive();}finally{switching=false;}
@@ -47,7 +47,7 @@
   const choice=currentChoice();if(!choice)return;
   if(!state||(!state.is_live&&Date.now()-acceptedAt>10000)){lastChoice=requested;toast('Đã chọn camera. Bấm Bật live để phát.');return;}
   switching=true;for(const el of [video,pipVideo,dashboardVideo].filter(Boolean))el.disabled=true;
-  try{const d=await call('live',{action:'switch',device_sn:select.value,video_id:choice.id,video_type:choice.type||undefined});acceptedAt=Date.now();lastChoice=requested;toast(d.message);if(choice.type)gCurrentCamMode=choice.type;const label=document.querySelector('#cam-pane-wide .cam-pane-label');if(label)label.textContent=lensName(choice.type);}
+  try{const d=await call('live',{action:'switch',device_sn:select.value,video_id:choice.id,video_type:choice.type||undefined});acceptedAt=Date.now();lastChoice=requested;if(state){state.active_video_id=d.data?.video_id||choice.id;state.active_video_type=d.data?.video_type||choice.type;}if(d.data?.streamPath&&d.data?.playback_url&&typeof window.startFlvLivePlayer==='function')await window.startFlvLivePlayer(d.data.streamPath,d.data.playback_url);toast(d.message);if(choice.type)gCurrentCamMode=choice.type;const label=document.querySelector('#cam-pane-wide .cam-pane-label');if(label)label.textContent=lensName(choice.type);}
   catch(err){video.value=previous;if(pipVideo)pipVideo.value=previous;if(dashboardVideo)dashboardVideo.value=previous;toast('Đổi camera thất bại: '+err.message);}
   finally{switching=false;for(const el of [video,pipVideo,dashboardVideo].filter(Boolean))el.disabled=false;}
  }

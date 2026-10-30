@@ -237,12 +237,16 @@ const engines = require("playwright-core"),
     await page.click("#gis-fp-pick-btn");
     await page.locator("#gis-fp-map").click({ position: { x: 180, y: 160 } });
     await page.locator("#gis-fp-map").click({ position: { x: 230, y: 210 } });
+    for(const [field,value]of [['altitude_m','44.5'],['speed_mps','4.2'],['gimbal_pitch','-45'],['hover_seconds','4.5']]){const input=page.locator(`[data-wp-row="0"][data-wp-field="${field}"]`);await input.fill(value);await input.press('Tab');}
+    await page.locator('[data-wp-row="1"][data-wp-field="hover_seconds"]').fill('0');await page.locator('[data-wp-row="1"][data-wp-field="hover_seconds"]').press('Tab');
+    assert.ok(await page.locator('.gis-fp-waypoints').isVisible());assert.equal(await page.locator('.gis-fp-form #gis-fp-manual-list').count(),0);
+    if(process.env.V2_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.V2_SCREENSHOT_DIR,'planner-editor.png'),fullPage:true});
     await page.click("#gis-fp-create");
     await page.waitForTimeout(200);
     const plan = writes.find((x) => x.url === "/api/flight-plans").body;
     assert.equal(plan.plant_id, 7);
     assert.equal(plan.points.length, 2);
-    assert.equal(plan.points[0].lenses, "wide,ir");
+    assert.equal(plan.points[0].lenses, "wide,ir");assert.equal(plan.points[0].altitude_m,44.5);assert.equal(plan.points[0].hover_seconds,4.5);assert.equal(plan.points[0].speed_mps,4.2);assert.equal(plan.points[0].gimbal_pitch,-45);assert.equal(plan.points[1].hover_seconds,0);const built=require('../src/services/wpmlBuilder').buildPointsKmz({name:plan.route_name,points:plan.points,profile:{lenses:'wide,ir',photos_per_point:1},speed:3});const zip=new(require('adm-zip'))(built.buffer),xml=zip.readAsText('wpmz/waylines.wpml');assert.match(xml,/<wpml:executeHeight>44\.5<\/wpml:executeHeight>/);assert.match(xml,/<wpml:hoverTime>4\.5<\/wpml:hoverTime>/);assert.match(xml,/<wpml:waypointSpeed>4\.2<\/wpml:waypointSpeed>/);assert.ok(!/<wpml:hoverTime>0(?:\.0+)?<\/wpml:hoverTime>/.test(xml));
 
     for (const [width, height] of [
       [390, 844],

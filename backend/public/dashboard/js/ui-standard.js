@@ -43,7 +43,7 @@
    root.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),select,textarea').forEach(e=>e.classList.add('input'));
    root.querySelectorAll('button').forEach(e=>{if(!e.closest('.leaflet-control')&&!e.classList.contains('gis-caret'))e.classList.add('btn');});
    root.querySelectorAll('input:not([type=checkbox]):not([type=file]):not([type=radio]):not([type=range]),select').forEach(e=>{
-    if(e.labels?.length||e.closest('.leaflet-control,.gis-fh-player,.ui-filterbar'))return;
+    if(e.labels?.length||e.closest('.leaflet-control,.gis-fh-player,.ui-filterbar,.fp-points-scroll'))return;
     const names={'task-found':'Kết quả tìm tài sản','insight-target':'Thiết bị cần xem','insight-ticket':'Phiếu kiểm tra','vision-media':'Ảnh gốc cần xử lý'};
     const text=names[e.id]||e.getAttribute('aria-label')||e.placeholder;
     if(!text)return;const label=document.createElement('label');label.className='field';const span=document.createElement('span');span.textContent=text;e.before(label);label.append(span,e);
