@@ -108,25 +108,18 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
   let id=req.body.video_id || '';
   if(!['start','stop','switch'].includes(req.body.action))throw failure('Thao tác live không hợp lệ',400);
 
-  // Chuẩn hóa video_id cho Mavic 3T: cụm camera 67-0-0 dùng video_index là normal-0
-  let pushVideoId = id;
-  let lens = req.body.video_type || null;
+  // Pilot defines video_index in live_capacity. Keep its published ID intact.
+  let lens=req.body.video_type||null;
   if(id&&!id.startsWith(t.sn+'/'))throw failure('Nguồn video không thuộc UAV đã chọn',400);
   if(lens&&!['normal','wide','zoom','thermal','ir'].includes(lens))throw failure('Loại camera không hợp lệ',400);
-  if (id.includes('67-0-0')) {
-    pushVideoId = `${t.sn}/67-0-0/normal-0`;
-    if (!lens) {
-      if (id.endsWith('/wide-0')) lens = 'wide';
-      else if (id.endsWith('/zoom-0')) lens = 'zoom';
-      else if (id.endsWith('/thermal-0')) lens = 'ir';
-    }
-  } else if (!pushVideoId) {
-    pushVideoId = `${t.sn}/67-0-0/normal-0`;
-  }
+  const published=videoIds(gateways[t.gateway].live_capacity).filter(v=>v.startsWith(t.sn+'/'));
+  const pushVideoId=id||activeLives.get(t.sn)?.video_id||(published.length===1?published[0]:`${t.sn}/67-0-0/normal-0`);
 
-  // normal-0 without live_lens_change follows the Pilot view. Only explicit lens choices pin a lens.
-  if(lens==='normal')lens=null;
-  const stream=await monitoring.ensureStream(t.session.ticket_id,t.sn),quality=Number(req.body.video_quality??2);
+  // Starting the default stream does not pin a lens; explicit switching may select normal/default.
+  if(lens==='ir')lens='thermal';
+  if(lens==='normal'&&req.body.action!=='switch')lens=null;
+  const stream=await monitoring.ensureStream(t.session.ticket_id,t.sn),quality=Number(req.body.video_quality??process.env.LIVE_VIDEO_QUALITY??4);
+  if(!Number.isInteger(quality)||quality<0||quality>4)throw failure('Chất lượng live phải từ 0 đến 4',400);
   const url=`${rtmpBase()}${stream.streamPath}?${streamAccess.mint(stream.streamPath,'publish',req.user)}`;
 
   let result = null,lensChangeError=null;
@@ -141,8 +134,9 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
     }
 
     let resAction;
-    if(req.body.action==='switch' && lens){
-      const lensParam = lens === 'thermal' ? 'ir' : lens;
+    const nativeLens=videoSources(gateways[t.gateway].live_capacity).find(v=>v.video_id===pushVideoId)?.video_type;
+    if(req.body.action==='switch' && lens&&(!previous||previous.video_id===pushVideoId)&&(nativeLens!==lens||lens==='normal')){
+      const lensParam = lens === 'ir' ? 'thermal' : lens;
       resAction = await commands.send(t.gateway,'live_lens_change',{video_id:pushVideoId,video_type:lensParam});
     } else {
       if(previous && (previous.video_id!==pushVideoId||(!lens&&previous.video_type&&previous.video_type!=='normal'))){
@@ -151,8 +145,8 @@ function createRouter({commands,devices,gateways,gatewayOfAircraft,activeSession
       }
       resAction = await commands.send(t.gateway,'live_start_push',{url_type:1,url,video_id:pushVideoId,video_quality:quality});
       activeLives.set(t.sn,{video_id:pushVideoId,video_type:null});
-      if(lens){
-        const lensParam = lens === 'thermal' ? 'ir' : lens;
+      if(lens&&nativeLens!==lens){
+        const lensParam = lens === 'ir' ? 'thermal' : lens;
         try{ await commands.send(t.gateway,'live_lens_change',{video_id:pushVideoId,video_type:lensParam}); }catch(e){lensChangeError=e.message;}
       }
     }

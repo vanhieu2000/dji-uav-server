@@ -5,8 +5,22 @@
  if(!box)return;
  const pipVideo=document.getElementById('device-video-pip'),dashboardVideo=document.getElementById('device-video-dashboard');
  const currentChoice=()=>choices.find(x=>x.value===video.value);
- const lensName=t=>({normal:'Theo tay cầm',wide:'Góc rộng',zoom:'Zoom',thermal:'Camera nhiệt',ir:'Camera nhiệt'}[t]||'Nguồn video');
- function fillCameras(){const current=video.value;choices=[];for(const source of state?.video_sources||[]){const published=source.switchable_video_types?.length?source.switchable_video_types:[null];const types=source.video_id.endsWith('/normal-0')?['normal',...published.filter(t=>t&&t!=='normal')]:published;for(const type of types)choices.push({value:source.video_id+'|'+(type||''),id:source.video_id,type,label:lensName(type)+' · '+source.video_id});}if(!choices.length)for(const id of state?.video_ids||[])choices.push({value:id+'|',id,type:null,label:id});for(const el of [video,pipVideo,dashboardVideo].filter(Boolean)){el.replaceChildren(new Option('Chọn camera',''));for(const c of choices)el.add(new Option(c.label,c.value));el.value=choices.some(c=>c.value===current)?current:(choices.find(c=>c.id.endsWith('/normal-0')&&(!c.type||c.type==='normal'))||choices[0])?.value||'';}}
+ const lensName=t=>({normal:'Nguồn mặc định',wide:'Góc rộng',zoom:'Zoom',thermal:'Camera nhiệt',ir:'Camera nhiệt'}[t]||'Nguồn video');
+ let followAttemptId=null;
+ function fillCameras(){
+  const current=video.value,sources=state?.video_sources||[];choices=[];
+  const primary=sources.find(s=>s.video_id.includes('/67-0-0/'));
+  if(primary)choices.push({value:'pilot-follow',id:primary.video_id,type:null,label:'Theo tay cầm'});
+  for(const source of sources){const types=source.switchable_video_types?.length?source.switchable_video_types:[null];for(const type of types){
+   const camera=source.video_id.split('/').slice(0,2).join('/');
+   const native=sources.find(s=>s.video_id.startsWith(camera+'/')&&s.video_type===type);
+   const id=native?.video_id||source.video_id,value=id+'|'+(type||'');
+   if(!choices.some(c=>c.value===value))choices.push({value,id,type,label:source.video_id.includes('/67-0-0/')?lensName(type):'Nguồn phụ · '+id});
+  }}
+  if(!choices.length)for(const id of state?.video_ids||[])choices.push({value:id+'|',id,type:null,label:id});
+  for(const el of [video,pipVideo,dashboardVideo].filter(Boolean)){el.replaceChildren(new Option('Chọn camera',''));for(const c of choices)el.add(new Option(c.label,c.value));el.value=choices.some(c=>c.value===current)?current:(choices.find(c=>c.value==='pilot-follow')||choices[0])?.value||'';}
+ }
+
  const disclosure=document.getElementById('device-readiness-details');let shortScreen;function fit(){const next=innerHeight<500;if(next!==shortScreen){shortScreen=next;disclosure.open=!next;}}fit();window.addEventListener('resize',fit);
  document.querySelectorAll('[onclick*=manualSendRth]').forEach(b=>{b.disabled=true;b.title='Thực hiện RTH trên Pilot 2; điều khiển chuyển động từ Web chưa được kiểm chứng';});
  async function call(path,body){const r=await fetch('/api/control/'+path,{method:body?'POST':'GET',headers:getAuthHeaders(),...(body?{body:JSON.stringify(body)}:{})});const d=await r.json();if(!r.ok||d.code!==0)throw Error(d.message||'Không đọc được trạng thái UAV');return d;}
@@ -22,6 +36,9 @@
    const result=await call('status?device_sn='+encodeURIComponent(sn));if(select.value!==sn||gSelectedDroneSn!==sn)return;state=result.data;
    fillCameras();lastChoice=video.value;
    const auth=document.getElementById('pip-auth-status-badge');if(auth)auth.textContent=state.cloud_control_authorized?'Đã cấp quyền':'Chưa cấp quyền';
+   const follow=currentChoice();if(video.value==='pilot-follow'&&state.is_live&&state.active_video_id&&follow?.id!==state.active_video_id&&followAttemptId!==follow.id&&typeof window.manualStartLive==='function'){
+    followAttemptId=follow.id;switching=true;try{await window.manualStartLive();}finally{switching=false;}
+   }
    box.querySelector('[data-device-status]').textContent=`MQTT: ${state.mqtt_connected?'kết nối':'ngắt'} · OSD: ${state.telemetry_fresh?'mới':'chưa có/cũ'} · Quyền: ${state.cloud_control_authorized?'đã cấp':'chưa cấp'} · Storage: ${state.storage.configured?'đã cấu hình, chờ ảnh xác minh':'chưa cấu hình'}`;
   }catch(e){state=null;video.replaceChildren(new Option('Chưa xác minh camera',''));box.querySelector('[data-device-status]').textContent=e.message;}finally{const status=box.querySelector('[data-device-status]');box.querySelector('[data-refresh-device]').title=status.textContent;inFlight=false;}
  }
