@@ -48,6 +48,26 @@ router.post('/users/:id/password',asyncHandler(async(req,res)=>{
     await withTransaction(async conn=>{const [r]=await conn.execute('UPDATE users SET password_hash=?,must_change_password=1,auth_version=auth_version+1 WHERE user_id=?',[hash,id]);if(!r.affectedRows)throw new NotFoundError('Không tìm thấy người dùng');await conn.execute('DELETE FROM user_sessions WHERE user_id=?',[id]);});
     onChanged(id);ok(res,{user_id:id,must_change_password:true});
 }));
+router.delete('/users/:id',asyncHandler(async(req,res)=>{
+    const id=v.parseId(req.params.id,'người dùng');
+    let lockedInstead=false;
+    await withTransaction(async conn=>{
+        const [admins]=await conn.execute("SELECT user_id FROM users WHERE role='ADMIN' AND status='ACTIVE' FOR UPDATE");
+        const [rows]=await conn.execute('SELECT * FROM users WHERE user_id=? FOR UPDATE',[id]);const u=rows[0];if(!u)throw new NotFoundError('Không tìm thấy người dùng');
+        if(u.role==='ADMIN'&&admins.length<=1)throw new v.ValidationError('Phải giữ ít nhất một quản trị viên đang hoạt động');
+        try{
+            await conn.execute('DELETE FROM users WHERE user_id=?',[id]);
+        }catch(err){
+            if(err.code==='ER_ROW_IS_REFERENCED_2'||err.errno===1451){
+                await conn.execute("UPDATE users SET status='LOCKED', auth_version=auth_version+1 WHERE user_id=?",[id]);
+                lockedInstead=true;
+            }else{throw err;}
+        }
+        await conn.execute('DELETE FROM user_sessions WHERE user_id=?',[id]);
+    });
+    onChanged(id);
+    ok(res,{user_id:id,locked_instead:lockedInstead},lockedInstead?'Tài khoản đã có dữ liệu ràng buộc, đã chuyển sang trạng thái KHÓA':'Đã xóa tài khoản');
+}));
 router.get('/units',asyncHandler(async(req,res)=>ok(res,await query('SELECT * FROM units ORDER BY unit_name'))));
 router.post('/units',asyncHandler(async(req,res)=>{const r=await query('INSERT INTO units (unit_code,unit_name) VALUES (?,?)',[v.requiredString(req.body.unit_code,'mã đơn vị',50),v.requiredString(req.body.unit_name,'tên đơn vị',150)]);ok(res,{unit_id:r.insertId});}));
 router.put('/units/:id',asyncHandler(async(req,res)=>{const r=await query('UPDATE units SET unit_code=?,unit_name=? WHERE unit_id=?',[v.requiredString(req.body.unit_code,'mã đơn vị',50),v.requiredString(req.body.unit_name,'tên đơn vị',150),v.parseId(req.params.id,'đơn vị')]);if(!r.affectedRows)throw new NotFoundError('Không tìm thấy đơn vị');ok(res,{});}));

@@ -96,12 +96,8 @@
 #account-profile dt{font-size:12px;color:var(--ink2)}
 #account-profile dd{margin:0;font-weight:600}
 
-#settings-alert-rules [data-rule]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px!important;margin:18px 0!important;padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--surface2)}
-#settings-alert-rules [data-rule]>b{grid-column:1/-1;font-size:14px}
-#settings-alert-rules [data-rule]>label{display:grid;gap:5px;color:var(--ink2);font-size:12px}
-#settings-alert-rules input:not([type=checkbox]){width:100%;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px;border-radius:6px}
-#settings-alert-rules [data-rule]>button{justify-self:start}
-@media(max-width:640px){#settings-alert-rules [data-rule]{grid-template-columns:1fr}}
+/* Settings alert rules: see compact-layout.css */
+
 /* Responsive shell and narrow operational forms. */
 #app,.main{height:100dvh}
 .page-view input,.page-view select,.page-view textarea{max-width:100%;min-width:0;box-sizing:border-box}

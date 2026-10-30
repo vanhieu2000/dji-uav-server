@@ -100,6 +100,7 @@
 
   function renderList() {
     const el = st.root.querySelector('#gis-pf-list');
+    if (!el) return;
     el.innerHTML = st.list.map(p => `
       <button type="button" class="gis-pf-item ${st.sel && st.sel.profile_id === p.profile_id ? 'on' : ''}" data-id="${p.profile_id}">
         <b>${esc(p.profile_name)}</b>
@@ -107,6 +108,14 @@
           ${p.geometry && p.route_kind === 'GRID' ? ` · ${esc(p.geometry.altitude_m)} m` : ''}</span>
         ${p.is_system ? '<span class="gis-chip">mặc định</span>' : ''}
       </button>`).join('') || '<div class="gis-empty">Chưa có hồ sơ</div>';
+  }
+
+  function updateActiveItem(profileId) {
+    const listEl = st.root.querySelector('#gis-pf-list');
+    if (!listEl) return;
+    listEl.querySelectorAll('.gis-pf-item').forEach(btn => {
+      btn.classList.toggle('on', profileId != null && Number(btn.dataset.id) === Number(profileId));
+    });
   }
 
   function renderForm(p, isNew) {
@@ -126,7 +135,7 @@
     form.addEventListener('submit', e => { e.preventDefault(); save(form, isNew); });
     form.addEventListener('input', debounce(() => preview(form), 350));
     form.addEventListener('change', debounce(() => preview(form), 100));
-    renderList();
+    updateActiveItem(st.sel ? st.sel.profile_id : null);
   }
 
   function debounce(fn, ms) {
